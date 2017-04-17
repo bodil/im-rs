@@ -684,3 +684,46 @@ fn disequality() {
     assert_ne!(l, cons(0, &l));
     assert_ne!(l, list![1, 2, 3, 4, 5, 6]);
 }
+
+#[cfg(test)]
+fn is_sorted<A: Ord + Clone>(l: &List<A>) -> bool {
+    if l.length() == 0 {
+        true
+    } else {
+        let mut it = l.iter();
+        let mut prev = it.next().unwrap();
+        loop {
+            match it.next() {
+                None => return true,
+                Some(ref i) if i < &prev => return false,
+                Some(ref i) => prev = i.clone()
+            }
+        }
+    }
+}
+
+#[test]
+quickcheck! {
+    fn reverse_a_list(xs: Vec<i32>) -> bool {
+        let mut rev_xs = xs.clone();
+        rev_xs.reverse();
+        let l = List::from(xs);
+        let rl = List::from(rev_xs);
+        l.reverse() == rl
+    }
+
+    fn append_two_lists(xs: Vec<i32>, ys: Vec<i32>) -> bool {
+        let mut extended = xs.clone();
+        extended.extend(ys.iter());
+        let xl = List::from(xs);
+        let yl = List::from(ys);
+        let extl = List::from(extended);
+        xl.append(&yl) == extl
+    }
+
+    fn sort_a_list(xs: Vec<i32>) -> bool {
+        let l = List::from(xs);
+        let sorted = l.sort();
+        l.length() == sorted.length() && is_sorted(&sorted)
+    }
+}
