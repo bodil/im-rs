@@ -108,6 +108,29 @@ impl<A> List<A> {
         List::List(Arc::new(Cons(1, v, list![])))
     }
 
+    /// Construct a list by consuming an `IntoIterator`.
+    ///
+    /// Allows you to construct a list out of anything that implements
+    /// the `IntoIterator` trait.
+    ///
+    /// Time: O(n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::list::List;
+    /// # fn main() {
+    /// assert_eq!(
+    ///   List::from(vec![1, 2, 3, 4, 5]),
+    ///   list![1, 2, 3, 4, 5]
+    /// );
+    /// # }
+    /// ```
+    pub fn from<I: IntoIterator<Item=A>>(it: I) -> List<A> {
+        it.into_iter().collect()
+    }
+
     fn as_arc<'a>(&'a self) -> &'a Arc<ListNode<A>> {
         match self {
             &List::List(ref arc) => arc,
@@ -319,29 +342,6 @@ impl<A> List<A>
 impl<A> List<A>
     where A: Clone
 {
-    /// Construct a list by consuming an `IntoIterator`.
-    ///
-    /// Allows you to construct a list out of anything that implements
-    /// the `IntoIterator` trait.
-    ///
-    /// Time: O(n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::list::List;
-    /// # fn main() {
-    /// assert_eq!(
-    ///   List::from(vec![1, 2, 3, 4, 5]),
-    ///   list![1, 2, 3, 4, 5]
-    /// );
-    /// # }
-    /// ```
-    pub fn from<I: IntoIterator<Item=A>>(it: I) -> List<A> {
-        it.into_iter().collect()
-    }
-
     /// Append the list `right` to the end of the current list.
     ///
     /// Time: O(n)
