@@ -2,5 +2,15 @@
 name = "im"
 version = "1.0.0"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
+license = "LGPL-3.0+"
+description = "Assorted immutable collection datatypes"
+repository = "https://github.com/bodil/im-rs"
+documentation = "https://bodil.lol/im-rs/1.0.0/im/"
+readme = "README.md"
+categories = ["data-structures"]
+keywords = ["immutable", "persistent"]
+
+[badges]
+travis-ci = { repository = "bodil/im-rs" }
 
 [dependencies]
