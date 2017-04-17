@@ -37,7 +37,7 @@ use self::ListNode::{Cons, Nil};
 /// # fn main() {
 /// assert_eq!(
 ///   list![1, 2, 3],
-///   List::from_slice(&[1, 2, 3])
+///   List::from(vec![1, 2, 3])
 /// );
 ///
 /// assert_eq!(
@@ -319,11 +319,27 @@ impl<A> List<A>
 impl<A> List<A>
     where A: Clone
 {
-    /// Construct a list from a slice of items.
+    /// Construct a list by consuming an `IntoIterator`.
+    ///
+    /// Allows you to construct a list out of anything that implements
+    /// the `IntoIterator` trait.
     ///
     /// Time: O(n)
-    pub fn from_slice(slice: &[A]) -> List<A> {
-        From::from(slice)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::list::List;
+    /// # fn main() {
+    /// assert_eq!(
+    ///   List::from(vec![1, 2, 3, 4, 5]),
+    ///   list![1, 2, 3, 4, 5]
+    /// );
+    /// # }
+    /// ```
+    pub fn from<I: IntoIterator<Item=A>>(it: I) -> List<A> {
+        it.into_iter().collect()
     }
 
     /// Append the list `right` to the end of the current list.
@@ -523,30 +539,27 @@ impl<A> IntoIterator for List<A>
 }
 
 impl<A> FromIterator<A> for List<A>
-    where A: Clone
 {
-    fn from_iter<T>(iter: T) -> Self
-        where T: IntoIterator<Item = A>
+    fn from_iter<I>(source: I) -> Self
+        where I: IntoIterator<Item = A>
     {
+        let mut input: Vec<A> = source.into_iter().collect();
+        input.reverse();
         let mut l = List::empty();
-        for i in iter {
+        for i in input.into_iter() {
             l = cons(i, &l)
         }
-        l.reverse()
+        l
     }
 }
 
 impl<'a, A> FromIterator<&'a A> for List<A>
     where A: 'a + Clone
 {
-    fn from_iter<T>(iter: T) -> Self
-        where T: IntoIterator<Item = &'a A>
+    fn from_iter<I>(source: I) -> Self
+        where I: IntoIterator<Item = &'a A>
     {
-        let mut l = List::empty();
-        for i in iter {
-            l = cons(i.clone(), &l)
-        }
-        l.reverse()
+        source.into_iter().cloned().collect()
     }
 }
 
