@@ -570,16 +570,26 @@ impl<A> PartialEq for List<A>
     /// lists to compare values.
     ///
     /// Time: O(n)
+    #[cfg(not(feature = "ptr_eq"))]
     fn eq(&self, other: &List<A>) -> bool {
-        Arc::ptr_eq(self.as_arc(), other.as_arc()) ||
-            self.length() == other.length() &&
-            self.iter().zip(other.iter()).all(|(a, b)| a == b)
+        self.length() == other.length() && self.iter().zip(other.iter()).all(|(a, b)| a == b)
     }
 
+    #[cfg(feature = "ptr_eq")]
+    fn eq(&self, other: &List<A>) -> bool {
+        Arc::ptr_eq(self.as_arc(), other.as_arc()) ||
+        self.length() == other.length() && self.iter().zip(other.iter()).all(|(a, b)| a == b)
+    }
+
+    #[cfg(not(feature = "ptr_eq"))]
+    fn ne(&self, other: &List<A>) -> bool {
+        self.length() != other.length() || self.iter().zip(other.iter()).all(|(a, b)| a != b)
+    }
+
+    #[cfg(feature = "ptr_eq")]
     fn ne(&self, other: &List<A>) -> bool {
         !Arc::ptr_eq(self.as_arc(), other.as_arc()) &&
-            self.length() != other.length() ||
-            self.iter().zip(other.iter()).all(|(a, b)| a != b)
+        (self.length() != other.length() || self.iter().zip(other.iter()).all(|(a, b)| a != b))
     }
 }
 

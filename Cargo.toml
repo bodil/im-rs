@@ -13,4 +13,7 @@ keywords = ["immutable", "persistent"]
 [badges]
 travis-ci = { repository = "bodil/im-rs" }
 
+[features]
+ptr_eq = []
+
 [dependencies]
