@@ -6,7 +6,7 @@ Currently, there's only a cons list.
 
 ## Documentation
 
-* [API docs](https://bodil.lol/im-rs/1.0.0/im/)
+* [API docs](https://bodil.lol/im-rs/2.0.1/im/)
 
 ## Licence
 
