@@ -92,6 +92,7 @@ pub enum List<A> {
 }
 
 #[doc(hidden)]
+#[derive(Clone)]
 pub enum ListNode<A> {
     Cons(usize, A, List<A>),
     Nil,
@@ -590,7 +591,7 @@ impl<A> PartialEq for List<A>
     #[cfg(feature = "ptr_eq")]
     fn eq(&self, other: &List<A>) -> bool {
         Arc::ptr_eq(self.as_arc(), other.as_arc()) ||
-        self.length() == other.length() && self.iter().zip(other.iter()).all(|(a, b)| a == b)
+            self.length() == other.length() && self.iter().zip(other.iter()).all(|(a, b)| a == b)
     }
 
     #[cfg(not(feature = "ptr_eq"))]
@@ -601,7 +602,7 @@ impl<A> PartialEq for List<A>
     #[cfg(feature = "ptr_eq")]
     fn ne(&self, other: &List<A>) -> bool {
         !Arc::ptr_eq(self.as_arc(), other.as_arc()) &&
-        (self.length() != other.length() || self.iter().zip(other.iter()).all(|(a, b)| a != b))
+            (self.length() != other.length() || self.iter().zip(other.iter()).all(|(a, b)| a != b))
     }
 }
 
@@ -652,10 +653,22 @@ impl<A> Debug for List<A>
     }
 }
 
+#[cfg(any(test, feature = "quickcheck"))]
+use quickcheck::{Arbitrary, Gen};
+
+#[cfg(any(test, feature = "quickcheck"))]
+impl<A: Arbitrary + Sync> Arbitrary for List<A> {
+    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+        List::from(Vec::arbitrary(g))
+    }
+}
+
+
 
 #[cfg(test)]
 mod test {
     use super::*;
+
     #[test]
     fn from_coercion() {
         assert_eq!(list![1, 2, 3], From::from(&[1, 2, 3][..]));
@@ -686,7 +699,6 @@ mod test {
         assert_ne!(l, list![1, 2, 3, 4, 5, 6]);
     }
 
-    #[cfg(test)]
     fn is_sorted<A: Ord + Clone>(l: &List<A>) -> bool {
         if l.length() == 0 {
             true
@@ -703,27 +715,19 @@ mod test {
         }
     }
 
-    #[test]
     quickcheck! {
-        fn reverse_a_list(xs: Vec<i32>) -> bool {
-            let mut rev_xs = xs.clone();
-            rev_xs.reverse();
-            let l = List::from(xs);
-            let rl = List::from(rev_xs);
-            l.reverse() == rl
+        fn reverse_a_list(l: List<i32>) -> bool {
+            let vec: Vec<i32> = l.clone().into_iter().collect();
+            let rev = List::from(vec.into_iter().rev());
+            l.reverse() == rev
         }
 
-        fn append_two_lists(xs: Vec<i32>, ys: Vec<i32>) -> bool {
-            let mut extended = xs.clone();
-            extended.extend(ys.iter());
-            let xl = List::from(xs);
-            let yl = List::from(ys);
-            let extl = List::from(extended);
-            xl.append(&yl) == extl
+        fn append_two_lists(xs: List<i32>, ys: List<i32>) -> bool {
+            let extended= List::from(xs.iter().chain(ys.iter()));
+            xs.append(&ys) == extended
         }
 
-        fn sort_a_list(xs: Vec<i32>) -> bool {
-            let l = List::from(xs);
+        fn sort_a_list(l: List<i32>) -> bool {
             let sorted = l.sort();
             l.length() == sorted.length() && is_sorted(&sorted)
         }

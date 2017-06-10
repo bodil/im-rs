@@ -1,6 +1,11 @@
+#[cfg(any(test, feature = "quickcheck"))]
+#[macro_use]
+extern crate quickcheck;
+
+#[cfg(feature = "quickcheck")]
+quickcheck!{}
+
 #[macro_use]
 pub mod list;
 
-#[cfg(test)]
-#[macro_use]
-extern crate quickcheck;
+pub use list::List;
