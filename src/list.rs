@@ -15,10 +15,10 @@
 //! When cloning values would be too expensive,
 //! use `List<Rc<T>>` or `List<Arc<T>>`.
 
+use std::sync::Arc;
 use std::iter::{Iterator, FromIterator};
 use std::fmt::{Debug, Formatter, Error};
 use std::ops::Deref;
-use std::sync::Arc;
 use std::hash::{Hash, Hasher};
 use std::cmp::Ordering;
 
@@ -86,10 +86,7 @@ pub fn cons<A>(car: A, cdr: &List<A>) -> List<A> {
 }
 
 /// A list of elements of type A.
-pub enum List<A> {
-    #[doc(hidden)]
-    List(Arc<ListNode<A>>),
-}
+pub struct List<A>(Arc<ListNode<A>>);
 
 #[doc(hidden)]
 #[derive(Clone)]
@@ -101,12 +98,12 @@ pub enum ListNode<A> {
 impl<A> List<A> {
     /// Construct an empty list.
     pub fn empty() -> List<A> {
-        List::List(Arc::new(Nil))
+        List(Arc::new(Nil))
     }
 
     /// Construct a list with a single element.
     pub fn singleton(v: A) -> List<A> {
-        List::List(Arc::new(Cons(1, v, list![])))
+        List(Arc::new(Cons(1, v, list![])))
     }
 
     /// Construct a list by consuming an `IntoIterator`.
@@ -134,7 +131,7 @@ impl<A> List<A> {
 
     fn as_arc<'a>(&'a self) -> &'a Arc<ListNode<A>> {
         match self {
-            &List::List(ref arc) => arc,
+            &List(ref arc) => arc,
         }
     }
 
@@ -155,7 +152,7 @@ impl<A> List<A> {
     pub fn cons(&self, car: A) -> List<A> {
         match self.as_arc().deref() {
             &Nil => List::singleton(car),
-            &Cons(l, _, _) => List::List(Arc::new(Cons(l + 1, car, self.clone()))),
+            &Cons(l, _, _) => List(Arc::new(Cons(l + 1, car, self.clone()))),
         }
     }
 
@@ -486,7 +483,7 @@ impl<A> Clone for List<A> {
     /// Time: O(1)
     fn clone(&self) -> Self {
         match self {
-            &List::List(ref arc) => List::List(arc.clone()),
+            &List(ref node) => List(node.clone()),
         }
     }
 }
