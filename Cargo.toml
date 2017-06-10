@@ -13,9 +13,6 @@ keywords = ["immutable", "persistent"]
 [badges]
 travis-ci = { repository = "bodil/im-rs" }
 
-[features]
-ptr_eq = []
-
 [dependencies]
 quickcheck = { version = "0.4.1", optional = true }
 

@@ -2,7 +2,4 @@ language: rust
 rust:
   - stable
   - beta
-matrix:
-  include:
-    - rust: nightly
-      script: cargo test --features ptr_eq
+  - nightly
