@@ -8,4 +8,6 @@ quickcheck!{}
 #[macro_use]
 pub mod list;
 
+pub mod map;
+
 pub use list::List;
