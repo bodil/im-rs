@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 use std::cmp::Ordering;
+use std::ops::Deref;
 use list::List;
 
 use super::Map;
@@ -88,7 +89,7 @@ fn from_zipper<K, V>(ctx: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V>
     match ctx.uncons() {
         None => tree,
         Some((x, xs)) => {
-            match x.clone() {
+            match x.deref().clone() {
                 TwoLeft(k1, v1, right) => from_zipper(xs, Map::two(tree, k1, v1, right)),
                 TwoRight(left, k1, v1) => from_zipper(xs, Map::two(left, k1, v1, tree)),
                 ThreeLeft(k1, v1, mid, k2, v2, right) => {
@@ -207,8 +208,8 @@ fn ins_up<K, V>(ctx: List<TreeContext<K, V>>, kickup: KickUp<K, V>) -> Map<K, V>
             }
         }
         Some((x, xs)) => {
-            match (x, kickup) {
-                (&TwoLeft(ref k1, ref v1, ref right), KickUp(ref left, ref k, ref v, ref mid)) => {
+            match (x.deref().clone(), kickup) {
+                (TwoLeft(ref k1, ref v1, ref right), KickUp(ref left, ref k, ref v, ref mid)) => {
                     from_zipper(xs,
                                 Map::three(left.clone(),
                                            k.clone(),
@@ -218,7 +219,7 @@ fn ins_up<K, V>(ctx: List<TreeContext<K, V>>, kickup: KickUp<K, V>) -> Map<K, V>
                                            v1.clone(),
                                            right.clone()))
                 }
-                (&TwoRight(ref left, ref k1, ref v1), KickUp(ref mid, ref k, ref v, ref right)) => {
+                (TwoRight(ref left, ref k1, ref v1), KickUp(ref mid, ref k, ref v, ref right)) => {
                     from_zipper(xs,
                                 Map::three(left.clone(),
                                            k1.clone(),
@@ -228,7 +229,7 @@ fn ins_up<K, V>(ctx: List<TreeContext<K, V>>, kickup: KickUp<K, V>) -> Map<K, V>
                                            v.clone(),
                                            right.clone()))
                 }
-                (&ThreeLeft(ref k1, ref v1, ref c, ref k2, ref v2, ref d),
+                (ThreeLeft(ref k1, ref v1, ref c, ref k2, ref v2, ref d),
                  KickUp(ref a, ref k, ref v, ref b)) => {
                     ins_up(xs,
                            KickUp(Map::two(a.clone(), k.clone(), v.clone(), b.clone()),
@@ -236,7 +237,7 @@ fn ins_up<K, V>(ctx: List<TreeContext<K, V>>, kickup: KickUp<K, V>) -> Map<K, V>
                                   v1.clone(),
                                   Map::two(c.clone(), k2.clone(), v2.clone(), d.clone())))
                 }
-                (&ThreeMiddle(ref a, ref k1, ref v1, ref k2, ref v2, ref d),
+                (ThreeMiddle(ref a, ref k1, ref v1, ref k2, ref v2, ref d),
                  KickUp(ref b, ref k, ref v, ref c)) => {
                     ins_up(xs,
                            KickUp(Map::two(a.clone(), k1.clone(), v1.clone(), b.clone()),
@@ -244,7 +245,7 @@ fn ins_up<K, V>(ctx: List<TreeContext<K, V>>, kickup: KickUp<K, V>) -> Map<K, V>
                                   v.clone(),
                                   Map::two(c.clone(), k2.clone(), v2.clone(), d.clone())))
                 }
-                (&ThreeRight(ref a, ref k1, ref v1, ref b, ref k2, ref v2),
+                (ThreeRight(ref a, ref k1, ref v1, ref b, ref k2, ref v2),
                  KickUp(ref c, ref k, ref v, ref d)) => {
                     ins_up(xs,
                            KickUp(Map::two(a.clone(), k1.clone(), v1.clone(), b.clone()),
@@ -376,17 +377,17 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
     match xs.uncons() {
         None => tree,
         Some((x, ctx)) => {
-            match (x, tree.null()) {
-                (&TwoLeft(ref k1, ref v1, ref right), true) if right.null() => {
+            match (x.deref().clone(), tree.null()) {
+                (TwoLeft(ref k1, ref v1, ref right), true) if right.null() => {
                     from_zipper(ctx,
                                 Map::two(Map::empty(), k1.clone(), v1.clone(), Map::empty()))
                 }
-                (&TwoRight(ref left, ref k1, ref v1), true) if left.null() => {
+                (TwoRight(ref left, ref k1, ref v1), true) if left.null() => {
                     from_zipper(ctx,
                                 Map::two(Map::empty(), k1.clone(), v1.clone(), Map::empty()))
                 }
 
-                (&TwoLeft(ref k1, ref v1, ref right), _) => {
+                (TwoLeft(ref k1, ref v1, ref right), _) => {
                     match *right.0 {
                         Leaf => unreachable!(),
                         Two(ref m, ref k2, ref v2, ref r) => {
@@ -411,7 +412,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                         }
                     }
                 }
-                (&TwoRight(ref left, ref k3, ref v3), _) => {
+                (TwoRight(ref left, ref k3, ref v3), _) => {
                     match *left.0 {
                         Leaf => unreachable!(),
                         Two(ref l, ref k1, ref v1, ref m) => {
@@ -436,8 +437,8 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                         }
                     }
                 }
-                (&ThreeLeft(ref k1, ref v1, ref m, ref k2, ref v2, ref r), true) if m.null() &&
-                                                                                    r.null() => {
+                (ThreeLeft(ref k1, ref v1, ref m, ref k2, ref v2, ref r), true) if m.null() &&
+                                                                                   r.null() => {
                     from_zipper(ctx,
                                 Map::three(Map::empty(),
                                            k1.clone(),
@@ -447,8 +448,8 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                                            v2.clone(),
                                            Map::empty()))
                 }
-                (&ThreeMiddle(ref l, ref k1, ref v1, ref k2, ref v2, ref r), true) if l.null() &&
-                                                                                      r.null() => {
+                (ThreeMiddle(ref l, ref k1, ref v1, ref k2, ref v2, ref r), true) if l.null() &&
+                                                                                     r.null() => {
                     from_zipper(ctx,
                                 Map::three(Map::empty(),
                                            k1.clone(),
@@ -458,8 +459,8 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                                            v2.clone(),
                                            Map::empty()))
                 }
-                (&ThreeRight(ref l, ref k1, ref v1, ref m, ref k2, ref v2), true) if l.null() &&
-                                                                                     m.null() => {
+                (ThreeRight(ref l, ref k1, ref v1, ref m, ref k2, ref v2), true) if l.null() &&
+                                                                                    m.null() => {
                     from_zipper(ctx,
                                 Map::three(Map::empty(),
                                            k1.clone(),
@@ -469,7 +470,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                                            v2.clone(),
                                            Map::empty()))
                 }
-                (&ThreeLeft(ref k1, ref v1, ref mid, ref k4, ref v4, ref e), _) => {
+                (ThreeLeft(ref k1, ref v1, ref mid, ref k4, ref v4, ref e), _) => {
                     match *mid.0 {
                         Leaf => unreachable!(),
                         Two(ref b, ref k2, ref v2, ref c) => {
@@ -503,7 +504,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                         }
                     }
                 }
-                (&ThreeMiddle(ref left, ref kl, ref vl, ref kr, ref vr, ref right), _) => {
+                (ThreeMiddle(ref left, ref kl, ref vl, ref kr, ref vr, ref right), _) => {
                     match (&*left.0, &*right.0) {
                         (&Two(ref a, ref k1, ref v1, ref b), _) => {
                             from_zipper(ctx,
@@ -566,7 +567,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                         _ => unreachable!(),
                     }
                 }
-                (&ThreeRight(ref a, ref k1, ref v1, ref mid, ref k4, ref v4), _) => {
+                (ThreeRight(ref a, ref k1, ref v1, ref mid, ref k4, ref v4), _) => {
                     match *mid.0 {
                         Leaf => unreachable!(),
                         Two(ref b, ref k2, ref v2, ref c) => {
