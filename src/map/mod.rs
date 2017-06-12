@@ -11,7 +11,7 @@ mod walk;
 
 use std::sync::Arc;
 use std::iter::{Iterator, FromIterator};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::fmt::{Debug, Formatter, Error};
@@ -663,9 +663,45 @@ impl<K, V> IntoIterator for Map<K, V> {
 
 // Conversions
 
+impl<'a, K: Ord + Clone, V: Clone> From<&'a [(K, V)]> for Map<K, V> {
+    fn from(m: &'a [(K, V)]) -> Map<K, V> {
+        m.into_iter().map(|&(ref k, ref v)| (k.clone(), v.clone())).collect()
+    }
+}
+
 impl<K: Eq + Hash + Ord, V> From<HashMap<K, V>> for Map<K, V> {
     fn from(m: HashMap<K, V>) -> Map<K, V> {
-        m.into_iter().fold(map![], |n, (k, v)| n.insert(k, v))
+        m.into_iter().collect()
+    }
+}
+
+impl<'a, K: Eq + Hash + Ord + Clone, V: Clone> From<&'a HashMap<K, V>> for Map<K, V> {
+    fn from(m: &'a HashMap<K, V>) -> Map<K, V> {
+        m.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    }
+}
+
+impl<'a, K: Eq + Hash + Ord, V> From<&'a HashMap<Arc<K>, Arc<V>>> for Map<K, V> {
+    fn from(m: &'a HashMap<Arc<K>, Arc<V>>) -> Map<K, V> {
+        m.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    }
+}
+
+impl<K: Ord, V> From<BTreeMap<K, V>> for Map<K, V> {
+    fn from(m: BTreeMap<K, V>) -> Map<K, V> {
+        m.into_iter().collect()
+    }
+}
+
+impl<'a, K: Ord + Clone, V: Clone> From<&'a BTreeMap<K, V>> for Map<K, V> {
+    fn from(m: &'a BTreeMap<K, V>) -> Map<K, V> {
+        m.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    }
+}
+
+impl<'a, K: Ord, V> From<&'a BTreeMap<Arc<K>, Arc<V>>> for Map<K, V> {
+    fn from(m: &'a BTreeMap<Arc<K>, Arc<V>>) -> Map<K, V> {
+        m.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 }
 
