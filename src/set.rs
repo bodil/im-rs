@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter, Error};
 use std::collections::{HashSet, BTreeSet};
 use std::hash::Hash;
+use std::ops::Add;
 use map::{self, Map};
 
 #[macro_export]
@@ -166,6 +167,14 @@ impl<A: Ord> Ord for Set<A> {
 impl<A> Default for Set<A> {
     fn default() -> Self {
         set![]
+    }
+}
+
+impl<'a, A: Ord> Add for &'a Set<A> {
+    type Output = Set<A>;
+
+    fn add(self, other: Self) -> Self::Output {
+        self.union(other)
     }
 }
 

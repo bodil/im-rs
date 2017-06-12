@@ -15,6 +15,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::fmt::{Debug, Formatter, Error};
+use std::ops::Add;
 
 use self::MapNode::{Leaf, Two, Three};
 
@@ -494,6 +495,14 @@ impl<K: Ord, V: Ord> Ord for Map<K, V> {
 impl<K, V> Default for Map<K, V> {
     fn default() -> Self {
         map![]
+    }
+}
+
+impl<'a, K: Ord, V> Add for &'a Map<K, V> {
+    type Output = Map<K, V>;
+
+    fn add(self, other: Self) -> Self::Output {
+        self.union(other)
     }
 }
 
