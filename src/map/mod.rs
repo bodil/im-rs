@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::iter::{Iterator, FromIterator};
 use std::collections::{BTreeMap, HashMap};
 use std::cmp::Ordering;
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::fmt::{Debug, Formatter, Error};
 use std::ops::Add;
 
@@ -307,8 +307,7 @@ impl<K: Ord, V> Map<K, V> {
     pub fn unions_with_key<I>(i: I, f: &Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>) -> Self
         where I: IntoIterator<Item = Self>
     {
-        i.into_iter()
-            .fold(map![], |a, b| a.union_with_key(&b, f))
+        i.into_iter().fold(map![], |a, b| a.union_with_key(&b, f))
     }
 
     pub fn difference<B>(&self, other: &Map<K, B>) -> Self {
@@ -492,6 +491,16 @@ impl<K: Ord, V: Ord> Ord for Map<K, V> {
     }
 }
 
+impl<K: Ord + Hash, V: Hash> Hash for Map<K, V> {
+    fn hash<H>(&self, state: &mut H)
+        where H: Hasher
+    {
+        for i in self.iter() {
+            i.hash(state);
+        }
+    }
+}
+
 impl<K, V> Default for Map<K, V> {
     fn default() -> Self {
         map![]
@@ -647,8 +656,7 @@ impl<K: Ord, V> FromIterator<(Arc<K>, Arc<V>)> for Map<K, V> {
     fn from_iter<T>(i: T) -> Self
         where T: IntoIterator<Item = (Arc<K>, Arc<V>)>
     {
-        i.into_iter()
-            .fold(map![], |m, (k, v)| m.insert_ref(k, v))
+        i.into_iter().fold(map![], |m, (k, v)| m.insert_ref(k, v))
     }
 }
 
@@ -674,7 +682,9 @@ impl<K, V> IntoIterator for Map<K, V> {
 
 impl<'a, K: Ord + Clone, V: Clone> From<&'a [(K, V)]> for Map<K, V> {
     fn from(m: &'a [(K, V)]) -> Map<K, V> {
-        m.into_iter().map(|&(ref k, ref v)| (k.clone(), v.clone())).collect()
+        m.into_iter()
+            .map(|&(ref k, ref v)| (k.clone(), v.clone()))
+            .collect()
     }
 }
 

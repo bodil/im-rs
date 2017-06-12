@@ -3,7 +3,7 @@ use std::iter::{IntoIterator, FromIterator};
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter, Error};
 use std::collections::{HashSet, BTreeSet};
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::ops::Add;
 use map::{self, Map};
 
@@ -79,7 +79,9 @@ impl<A: Ord> Set<A> {
         Set(self.0.union(&other.0))
     }
 
-    pub fn unions<I>(i: I) -> Self where I: IntoIterator<Item = Self> {
+    pub fn unions<I>(i: I) -> Self
+        where I: IntoIterator<Item = Self>
+    {
         i.into_iter().fold(set![], |a, b| a.union(&b))
     }
 
@@ -164,6 +166,16 @@ impl<A: Ord> Ord for Set<A> {
     }
 }
 
+impl<A: Hash> Hash for Set<A> {
+    fn hash<H>(&self, state: &mut H)
+        where H: Hasher
+    {
+        for i in self.iter() {
+            i.hash(state);
+        }
+    }
+}
+
 impl<A> Default for Set<A> {
     fn default() -> Self {
         set![]
@@ -201,7 +213,7 @@ impl<A: Debug> Debug for Set<A> {
 // Iterators
 
 pub struct Iter<A> {
-    it: map::Iter<A, ()>
+    it: map::Iter<A, ()>,
 }
 
 impl<A> Iterator for Iter<A> {
@@ -239,8 +251,7 @@ impl<A: Ord> FromIterator<Arc<A>> for Set<A> {
     fn from_iter<T>(i: T) -> Self
         where T: IntoIterator<Item = Arc<A>>
     {
-        i.into_iter()
-            .fold(set![], |s, a| s.insert_ref(a))
+        i.into_iter().fold(set![], |s, a| s.insert_ref(a))
     }
 }
 
