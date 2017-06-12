@@ -7,8 +7,8 @@ quickcheck!{}
 
 #[macro_use]
 pub mod list;
-
 pub mod map;
+pub mod set;
 
 pub use list::List;
 pub use map::Map;
