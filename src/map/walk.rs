@@ -14,14 +14,14 @@ use self::TreeContext::{TwoLeft, TwoRight, ThreeLeft, ThreeMiddle, ThreeRight};
 pub fn lookup<K: Ord, V>(m: &Map<K, V>, k: &K) -> Option<Arc<V>> {
     match *m.0 {
         Leaf => None,
-        Two(ref left, ref k1, ref v, ref right) => {
+        Two(_, ref left, ref k1, ref v, ref right) => {
             match k.cmp(k1) {
                 Ordering::Equal => Some(v.clone()),
                 Ordering::Less => left.lookup(k),
                 _ => right.lookup(k),
             }
         }
-        Three(ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => {
+        Three(_, ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => {
             match k.cmp(k1) {
                 Ordering::Equal => Some(v1.clone()),
                 c1 => {
@@ -114,9 +114,9 @@ pub fn ins_down<K: Ord, V>(ctx: List<TreeContext<K, V>>,
     match *m.0 {
         Leaf => {
             ins_up(ctx,
-                   KickUp(Map::empty(), k.clone(), v.clone(), Map::empty()))
+                   KickUp(Map::new(), k.clone(), v.clone(), Map::new()))
         }
-        Two(ref left, ref k1, ref v1, ref right) => {
+        Two(_, ref left, ref k1, ref v1, ref right) => {
             match k.cmp(k1) {
                 Ordering::Equal => {
                     from_zipper(ctx,
@@ -136,7 +136,7 @@ pub fn ins_down<K: Ord, V>(ctx: List<TreeContext<K, V>>,
                 }
             }
         }
-        Three(ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => {
+        Three(_, ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => {
             match k.cmp(k1) {
                 Ordering::Equal => {
                     from_zipper(ctx,
@@ -266,10 +266,10 @@ pub fn pop_down<K: Ord, V>(ctx: List<TreeContext<K, V>>,
                            -> Option<(Arc<K>, Arc<V>, Map<K, V>)> {
     match *m.0 {
         Leaf => None,
-        Two(ref left, ref k1, ref v1, ref right) => {
+        Two(_, ref left, ref k1, ref v1, ref right) => {
             match (&*right.0, k.cmp(k1)) {
                 (&Leaf, Ordering::Equal) => {
-                    Some((k1.clone(), v1.clone(), pop_up(ctx, Map::empty())))
+                    Some((k1.clone(), v1.clone(), pop_up(ctx, Map::new())))
                 }
                 (_, Ordering::Equal) => {
                     let (max_key, max_val) = max_node(left.clone());
@@ -290,7 +290,7 @@ pub fn pop_down<K: Ord, V>(ctx: List<TreeContext<K, V>>,
                 }
             }
         }
-        Three(ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => {
+        Three(_, ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => {
             let leaves = match (&*left.0, &*mid.0, &*right.0) {
                 (&Leaf, &Leaf, &Leaf) => true,
                 _ => false,
@@ -300,19 +300,19 @@ pub fn pop_down<K: Ord, V>(ctx: List<TreeContext<K, V>>,
                     Some((k1.clone(),
                           v1.clone(),
                           from_zipper(ctx,
-                                      Map::two(Map::empty(),
+                                      Map::two(Map::new(),
                                                k2.clone(),
                                                v2.clone(),
-                                               Map::empty()))))
+                                               Map::new()))))
                 }
                 (true, _, Ordering::Equal) => {
                     Some((k2.clone(),
                           v2.clone(),
                           from_zipper(ctx,
-                                      Map::two(Map::empty(),
+                                      Map::two(Map::new(),
                                                k1.clone(),
                                                v1.clone(),
-                                               Map::empty()))))
+                                               Map::new()))))
                 }
                 (_, Ordering::Equal, _) => {
                     let (max_key, max_val) = max_node(left.clone());
@@ -377,20 +377,20 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
     match xs.uncons() {
         None => tree,
         Some((x, ctx)) => {
-            match (x.deref().clone(), tree.null()) {
-                (TwoLeft(ref k1, ref v1, ref right), true) if right.null() => {
+            match (x.deref().clone(), tree.is_empty()) {
+                (TwoLeft(ref k1, ref v1, ref right), true) if right.is_empty() => {
                     from_zipper(ctx,
-                                Map::two(Map::empty(), k1.clone(), v1.clone(), Map::empty()))
+                                Map::two(Map::new(), k1.clone(), v1.clone(), Map::new()))
                 }
-                (TwoRight(ref left, ref k1, ref v1), true) if left.null() => {
+                (TwoRight(ref left, ref k1, ref v1), true) if left.is_empty() => {
                     from_zipper(ctx,
-                                Map::two(Map::empty(), k1.clone(), v1.clone(), Map::empty()))
+                                Map::two(Map::new(), k1.clone(), v1.clone(), Map::new()))
                 }
 
                 (TwoLeft(ref k1, ref v1, ref right), _) => {
                     match *right.0 {
                         Leaf => unreachable!(),
-                        Two(ref m, ref k2, ref v2, ref r) => {
+                        Two(_, ref m, ref k2, ref v2, ref r) => {
                             pop_up(ctx,
                                    Map::three(tree,
                                               k1.clone(),
@@ -400,7 +400,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                                               v2.clone(),
                                               r.clone()))
                         }
-                        Three(ref b, ref k2, ref v2, ref c, ref k3, ref v3, ref d) => {
+                        Three(_, ref b, ref k2, ref v2, ref c, ref k3, ref v3, ref d) => {
                             from_zipper(ctx,
                                         Map::two(Map::two(tree, k1.clone(), v1.clone(), b.clone()),
                                                  k2.clone(),
@@ -415,7 +415,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                 (TwoRight(ref left, ref k3, ref v3), _) => {
                     match *left.0 {
                         Leaf => unreachable!(),
-                        Two(ref l, ref k1, ref v1, ref m) => {
+                        Two(_, ref l, ref k1, ref v1, ref m) => {
                             pop_up(ctx,
                                    Map::three(l.clone(),
                                               k1.clone(),
@@ -425,7 +425,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                                               v3.clone(),
                                               tree))
                         }
-                        Three(ref a, ref k1, ref v1, ref b, ref k2, ref v2, ref c) => {
+                        Three(_, ref a, ref k1, ref v1, ref b, ref k2, ref v2, ref c) => {
                             from_zipper(ctx,
                                         Map::two(Map::two(a.clone(),
                                                           k1.clone(),
@@ -437,43 +437,43 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                         }
                     }
                 }
-                (ThreeLeft(ref k1, ref v1, ref m, ref k2, ref v2, ref r), true) if m.null() &&
-                                                                                   r.null() => {
+                (ThreeLeft(ref k1, ref v1, ref m, ref k2, ref v2, ref r), true) if m.is_empty() &&
+                                                                                   r.is_empty() => {
                     from_zipper(ctx,
-                                Map::three(Map::empty(),
+                                Map::three(Map::new(),
                                            k1.clone(),
                                            v1.clone(),
-                                           Map::empty(),
+                                           Map::new(),
                                            k2.clone(),
                                            v2.clone(),
-                                           Map::empty()))
+                                           Map::new()))
                 }
-                (ThreeMiddle(ref l, ref k1, ref v1, ref k2, ref v2, ref r), true) if l.null() &&
-                                                                                     r.null() => {
+                (ThreeMiddle(ref l, ref k1, ref v1, ref k2, ref v2, ref r), true) if l.is_empty() &&
+                                                                                     r.is_empty() => {
                     from_zipper(ctx,
-                                Map::three(Map::empty(),
+                                Map::three(Map::new(),
                                            k1.clone(),
                                            v1.clone(),
-                                           Map::empty(),
+                                           Map::new(),
                                            k2.clone(),
                                            v2.clone(),
-                                           Map::empty()))
+                                           Map::new()))
                 }
-                (ThreeRight(ref l, ref k1, ref v1, ref m, ref k2, ref v2), true) if l.null() &&
-                                                                                    m.null() => {
+                (ThreeRight(ref l, ref k1, ref v1, ref m, ref k2, ref v2), true) if l.is_empty() &&
+                                                                                    m.is_empty() => {
                     from_zipper(ctx,
-                                Map::three(Map::empty(),
+                                Map::three(Map::new(),
                                            k1.clone(),
                                            v1.clone(),
-                                           Map::empty(),
+                                           Map::new(),
                                            k2.clone(),
                                            v2.clone(),
-                                           Map::empty()))
+                                           Map::new()))
                 }
                 (ThreeLeft(ref k1, ref v1, ref mid, ref k4, ref v4, ref e), _) => {
                     match *mid.0 {
                         Leaf => unreachable!(),
-                        Two(ref b, ref k2, ref v2, ref c) => {
+                        Two(_, ref b, ref k2, ref v2, ref c) => {
                             from_zipper(ctx,
                                         Map::two(Map::three(tree,
                                                             k1.clone(),
@@ -486,7 +486,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                                                  v4.clone(),
                                                  e.clone()))
                         }
-                        Three(ref b, ref k2, ref v2, ref c, ref k3, ref v3, ref d) => {
+                        Three(_, ref b, ref k2, ref v2, ref c, ref k3, ref v3, ref d) => {
                             from_zipper(ctx,
                                         Map::three(Map::two(tree,
                                                             k1.clone(),
@@ -506,7 +506,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                 }
                 (ThreeMiddle(ref left, ref kl, ref vl, ref kr, ref vr, ref right), _) => {
                     match (&*left.0, &*right.0) {
-                        (&Two(ref a, ref k1, ref v1, ref b), _) => {
+                        (&Two(_, ref a, ref k1, ref v1, ref b), _) => {
                             from_zipper(ctx,
                                         Map::two(Map::three(a.clone(),
                                                             k1.clone(),
@@ -519,7 +519,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                                                  vr.clone(),
                                                  right.clone()))
                         }
-                        (_, &Two(ref c, ref k3, ref v3, ref d)) => {
+                        (_, &Two(_, ref c, ref k3, ref v3, ref d)) => {
                             from_zipper(ctx,
                                         Map::two(left.clone(),
                                                  kl.clone(),
@@ -532,7 +532,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                                                             v3.clone(),
                                                             d.clone())))
                         }
-                        (&Three(ref a, ref k1, ref v1, ref b, ref k2, ref v2, ref c), _) => {
+                        (&Three(_, ref a, ref k1, ref v1, ref b, ref k2, ref v2, ref c), _) => {
                             from_zipper(ctx,
                                         Map::three(Map::two(a.clone(),
                                                             k1.clone(),
@@ -548,7 +548,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                                                    vr.clone(),
                                                    right.clone()))
                         }
-                        (_, &Three(ref c, ref k3, ref v3, ref d, ref k4, ref v4, ref e)) => {
+                        (_, &Three(_, ref c, ref k3, ref v3, ref d, ref k4, ref v4, ref e)) => {
                             from_zipper(ctx,
                                         Map::three(left.clone(),
                                                    kl.clone(),
@@ -570,7 +570,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                 (ThreeRight(ref a, ref k1, ref v1, ref mid, ref k4, ref v4), _) => {
                     match *mid.0 {
                         Leaf => unreachable!(),
-                        Two(ref b, ref k2, ref v2, ref c) => {
+                        Two(_, ref b, ref k2, ref v2, ref c) => {
                             from_zipper(ctx,
                                         Map::two(a.clone(),
                                                  k1.clone(),
@@ -583,7 +583,7 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                                                             v4.clone(),
                                                             tree)))
                         }
-                        Three(ref b, ref k2, ref v2, ref c, ref k3, ref v3, ref d) => {
+                        Three(_, ref b, ref k2, ref v2, ref c, ref k3, ref v3, ref d) => {
                             from_zipper(ctx,
                                         Map::three(a.clone(),
                                                    k1.clone(),
@@ -609,27 +609,27 @@ fn pop_up<K, V>(xs: List<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
 fn max_node<K, V>(m: Map<K, V>) -> (Arc<K>, Arc<V>) {
     match *m.0 {
         Leaf => unreachable!(),
-        Two(_, ref k, ref v, ref right) if right.null() => (k.clone(), v.clone()),
-        Two(_, _, _, ref right) => max_node(right.clone()),
-        Three(_, _, _, _, ref k, ref v, ref right) if right.null() => (k.clone(), v.clone()),
-        Three(_, _, _, _, _, _, ref right) => max_node(right.clone()),
+        Two(_, _, ref k, ref v, ref right) if right.is_empty() => (k.clone(), v.clone()),
+        Two(_, _, _, _, ref right) => max_node(right.clone()),
+        Three(_, _, _, _, _, ref k, ref v, ref right) if right.is_empty() => (k.clone(), v.clone()),
+        Three(_, _, _, _, _, _, _, ref right) => max_node(right.clone()),
     }
 }
 
 fn remove_max_node<K, V>(ctx: List<TreeContext<K, V>>, m: Map<K, V>) -> Map<K, V> {
     match *m.0 {
         Leaf => unreachable!(),
-        Two(ref left, _, _, ref right) if left.null() && right.null() => pop_up(ctx, Map::empty()),
-        Two(ref left, ref k, ref v, ref right) => {
+        Two(_, ref left, _, _, ref right) if left.is_empty() && right.is_empty() => pop_up(ctx, Map::new()),
+        Two(_, ref left, ref k, ref v, ref right) => {
             remove_max_node(ctx.cons(TwoRight(left.clone(), k.clone(), v.clone())),
                             right.clone())
         }
-        Three(ref left, ref k1, ref v1, ref mid, _, _, ref right) if left.null() && mid.null() &&
-                                                                     right.null() => {
-            pop_up(ctx.cons(TwoRight(Map::empty(), k1.clone(), v1.clone())),
-                   Map::empty())
+        Three(_, ref left, ref k1, ref v1, ref mid, _, _, ref right) if left.is_empty() && mid.is_empty() &&
+                                                                     right.is_empty() => {
+            pop_up(ctx.cons(TwoRight(Map::new(), k1.clone(), v1.clone())),
+                   Map::new())
         }
-        Three(ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => {
+        Three(_, ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => {
             remove_max_node(ctx.cons(ThreeRight(left.clone(),
                                                 k1.clone(),
                                                 v1.clone(),

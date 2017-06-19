@@ -13,3 +13,6 @@ pub mod set;
 pub use list::List;
 pub use map::Map;
 pub use set::Set;
+
+#[cfg(test)]
+pub mod test;

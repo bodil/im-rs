@@ -9,11 +9,10 @@
 //! the length of a list is also O(1). Otherwise, operations
 //! are generally O(n).
 //!
-//! Items in the list generally need to implement `Clone`,
-//! because the shared structure makes it impossible to
-//! determine the lifetime of a reference inside the list.
-//! When cloning values would be too expensive,
-//! use `List<Rc<T>>` or `List<Arc<T>>`.
+//! Items in the list are stored in `Arc`s, and insertion
+//! operations accept any value for which there's a `From`
+//! implementation into `Arc<A>`. Iterators and lookup
+//! operations, conversely, produce `Arc<A>`.
 
 use std::sync::Arc;
 use std::iter::{Iterator, FromIterator};
@@ -42,16 +41,16 @@ use self::ListNode::{Cons, Nil};
 ///
 /// assert_eq!(
 ///   list![1, 2, 3],
-///   cons(1, &cons(2, &cons(3, &List::empty())))
+///   cons(1, &cons(2, &cons(3, &List::new())))
 /// );
 /// # }
 /// ```
 #[macro_export]
 macro_rules! list {
-    () => { $crate::list::List::empty() };
+    () => { $crate::list::List::new() };
 
     ( $($x:expr),* ) => {{
-        let mut l = $crate::list::List::empty();
+        let mut l = $crate::list::List::new();
         $(
             l = l.cons($x);
         )*
@@ -76,24 +75,21 @@ macro_rules! list {
 /// # use im::list::{List, cons};
 /// # fn main() {
 /// assert_eq!(
-///   cons(1, &cons(2, &cons(3, &List::empty()))),
+///   cons(1, &cons(2, &cons(3, &List::new()))),
 ///   list![1, 2, 3]
 /// );
 /// # }
 /// ```
-pub fn cons<A>(car: A, cdr: &List<A>) -> List<A> {
+pub fn cons<A, R>(car: R, cdr: &List<A>) -> List<A>
+    where Arc<A>: From<R>
+{
     cdr.cons(car)
-}
-
-pub fn cons_ref<A>(car: Arc<A>, cdr: &List<A>) -> List<A> {
-    cdr.cons_ref(car)
 }
 
 /// A list of elements of type A.
 pub struct List<A>(Arc<ListNode<A>>);
 
 #[doc(hidden)]
-#[derive(Clone)]
 pub enum ListNode<A> {
     Cons(usize, Arc<A>, List<A>),
     Nil,
@@ -101,17 +97,15 @@ pub enum ListNode<A> {
 
 impl<A> List<A> {
     /// Construct an empty list.
-    pub fn empty() -> List<A> {
+    pub fn new() -> List<A> {
         List(Arc::new(Nil))
     }
 
     /// Construct a list with a single element.
-    pub fn singleton(v: A) -> List<A> {
-        List(Arc::new(Cons(1, Arc::new(v), list![])))
-    }
-
-    pub fn singleton_ref(v: Arc<A>) -> List<A> {
-        List(Arc::new(Cons(1, v, list![])))
+    pub fn singleton<R>(v: R) -> List<A>
+        where Arc<A>: From<R>
+    {
+        List(Arc::new(Cons(1, Arc::from(v), list![])))
     }
 
     /// Construct a list by consuming an `IntoIterator`.
@@ -133,14 +127,17 @@ impl<A> List<A> {
     /// );
     /// # }
     /// ```
-    pub fn from<I: IntoIterator<Item = A>>(it: I) -> List<A> {
-        it.into_iter().collect()
+    pub fn from<R, I>(it: I) -> List<A>
+        where I: IntoIterator<Item = R>,
+              Arc<A>: From<R>
+    {
+        it.into_iter().map(|a| Arc::from(a)).collect()
     }
 
     /// Test whether a list is empty.
     ///
     /// Time: O(1)
-    pub fn null(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         match *self.0 {
             Nil => true,
             _ => false,
@@ -151,12 +148,10 @@ impl<A> List<A> {
     /// current list.
     ///
     /// Time: O(1)
-    pub fn cons(&self, car: A) -> List<A> {
-        List(Arc::new(Cons(self.length() + 1, Arc::new(car), self.clone())))
-    }
-
-    pub fn cons_ref(&self, car: Arc<A>) -> List<A> {
-        List(Arc::new(Cons(self.length() + 1, car, self.clone())))
+    pub fn cons<R>(&self, car: R) -> List<A>
+        where Arc<A>: From<R>
+    {
+        List(Arc::new(Cons(self.len() + 1, Arc::from(car), self.clone())))
     }
 
     /// Get the first element of a list.
@@ -164,9 +159,11 @@ impl<A> List<A> {
     /// If the list is empty, `None` is returned.
     ///
     /// Time: O(1)
-    pub fn head(&self) -> Option<Arc<A>> {
+    pub fn head<T>(&self) -> Option<T>
+        where T: From<Arc<A>>
+    {
         match *self.0 {
-            Cons(_, ref a, _) => Some(a.clone()),
+            Cons(_, ref a, _) => Some(T::from(a.clone())),
             _ => None,
         }
     }
@@ -240,10 +237,10 @@ impl<A> List<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # fn main() {
-    /// assert_eq!(5, list![1, 2, 3, 4, 5].length());
+    /// assert_eq!(5, list![1, 2, 3, 4, 5].len());
     /// # }
     /// ```
-    pub fn length(&self) -> usize {
+    pub fn len(&self) -> usize {
         match *self.0 {
             Nil => 0,
             Cons(l, _, _) => l,
@@ -268,8 +265,8 @@ impl<A> List<A> {
     /// ```
     pub fn append(&self, right: &List<A>) -> List<A> {
         match *self.0 {
-            Nil => right.as_ref().clone(),
-            Cons(_, ref a, ref d) => cons_ref(a.clone(), &d.append(right.as_ref())),
+            Nil => right.clone(),
+            Cons(_, ref a, ref d) => cons(a.clone(), &d.append(right)),
         }
     }
 
@@ -290,9 +287,9 @@ impl<A> List<A> {
     /// # }
     /// ```
     pub fn reverse(&self) -> List<A> {
-        let mut out = List::empty();
+        let mut out = List::new();
         for i in self.iter() {
-            out = out.cons_ref(i);
+            out = out.cons(i);
         }
         out
     }
@@ -300,10 +297,6 @@ impl<A> List<A> {
     /// Get an iterator over a list.
     pub fn iter(&self) -> ListIter<A> {
         ListIter { current: self.clone() }
-    }
-
-    pub fn clone_iter(&self) -> ListCloneIter<A> {
-        ListCloneIter { it: self.iter() }
     }
 
     /// Sort a list using a comparator function.
@@ -316,9 +309,9 @@ impl<A> List<A> {
             match (la.uncons(), lb.uncons()) {
                 (Some((ref a, _)), Some((ref b, ref lb1))) if cmp(a.clone(), b.clone()) ==
                                                               Ordering::Greater => {
-                    cons_ref(b.clone(), &merge(la, &lb1, cmp))
+                    cons(b.clone(), &merge(la, &lb1, cmp))
                 }
-                (Some((a, la1)), Some((_, _))) => cons_ref(a.clone(), &merge(&la1, lb, cmp)),
+                (Some((a, la1)), Some((_, _))) => cons(a.clone(), &merge(&la1, lb, cmp)),
                 (None, _) => lb.clone(),
                 (_, None) => la.clone(),
             }
@@ -336,7 +329,7 @@ impl<A> List<A> {
         fn merge_all<A>(l: &List<List<A>>, cmp: &Fn(Arc<A>, Arc<A>) -> Ordering) -> List<A> {
             match l.uncons() {
                 None => list![],
-                Some((ref a, ref d)) if d.null() => a.deref().clone(),
+                Some((ref a, ref d)) if d.is_empty() => a.deref().clone(),
                 _ => merge_all(&merge_pairs(l, cmp), cmp),
             }
         }
@@ -348,9 +341,9 @@ impl<A> List<A> {
                         -> List<List<A>> {
             match l.uncons() {
                 Some((ref b, ref lb)) if cmp(a.clone(), b.clone()) != Ordering::Greater => {
-                    ascending(b.clone(), &|ys| f(cons_ref(a.clone(), &ys)), &lb, cmp)
+                    ascending(b.clone(), &|ys| f(cons(a.clone(), &ys)), &lb, cmp)
                 }
-                _ => cons(f(List::singleton_ref(a.clone())), &sequences(l, cmp)),
+                _ => cons(f(List::singleton(a.clone())), &sequences(l, cmp)),
             }
         }
 
@@ -361,19 +354,19 @@ impl<A> List<A> {
                          -> List<List<A>> {
             match lb.uncons() {
                 Some((ref b, ref bs)) if cmp(a.clone(), b.clone()) == Ordering::Greater => {
-                    descending(b.clone(), &cons_ref(a.clone(), &la), bs, cmp)
+                    descending(b.clone(), &cons(a.clone(), &la), bs, cmp)
                 }
-                _ => cons(cons_ref(a.clone(), &la), &sequences(&lb, cmp)),
+                _ => cons(cons(a.clone(), &la), &sequences(&lb, cmp)),
             }
         }
 
         fn sequences<A>(l: &List<A>, cmp: &Fn(Arc<A>, Arc<A>) -> Ordering) -> List<List<A>> {
             match l.uncons2() {
                 Some((ref a, ref b, ref xs)) if cmp(a.clone(), b.clone()) == Ordering::Greater => {
-                    descending(b.clone(), &List::singleton_ref(a.clone()), xs, cmp)
+                    descending(b.clone(), &List::singleton(a.clone()), xs, cmp)
                 }
                 Some((ref a, ref b, ref xs)) => {
-                    ascending(b.clone(), &|l| cons_ref(a.clone(), &l), &xs, cmp)
+                    ascending(b.clone(), &|l| cons(a.clone(), &l), &xs, cmp)
                 }
                 None => list![l.clone()],
             }
@@ -399,7 +392,7 @@ impl List<i32> {
     /// # }
     /// ```
     pub fn range(from: i32, to: i32) -> List<i32> {
-        let mut list = List::empty();
+        let mut list = List::new();
         let mut c = to;
         while c >= from {
             list = cons(c, &list);
@@ -431,14 +424,20 @@ impl<A> List<A>
     /// );
     /// # }
     /// ```
-    pub fn insert(&self, item: A) -> List<A> {
+    pub fn insert<T>(&self, item: T) -> List<A>
+        where Arc<A>: From<T>
+    {
+        self.insert_ref(Arc::from(item))
+    }
+
+    fn insert_ref(&self, item: Arc<A>) -> List<A> {
         match *self.0 {
-            Nil => List::singleton(item),
+            Nil => List(Arc::new(Cons(0, item, List::new()))),
             Cons(_, ref a, ref d) => {
-                if a.as_ref() > &item {
-                    cons(item, self)
+                if a.deref() > item.deref() {
+                    self.cons(item)
                 } else {
-                    cons_ref(a.clone(), &d.insert(item))
+                    d.insert_ref(item).cons(a.clone())
                 }
             }
         }
@@ -465,6 +464,8 @@ impl<A> List<A>
     }
 }
 
+// Core traits
+
 impl<A> Clone for List<A> {
     /// Clone a list.
     ///
@@ -482,89 +483,7 @@ impl<A> Clone for List<A> {
 impl<A> Default for List<A> {
     /// `Default` for lists is the empty list.
     fn default() -> Self {
-        List::empty()
-    }
-}
-
-pub struct ListIter<A> {
-    #[doc(hidden)]
-    current: List<A>,
-}
-
-impl<A> Iterator for ListIter<A> {
-    type Item = Arc<A>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.current.uncons() {
-            None => None,
-            Some((ref a, ref d)) => {
-                self.current = d.clone();
-                Some(a.clone())
-            }
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match *self.current.0 {
-            Nil => (0, Some(0)),
-            Cons(l, _, _) => (l, Some(l)),
-        }
-    }
-}
-
-impl<A> ExactSizeIterator for ListIter<A> where A: Clone {}
-
-pub struct ListCloneIter<A> {
-    #[doc(hidden)]
-    it: ListIter<A>,
-}
-
-impl<A: Clone> Iterator for ListCloneIter<A> {
-    type Item = A;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.it.next().map(|a| a.deref().clone())
-    }
-}
-
-impl<A> IntoIterator for List<A> {
-    type Item = Arc<A>;
-    type IntoIter = ListIter<A>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
-impl<A> FromIterator<A> for List<A> {
-    fn from_iter<I>(source: I) -> Self
-        where I: IntoIterator<Item = A>
-    {
-        let mut input: Vec<A> = source.into_iter().collect();
-        input.reverse();
-        let mut l = List::empty();
-        for i in input.into_iter() {
-            l = cons(i, &l)
-        }
-        l
-    }
-}
-
-impl<'a, A> FromIterator<&'a A> for List<A>
-    where A: 'a + Clone
-{
-    fn from_iter<I>(source: I) -> Self
-        where I: IntoIterator<Item = &'a A>
-    {
-        source.into_iter().cloned().collect()
-    }
-}
-
-impl<'a, A> From<&'a [A]> for List<A>
-    where A: Clone
-{
-    fn from(slice: &'a [A]) -> List<A> {
-        slice.iter().cloned().collect()
+        List::new()
     }
 }
 
@@ -582,12 +501,12 @@ impl<A> PartialEq for List<A>
     /// Time: O(n)
     fn eq(&self, other: &List<A>) -> bool {
         Arc::ptr_eq(&self.0, &other.0) ||
-        self.length() == other.length() && self.iter().zip(other.iter()).all(|(a, b)| a == b)
+        self.len() == other.len() && self.iter().zip(other.iter()).all(|(a, b)| a == b)
     }
 
     fn ne(&self, other: &List<A>) -> bool {
         !Arc::ptr_eq(&self.0, &other.0) &&
-        (self.length() != other.length() || self.iter().zip(other.iter()).all(|(a, b)| a != b))
+        (self.len() != other.len() || self.iter().zip(other.iter()).all(|(a, b)| a != b))
     }
 }
 
@@ -602,12 +521,6 @@ impl<A> Hash for List<A>
         for i in self.iter() {
             i.hash(state);
         }
-    }
-}
-
-impl<A> AsRef<List<A>> for List<A> {
-    fn as_ref(&self) -> &List<A> {
-        self
     }
 }
 
@@ -638,26 +551,97 @@ impl<A> Debug for List<A>
     }
 }
 
+// Iterators
+
+pub struct ListIter<A> {
+    #[doc(hidden)]
+    current: List<A>,
+}
+
+impl<A> Iterator for ListIter<A> {
+    type Item = Arc<A>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.current.uncons() {
+            None => None,
+            Some((ref a, ref d)) => {
+                self.current = d.clone();
+                Some(a.clone())
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let l = self.current.len();
+        (l, Some(l))
+    }
+}
+
+impl<A> ExactSizeIterator for ListIter<A> {}
+
+impl<A> IntoIterator for List<A> {
+    type Item = Arc<A>;
+    type IntoIter = ListIter<A>;
+
+    fn into_iter(self) -> ListIter<A> {
+        self.iter()
+    }
+}
+
+impl<A, T> FromIterator<T> for List<A>
+    where Arc<A>: From<T>
+{
+    fn from_iter<I>(source: I) -> Self
+        where I: IntoIterator<Item = T>
+    {
+        source.into_iter().fold(list![], |l, v| l.cons(v)).reverse()
+    }
+}
+
+// Conversions
+
+impl<'a, A, R> From<&'a [R]> for List<A>
+    where Arc<A>: From<&'a R>
+{
+    fn from(slice: &'a [R]) -> Self {
+        slice.into_iter().map(|a| Arc::from(a)).collect()
+    }
+}
+
+impl<A, R> From<Vec<R>> for List<A>
+    where Arc<A>: From<R>
+{
+    fn from(vec: Vec<R>) -> Self {
+        vec.into_iter().map(|a| Arc::from(a)).collect()
+    }
+}
+
+impl<'a, A, R> From<&'a Vec<R>> for List<A>
+    where Arc<A>: From<&'a R>
+{
+    fn from(vec: &'a Vec<R>) -> Self {
+        vec.into_iter().map(|a| Arc::from(a)).collect()
+    }
+}
+
+// QuickCheck
+
 #[cfg(any(test, feature = "quickcheck"))]
 use quickcheck::{Arbitrary, Gen};
 
 #[cfg(any(test, feature = "quickcheck"))]
 impl<A: Arbitrary + Sync> Arbitrary for List<A> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
-        List::from(Vec::arbitrary(g))
+        List::from(Vec::<A>::arbitrary(g))
     }
 }
 
-
+// Tests
 
 #[cfg(test)]
 mod test {
     use super::*;
-
-    #[test]
-    fn from_coercion() {
-        assert_eq!(list![1, 2, 3], From::from(&[1, 2, 3][..]));
-    }
+    use test::is_sorted;
 
     #[test]
     fn exact_size_iterator() {
@@ -684,37 +668,31 @@ mod test {
         assert_ne!(l, list![1, 2, 3, 4, 5, 6]);
     }
 
-    fn is_sorted<A: Ord + Clone>(l: &List<A>) -> bool {
-        if l.length() == 0 {
-            true
-        } else {
-            let mut it = l.iter();
-            let mut prev = it.next().unwrap();
-            loop {
-                match it.next() {
-                    None => return true,
-                    Some(ref i) if i < &prev => return false,
-                    Some(ref i) => prev = i.clone(),
-                }
-            }
-        }
-    }
-
     quickcheck! {
+        fn length(vec: Vec<i32>) -> bool {
+            let list = List::from(vec.clone());
+            vec.len() == list.len()
+        }
+
+        fn order(vec: Vec<i32>) -> bool {
+            let list = List::from(vec.clone());
+            list.iter().map(|a| *a).eq(vec.into_iter())
+        }
+
         fn reverse_a_list(l: List<i32>) -> bool {
-            let vec: Vec<i32> = l.clone_iter().collect();
+            let vec: Vec<i32> = l.iter().map(|v| *v).collect();
             let rev = List::from(vec.into_iter().rev());
             l.reverse() == rev
         }
 
         fn append_two_lists(xs: List<i32>, ys: List<i32>) -> bool {
-            let extended = List::from(xs.clone_iter().chain(ys.clone_iter()));
+            let extended = List::from(xs.iter().map(|v| *v).chain(ys.iter().map(|v| *v)));
             xs.append(&ys) == extended
         }
 
         fn sort_a_list(l: List<i32>) -> bool {
             let sorted = l.sort();
-            l.length() == sorted.length() && is_sorted(&sorted)
+            l.len() == sorted.len() && is_sorted(sorted)
         }
     }
 }

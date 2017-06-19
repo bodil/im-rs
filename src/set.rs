@@ -9,10 +9,10 @@ use map::{self, Map};
 
 #[macro_export]
 macro_rules! set {
-    () => { $crate::set::Set::empty() };
+    () => { $crate::set::Set::new() };
 
     ( $($x:expr),* ) => {{
-        let mut l = $crate::set::Set::empty();
+        let mut l = $crate::set::Set::new();
         $(
             l = l.insert($x);
         )*
@@ -23,56 +23,46 @@ macro_rules! set {
 pub struct Set<A>(Map<A, ()>);
 
 impl<A> Set<A> {
-    pub fn empty() -> Self {
-        Set(Map::empty())
-    }
-
-    pub fn singleton(a: A) -> Self {
-        Set(Map::singleton(a, ()))
+    pub fn new() -> Self {
+        Set(Map::new())
     }
 
     pub fn iter(&self) -> Iter<A> {
         Iter { it: self.0.iter() }
     }
 
-    pub fn size(&self) -> usize {
-        self.0.size()
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
-    pub fn lookup_min(&self) -> Option<Arc<A>> {
-        self.0.lookup_min().map(|(a, _)| a)
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 
-    pub fn lookup_max(&self) -> Option<Arc<A>> {
-        self.0.lookup_max().map(|(a, _)| a)
+    pub fn get_min(&self) -> Option<Arc<A>> {
+        self.0.get_min().map(|(a, _)| a)
     }
 
-    pub fn valid(&self) -> bool {
-        self.0.valid()
-    }
-}
-
-impl<A: Clone> Set<A> {
-    pub fn clone_iter(&self) -> Cloned<A> {
-        Cloned { it: self.iter() }
+    pub fn get_max(&self) -> Option<Arc<A>> {
+        self.0.get_max().map(|(a, _)| a)
     }
 }
 
 impl<A: Ord> Set<A> {
-    pub fn insert(&self, a: A) -> Self {
-        Set(self.0.insert(a, ()))
+    pub fn singleton<R>(a: R) -> Self where Arc<A>: From<R> {
+        Set::new().insert(a)
     }
 
-    pub fn insert_ref(&self, a: Arc<A>) -> Self {
-        Set(self.0.insert_ref(a, Arc::new(())))
+    pub fn insert<R>(&self, a: R) -> Self where Arc<A>: From<R> {
+        Set(self.0.insert(a, ()))
     }
 
     pub fn contains(&self, a: &A) -> bool {
         self.0.contains_key(a)
     }
 
-    pub fn delete(&self, a: &A) -> Self {
-        Set(self.0.delete(a))
+    pub fn remove(&self, a: &A) -> Self {
+        Set(self.0.remove(a))
     }
 
     pub fn union(&self, other: &Self) -> Self {
@@ -129,11 +119,11 @@ impl<A: Ord> Set<A> {
         (pair.map(|(a, _)| a), Set(set))
     }
 
-    pub fn delete_min(&self) -> Self {
+    pub fn remove_min(&self) -> Self {
         self.pop_min().1
     }
 
-    pub fn delete_max(&self) -> Self {
+    pub fn remove_max(&self) -> Self {
         self.pop_max().1
     }
 }
@@ -224,21 +214,6 @@ impl<A> Iterator for Iter<A> {
     }
 }
 
-pub struct Cloned<A> {
-    it: Iter<A>,
-}
-
-impl<A: Clone> Iterator for Cloned<A> {
-    type Item = A;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.it.next() {
-            None => None,
-            Some(v) => Some((*v).clone()),
-        }
-    }
-}
-
 impl<A: Ord> FromIterator<A> for Set<A> {
     fn from_iter<T>(i: T) -> Self
         where T: IntoIterator<Item = A>
@@ -251,7 +226,7 @@ impl<A: Ord> FromIterator<Arc<A>> for Set<A> {
     fn from_iter<T>(i: T) -> Self
         where T: IntoIterator<Item = Arc<A>>
     {
-        i.into_iter().fold(set![], |s, a| s.insert_ref(a))
+        i.into_iter().fold(set![], |s, a| s.insert(a))
     }
 }
 
