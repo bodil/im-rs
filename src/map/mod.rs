@@ -276,8 +276,10 @@ impl<K: Ord, V> Map<K, V> {
     /// );
     /// # }
     /// ```
-    pub fn get_or(&self, k: &K, default: V) -> Arc<V> {
-        self.get(k).unwrap_or(Arc::new(default))
+    pub fn get_or<RV>(&self, k: &K, default: RV) -> Arc<V>
+        where Arc<V>: From<RV>
+    {
+        self.get(k).unwrap_or(Arc::from(default))
     }
 
     /// Test for the presence of a key in a map.
