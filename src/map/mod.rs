@@ -68,6 +68,21 @@ impl<K, V> Map<K, V> {
     }
 
     /// Construct a map with a single mapping.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::map::Map;
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// let map = Map::singleton(123, "onetwothree");
+    /// assert_eq!(
+    ///   map.get(&123),
+    ///   Some(Arc::new("onetwothree"))
+    /// );
+    /// # }
+    /// ```
     pub fn singleton<RK, RV>(k: RK, v: RV) -> Map<K, V> where Arc<K>: From<RK>, Arc<V>: From<RV> {
         Map::two(map![], Arc::from(k), Arc::from(v), map![])
     }
@@ -75,6 +90,21 @@ impl<K, V> Map<K, V> {
     /// Test whether a map is empty.
     ///
     /// Time: O(1)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::map::Map;
+    /// # fn main() {
+    /// assert!(
+    ///   !map!{1 => 2}.is_empty()
+    /// );
+    /// assert!(
+    ///   Map::<i32, i32>::new().is_empty()
+    /// );
+    /// # }
+    /// ```
     pub fn is_empty(&self) -> bool {
         match *self.0 {
             Leaf => true,
@@ -201,16 +231,77 @@ impl<K, V> Map<K, V> {
 }
 
 impl<K: Ord, V> Map<K, V> {
-    pub fn lookup(&self, k: &K) -> Option<Arc<V>> {
+    /// Get the value for a key from a map.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::map::Map;
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// let map = map!{123 => "lol"};
+    /// assert_eq!(
+    ///   map.get(&123),
+    ///   Some(Arc::new("lol"))
+    /// );
+    /// # }
+    /// ```
+    pub fn get(&self, k: &K) -> Option<Arc<V>> {
         walk::lookup(self, k)
     }
 
-    pub fn lookup_or(&self, k: &K, default: V) -> Arc<V> {
-        self.lookup(k).unwrap_or(Arc::new(default))
+    /// Get the value for a key from a map, or a default value
+    /// if the key isn't in the map.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::map::Map;
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// let map = map!{123 => "lol"};
+    /// assert_eq!(
+    ///   map.get_or(&123, "hi"),
+    ///   Arc::new("lol")
+    /// );
+    /// assert_eq!(
+    ///   map.get_or(&321, "hi"),
+    ///   Arc::new("hi")
+    /// );
+    /// # }
+    /// ```
+    pub fn get_or(&self, k: &K, default: V) -> Arc<V> {
+        self.get(k).unwrap_or(Arc::new(default))
     }
 
+    /// Test for the presence of a key in a map.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::map::Map;
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// let map = map!{123 => "lol"};
+    /// assert!(
+    ///   map.contains_key(&123)
+    /// );
+    /// assert!(
+    ///   !map.contains_key(&321)
+    /// );
+    /// # }
+    /// ```
     pub fn contains_key(&self, k: &K) -> bool {
-        self.lookup(k).is_some()
+        self.get(k).is_some()
     }
 
     pub fn insert<RK, RV>(&self, k: RK, v: RV) -> Self where Arc<K>: From<RK>, Arc<V>: From<RV> {
@@ -337,7 +428,7 @@ impl<K: Ord, V> Map<K, V> {
             .iter()
             .fold(self.clone(), |m, (k, v)| {
                 m.insert(k.clone(),
-                         self.lookup(&*k).map(|v1| f(k, v1, v.clone())).unwrap_or(v))
+                         self.get(&*k).map(|v1| f(k, v1, v.clone())).unwrap_or(v))
             })
     }
 
@@ -402,7 +493,7 @@ impl<K: Ord, V> Map<K, V> {
         other
             .iter()
             .fold(map![], |m, (k, v2)| {
-                self.lookup(&*k)
+                self.get(&*k)
                     .map(|v1| m.insert(k.clone(), f(k, v1, v2)))
                     .unwrap_or(m)
             })
@@ -453,7 +544,7 @@ impl<K: Ord, V> Map<K, V> {
         where F: Fn(Arc<V>, Arc<B>) -> bool
     {
         self.iter()
-            .all(|(k, v)| other.lookup(&*k).map(|ov| cmp(v, ov)).unwrap_or(false))
+            .all(|(k, v)| other.get(&*k).map(|ov| cmp(v, ov)).unwrap_or(false))
     }
 
     pub fn is_proper_submap_by<B, F>(&self, other: &Map<K, B>, cmp: F) -> bool

@@ -17,8 +17,8 @@ pub fn lookup<K: Ord, V>(m: &Map<K, V>, k: &K) -> Option<Arc<V>> {
         Two(_, ref left, ref k1, ref v, ref right) => {
             match k.cmp(k1) {
                 Ordering::Equal => Some(v.clone()),
-                Ordering::Less => left.lookup(k),
-                _ => right.lookup(k),
+                Ordering::Less => left.get(k),
+                _ => right.get(k),
             }
         }
         Three(_, ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => {
@@ -27,9 +27,9 @@ pub fn lookup<K: Ord, V>(m: &Map<K, V>, k: &K) -> Option<Arc<V>> {
                 c1 => {
                     match (c1, k.cmp(k2)) {
                         (_, Ordering::Equal) => Some(v2.clone()),
-                        (Ordering::Less, _) => left.lookup(k),
-                        (_, Ordering::Greater) => right.lookup(k),
-                        _ => mid.lookup(k),
+                        (Ordering::Less, _) => left.get(k),
+                        (_, Ordering::Greater) => right.get(k),
+                        _ => mid.get(k),
                     }
                 }
             }
