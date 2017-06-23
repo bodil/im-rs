@@ -16,6 +16,7 @@ use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::fmt::{Debug, Formatter, Error};
 use std::ops::Add;
+use std::borrow::Borrow;
 
 use self::MapNode::{Leaf, Two, Three};
 
@@ -52,6 +53,14 @@ macro_rules! map {
     }};
 }
 
+/// # Ordered Map
+///
+/// An immutable ordered map implemented as a balanced 2-3 tree.
+///
+/// Most operations on this type of map are O(log n). It's a decent
+/// choice for a generic map datatype, but if you're using it for
+/// large datasets, you should consider whether you need an ordered
+/// map, or whether a hash map would suit you better.
 pub struct Map<K, V>(Arc<MapNode<K, V>>);
 
 #[doc(hidden)]
@@ -83,7 +92,11 @@ impl<K, V> Map<K, V> {
     /// );
     /// # }
     /// ```
-    pub fn singleton<RK, RV>(k: RK, v: RV) -> Map<K, V> where Arc<K>: From<RK>, Arc<V>: From<RV> {
+    pub fn singleton<RK, RV>(k: RK, v: RV) -> Map<K, V>
+    where
+        Arc<K>: From<RK>,
+        Arc<V>: From<RV>,
+    {
         Map::two(map![], Arc::from(k), Arc::from(v), map![])
     }
 
@@ -127,7 +140,7 @@ impl<K, V> Map<K, V> {
         Values { it: self.iter() }
     }
 
-    /// Get the length of a map.
+    /// Get the size of a map.
     ///
     /// Time: O(1)
     ///
@@ -215,18 +228,30 @@ impl<K, V> Map<K, V> {
     }
 
     fn two(left: Map<K, V>, k: Arc<K>, v: Arc<V>, right: Map<K, V>) -> Map<K, V> {
-        Map(Arc::new(Two(left.len() + right.len() + 1, left, k, v, right)))
+        Map(Arc::new(
+            Two(left.len() + right.len() + 1, left, k, v, right),
+        ))
     }
 
-    fn three(left: Map<K, V>,
-             k1: Arc<K>,
-             v1: Arc<V>,
-             mid: Map<K, V>,
-             k2: Arc<K>,
-             v2: Arc<V>,
-             right: Map<K, V>)
-             -> Map<K, V> {
-        Map(Arc::new(Three(left.len() + mid.len() + right.len() + 2, left, k1, v1, mid, k2, v2, right)))
+    fn three(
+        left: Map<K, V>,
+        k1: Arc<K>,
+        v1: Arc<V>,
+        mid: Map<K, V>,
+        k2: Arc<K>,
+        v2: Arc<V>,
+        right: Map<K, V>,
+    ) -> Map<K, V> {
+        Map(Arc::new(Three(
+            left.len() + mid.len() + right.len() + 2,
+            left,
+            k1,
+            v1,
+            mid,
+            k2,
+            v2,
+            right,
+        )))
     }
 }
 
@@ -277,7 +302,8 @@ impl<K: Ord, V> Map<K, V> {
     /// # }
     /// ```
     pub fn get_or<RV>(&self, k: &K, default: RV) -> Arc<V>
-        where Arc<V>: From<RV>
+    where
+        Arc<V>: From<RV>,
     {
         self.get(k).unwrap_or(Arc::from(default))
     }
@@ -306,48 +332,110 @@ impl<K: Ord, V> Map<K, V> {
         self.get(k).is_some()
     }
 
-    pub fn insert<RK, RV>(&self, k: RK, v: RV) -> Self where Arc<K>: From<RK>, Arc<V>: From<RV> {
-        walk::ins_down(list![], Arc::from(k), Arc::from(v), self.clone())
+    /// Construct a new map by inserting a key/value mapping into a map.
+    ///
+    /// If the map already has a mapping for the given key, the previous value
+    /// is overwritten.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::map::Map;
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// let map = map!{};
+    /// assert_eq!(
+    ///   map.insert(123, "123"),
+    ///   map!{123 => "123"}
+    /// );
+    /// # }
+    /// ```
+    pub fn insert<RK, RV>(&self, k: RK, v: RV) -> Self
+    where
+        Arc<K>: From<RK>,
+        Arc<V>: From<RV>,
+    {
+        walk::ins_down(conslist![], Arc::from(k), Arc::from(v), self.clone())
     }
 
     fn insert_ref(&self, k: Arc<K>, v: Arc<V>) -> Self {
-        walk::ins_down(list![], k, v, self.clone())
+        walk::ins_down(conslist![], k, v, self.clone())
     }
 
-    pub fn insert_with<RK, RV, F>(self, k: RK, v: RV, f: F) -> Self where Arc<K>: From<RK>, Arc<V>: From<RV>, F: Fn(Arc<V>, Arc<V>) -> Arc<V>
+    /// Construct a new map by inserting a key/value mapping into a map.
+    ///
+    /// If the map already has a mapping for the given key, we call the provided
+    /// function with the old value and the new value, and insert the result as
+    /// the new value.
+    ///
+    /// Time: O(log n)
+    pub fn insert_with<RK, RV, F>(self, k: RK, v: RV, f: F) -> Self
+    where
+        Arc<K>: From<RK>,
+        Arc<V>: From<RV>,
+        F: Fn(Arc<V>, Arc<V>) -> Arc<V>,
     {
         let ak = Arc::from(k);
         let av = Arc::from(v);
         match self.pop_with_key(&ak) {
             None => self.insert_ref(ak, av),
-            Some((_, v2, m)) => m.insert_ref(ak, f(av, v2)),
+            Some((_, v2, m)) => m.insert_ref(ak, f(v2, av)),
         }
     }
 
+    /// Construct a new map by inserting a key/value mapping into a map.
+    ///
+    /// If the map already has a mapping for the given key, we call the provided
+    /// function with the key, the old value and the new value, and insert the result as
+    /// the new value.
+    ///
+    /// Time: O(log n)
     pub fn insert_with_key<RK, RV, F>(self, k: RK, v: RV, f: F) -> Self
-        where F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>, Arc<K>: From<RK>, Arc<V>: From<RV>
+    where
+        F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
+        Arc<K>: From<RK>,
+        Arc<V>: From<RV>,
     {
         let ak = Arc::from(k);
         let av = Arc::from(v);
         match self.pop_with_key(&ak) {
             None => self.insert_ref(ak, av),
-            Some((_, v2, m)) => m.insert_ref(ak.clone(), f(ak, av, v2)),
+            Some((_, v2, m)) => m.insert_ref(ak.clone(), f(ak, v2, av)),
         }
     }
 
-    pub fn insert_lookup_with_key<RK, RV, F>(self, k: K, v: V, f: F) -> (Option<Arc<V>>, Self)
-        where F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>, Arc<K>: From<RK>, Arc<V>: From<RV>
+    /// Construct a new map by inserting a key/value mapping into a map, returning
+    /// the old value for the key as well as the new map.
+    ///
+    /// If the map already has a mapping for the given key, we call the provided
+    /// function with the key, the old value and the new value, and insert the result as
+    /// the new value.
+    ///
+    /// Time: O(log n)
+    pub fn insert_lookup_with_key<RK, RV, F>(self, k: RK, v: RV, f: F) -> (Option<Arc<V>>, Self)
+    where
+        F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
+        Arc<K>: From<RK>,
+        Arc<V>: From<RV>,
     {
         let ak = Arc::from(k);
         let av = Arc::from(v);
         match self.pop_with_key(&ak) {
             None => (None, self.insert_ref(ak, av)),
-            Some((_, v2, m)) => (Some(v2.clone()), m.insert_ref(ak.clone(), f(ak, av, v2))),
+            Some((_, v2, m)) => (Some(v2.clone()), m.insert_ref(ak.clone(), f(ak, v2, av))),
         }
     }
 
+    /// Update the value for a given key by calling a function with the current value
+    /// and overwriting it with the function's return value.
+    ///
+    /// Time: O(log n)
     pub fn update<F>(&self, k: &K, f: F) -> Self
-        where F: Fn(Arc<V>) -> Option<Arc<V>>
+    where
+        F: Fn(Arc<V>) -> Option<Arc<V>>,
     {
         match self.pop_with_key(k) {
             None => self.clone(),
@@ -360,8 +448,13 @@ impl<K: Ord, V> Map<K, V> {
         }
     }
 
+    /// Update the value for a given key by calling a function with the key and the current value
+    /// and overwriting it with the function's return value.
+    ///
+    /// Time: O(log n)
     pub fn update_with_key<F>(&self, k: &K, f: F) -> Self
-        where F: Fn(Arc<K>, Arc<V>) -> Option<Arc<V>>
+    where
+        F: Fn(Arc<K>, Arc<V>) -> Option<Arc<V>>,
     {
         match self.pop_with_key(k) {
             None => self.clone(),
@@ -374,8 +467,17 @@ impl<K: Ord, V> Map<K, V> {
         }
     }
 
+    /// Update the value for a given key by calling a function with the key and the current value
+    /// and overwriting it with the function's return value.
+    ///
+    /// If the key was not in the map, the function is never called and the map is left unchanged.
+    ///
+    /// Return a tuple of the old value, if there was one, and the new map.
+    ///
+    /// Time: O(log n)
     pub fn update_lookup_with_key<F>(&self, k: &K, f: F) -> (Option<Arc<V>>, Self)
-        where F: Fn(Arc<K>, Arc<V>) -> Option<Arc<V>>
+    where
+        F: Fn(Arc<K>, Arc<V>) -> Option<Arc<V>>,
     {
         match self.pop_with_key(k) {
             None => (None, self.clone()),
@@ -388,8 +490,18 @@ impl<K: Ord, V> Map<K, V> {
         }
     }
 
+    /// Update the value for a given key by calling a function with the current value
+    /// and overwriting it with the function's return value.
+    ///
+    /// This is like the `update` method, except with more control: the function gets
+    /// an `Option<V>` and returns the same, so that it can decide to delete a mapping
+    /// instead of updating the value, and decide what to do if the key isn't in the map.
+    ///
+    /// Time: O(log n)
     pub fn alter<RK, F>(&self, f: F, k: RK) -> Self
-        where F: Fn(Option<Arc<V>>) -> Option<Arc<V>>, Arc<K>: From<RK>
+    where
+        F: Fn(Option<Arc<V>>) -> Option<Arc<V>>,
+        Arc<K>: From<RK>,
     {
         let ak = Arc::from(k);
         let pop = self.pop_with_key(&*ak);
@@ -401,74 +513,119 @@ impl<K: Ord, V> Map<K, V> {
         }
     }
 
+    /// Remove a key/value pair from a list, if it exists.
+    ///
+    /// Time: O(log n)
     pub fn remove(&self, k: &K) -> Self {
         self.pop(k).map(|(_, m)| m).unwrap_or_else(|| self.clone())
     }
 
+    /// Remove a key/value pair from a list, if it exists, and return the removed value
+    /// as well as the updated list.
+    ///
+    /// Time: O(log n)
     pub fn pop(&self, k: &K) -> Option<(Arc<V>, Self)> {
         self.pop_with_key(k).map(|(_, v, m)| (v, m))
     }
 
+    /// Remove a key/value pair from a list, if it exists, and return the removed key and value
+    /// as well as the updated list.
+    ///
+    /// Time: O(log n)
     pub fn pop_with_key(&self, k: &K) -> Option<(Arc<K>, Arc<V>, Self)> {
-        walk::pop_down(list![], k, self.clone())
+        walk::pop_down(conslist![], k, self.clone())
     }
 
+    /// Construct the union of two maps, keeping the values in the current map
+    /// when keys exist in both maps.
     pub fn union(&self, other: &Self) -> Self {
         self.union_with_key(other, |_, v, _| v)
     }
 
-    pub fn union_with<F>(&self, other: &Self, f: F) -> Self
-        where F: Fn(Arc<V>, Arc<V>) -> Arc<V>
+    /// Construct the union of two maps, using a function to decide what to do
+    /// with the value when a key is in both maps.
+    pub fn union_with<F, RM>(&self, other: RM, f: F) -> Self
+    where
+        F: Fn(Arc<V>, Arc<V>) -> Arc<V>,
+        RM: Borrow<Self>,
     {
         self.union_with_key(other, |_, v1, v2| f(v1, v2))
     }
 
-    pub fn union_with_key<F>(&self, other: &Self, f: F) -> Self
-        where F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>
+    /// Construct the union of two maps, using a function to decide what to do
+    /// with the value when a key is in both maps. The function receives the key
+    /// as well as both values.
+    pub fn union_with_key<F, RM>(&self, other: RM, f: F) -> Self
+    where
+        F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
+        RM: Borrow<Self>,
     {
-        other
-            .iter()
-            .fold(self.clone(), |m, (k, v)| {
-                m.insert(k.clone(),
-                         self.get(&*k).map(|v1| f(k, v1, v.clone())).unwrap_or(v))
-            })
+        other.borrow().iter().fold(self.clone(), |m, (k, v)| {
+            m.insert(
+                k.clone(),
+                self.get(&*k).map(|v1| f(k, v1, v.clone())).unwrap_or(v),
+            )
+        })
     }
 
+    /// Construct the union of a sequence of maps, selecting the value of the
+    /// leftmost when a key appears in more than one map.
     pub fn unions<I>(i: I) -> Self
-        where I: IntoIterator<Item = Self>
+    where
+        I: IntoIterator<Item = Self>,
     {
         i.into_iter().fold(map![], |a, b| a.union(&b))
     }
 
-    pub fn unions_with<I, F>(i: I, f: &F) -> Self
-        where I: IntoIterator<Item = Self>,
-              F: Fn(Arc<V>, Arc<V>) -> Arc<V>
+    /// Construct the union of a sequence of maps, using a function to decide what to do
+    /// with the value when a key is in more than one map.
+    pub fn unions_with<I, F>(i: I, f: F) -> Self
+    where
+        I: IntoIterator<Item = Self>,
+        F: Fn(Arc<V>, Arc<V>) -> Arc<V>,
     {
-        i.into_iter().fold(map![], |a, b| a.union_with(&b, f))
+        i.into_iter().fold(map![], |a, b| a.union_with(&b, &f))
     }
 
-    pub fn unions_with_key<I>(i: I, f: &Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>) -> Self
-        where I: IntoIterator<Item = Self>
+    /// Construct the union of a sequence of maps, using a function to decide what to do
+    /// with the value when a key is in more than one map. The function receives the key
+    /// as well as both values.
+    pub fn unions_with_key<I, F>(i: I, f: F) -> Self
+    where
+        I: IntoIterator<Item = Self>,
+        F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
     {
-        i.into_iter().fold(map![], |a, b| a.union_with_key(&b, f))
+        i.into_iter().fold(map![], |a, b| a.union_with_key(&b, &f))
     }
 
-    pub fn difference<B>(&self, other: &Map<K, B>) -> Self {
+    /// Construct the difference between two maps by discarding keys which occur in both maps.
+    pub fn difference<B, RM>(&self, other: RM) -> Self
+    where
+        RM: Borrow<Map<K, B>>,
+    {
         self.difference_with_key(other, |_, _, _| None)
     }
 
-    pub fn difference_with<B, F>(&self, other: &Map<K, B>, f: F) -> Self
-        where F: Fn(Arc<V>, Arc<B>) -> Option<Arc<V>>
+    /// Construct the difference between two maps by using a function to decide
+    /// what to do if a key occurs in both.
+    pub fn difference_with<B, RM, F>(&self, other: RM, f: F) -> Self
+    where
+        F: Fn(Arc<V>, Arc<B>) -> Option<Arc<V>>,
+        RM: Borrow<Map<K, B>>,
     {
         self.difference_with_key(other, |_, a, b| f(a, b))
     }
 
-    pub fn difference_with_key<B, F>(&self, other: &Map<K, B>, f: F) -> Self
-        where F: Fn(Arc<K>, Arc<V>, Arc<B>) -> Option<Arc<V>>
+    /// Construct the difference between two maps by using a function to decide
+    /// what to do if a key occurs in both. The function receives the key
+    /// as well as both values.
+    pub fn difference_with_key<B, RM, F>(&self, other: RM, f: F) -> Self
+    where
+        F: Fn(Arc<K>, Arc<V>, Arc<B>) -> Option<Arc<V>>,
+        RM: Borrow<Map<K, B>>,
     {
-        other
-            .iter()
-            .fold(self.clone(), |m, (k, v2)| match m.pop(&*k) {
+        other.borrow().iter().fold(self.clone(), |m, (k, v2)| {
+            match m.pop(&*k) {
                 None => m,
                 Some((v1, m)) => {
                     match f(k.clone(), v1, v2) {
@@ -476,98 +633,157 @@ impl<K: Ord, V> Map<K, V> {
                         Some(v) => m.insert(k, v),
                     }
                 }
-            })
+            }
+        })
     }
 
-    pub fn intersection<B>(&self, other: &Map<K, B>) -> Self {
+    /// Construct the intersection of two maps, keeping the values from the current map.
+    pub fn intersection<B, RM>(&self, other: RM) -> Self
+    where
+        RM: Borrow<Map<K, B>>,
+    {
         self.intersection_with_key(other, |_, v, _| v)
     }
 
-    pub fn intersection_with<B, C, F>(&self, other: &Map<K, B>, f: F) -> Map<K, C>
-        where F: Fn(Arc<V>, Arc<B>) -> Arc<C>
+    /// Construct the intersection of two maps, calling a function with both values for each
+    /// key and using the result as the value for the key.
+    pub fn intersection_with<B, C, RM, F>(&self, other: RM, f: F) -> Map<K, C>
+    where
+        F: Fn(Arc<V>, Arc<B>) -> Arc<C>,
+        RM: Borrow<Map<K, B>>,
     {
         self.intersection_with_key(other, |_, v1, v2| f(v1, v2))
     }
 
-    pub fn intersection_with_key<B, C, F>(&self, other: &Map<K, B>, f: F) -> Map<K, C>
-        where F: Fn(Arc<K>, Arc<V>, Arc<B>) -> Arc<C>
+    /// Construct the intersection of two maps, calling a function
+    /// with the key and both values for each
+    /// key and using the result as the value for the key.
+    pub fn intersection_with_key<B, C, RM, F>(&self, other: RM, f: F) -> Map<K, C>
+    where
+        F: Fn(Arc<K>, Arc<V>, Arc<B>) -> Arc<C>,
+        RM: Borrow<Map<K, B>>,
     {
-        other
-            .iter()
-            .fold(map![], |m, (k, v2)| {
-                self.get(&*k)
-                    .map(|v1| m.insert(k.clone(), f(k, v1, v2)))
-                    .unwrap_or(m)
-            })
+        other.borrow().iter().fold(map![], |m, (k, v2)| {
+            self.get(&*k)
+                .map(|v1| m.insert(k.clone(), f(k, v1, v2)))
+                .unwrap_or(m)
+        })
     }
 
-    pub fn merge_with_key<B, C, FC, F1, F2>(&self,
-                                            other: &Map<K, B>,
-                                            combine: FC,
-                                            only1: F1,
-                                            only2: F2)
-                                            -> Map<K, C>
-        where FC: Fn(Arc<K>, Arc<V>, Arc<B>) -> Option<Arc<C>>,
-              F1: Fn(Self) -> Map<K, C>,
-              F2: Fn(Map<K, B>) -> Map<K, C>
+    /// Merge two maps.
+    ///
+    /// First, we call the `combine` function for each key/value pair which exists in both maps,
+    /// updating the value or discarding it according to the function's return value.
+    ///
+    /// The `only1` and `only2` functions are called with the key/value pairs which are only in
+    /// the first and the second list respectively. The results of these are then merged with
+    /// the result of the first operation.
+    pub fn merge_with_key<B, C, RM, FC, F1, F2>(
+        &self,
+        other: RM,
+        combine: FC,
+        only1: F1,
+        only2: F2,
+    ) -> Map<K, C>
+    where
+        RM: Borrow<Map<K, B>>,
+        FC: Fn(Arc<K>, Arc<V>, Arc<B>) -> Option<Arc<C>>,
+        F1: Fn(Self) -> Map<K, C>,
+        F2: Fn(Map<K, B>) -> Map<K, C>,
     {
-        let (left, right, both) = other
-            .iter()
-            .fold((self.clone(), other.clone(), map![]),
-                  |(l, r, m), (k, vr)| match l.pop(&*k) {
-                      None => (l, r, m),
-                      Some((vl, ml)) => {
-                          (ml,
-                           r.remove(&*k),
-                           combine(k.clone(), vl, vr)
-                           .map(|v| m.insert(k, v))
-                           .unwrap_or(m))
-                      }
-                  });
+        let (left, right, both) = other.borrow().iter().fold(
+            (
+                self.clone(),
+                other.borrow().clone(),
+                map![],
+            ),
+            |(l, r, m), (k, vr)| match l.pop(&*k) {
+                None => (l, r, m),
+                Some((vl, ml)) => {
+                    (
+                        ml,
+                        r.remove(&*k),
+                        combine(k.clone(), vl, vr)
+                            .map(|v| m.insert(k, v))
+                            .unwrap_or(m),
+                    )
+                }
+            },
+        );
         both.union(&only1(left)).union(&only2(right))
     }
 
+    /// Split a map into two, with the left hand map containing keys which are smaller
+    /// than `split`, and the right hand map containing keys which are larger than `split`.
+    ///
+    /// The `split` mapping is discarded.
     pub fn split(&self, split: &K) -> (Self, Self) {
         let (l, _, r) = self.split_lookup(split);
         (l, r)
     }
 
+    /// Split a map into two, with the left hand map containing keys which are smaller
+    /// than `split`, and the right hand map containing keys which are larger than `split`.
+    ///
+    /// Returns both the two maps and the value of `split`.
     pub fn split_lookup(&self, split: &K) -> (Self, Option<Arc<V>>, Self) {
-        self.iter()
-            .fold((map![], None, map![]),
-                  |(l, m, r), (k, v)| match k.as_ref().cmp(split) {
-                      Ordering::Less => (l.insert(k, v), m, r),
-                      Ordering::Equal => (l, Some(v), r),
-                      Ordering::Greater => (l, m, r.insert(k, v)),
-                  })
+        self.iter().fold(
+            (map![], None, map![]),
+            |(l, m, r), (k, v)| match k.as_ref().cmp(split) {
+                Ordering::Less => (l.insert(k, v), m, r),
+                Ordering::Equal => (l, Some(v), r),
+                Ordering::Greater => (l, m, r.insert(k, v)),
+            },
+        )
     }
 
-    pub fn is_submap_by<B, F>(&self, other: &Map<K, B>, cmp: F) -> bool
-        where F: Fn(Arc<V>, Arc<B>) -> bool
+    /// Test whether a map is a submap of another map, meaning that
+    /// all keys in our map must also be in the other map, with the same values.
+    ///
+    /// Use the provided function to decide whether values are equal.
+    pub fn is_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
+    where
+        F: Fn(Arc<V>, Arc<B>) -> bool,
+        RM: Borrow<Map<K, B>>,
     {
-        self.iter()
-            .all(|(k, v)| other.get(&*k).map(|ov| cmp(v, ov)).unwrap_or(false))
+        self.iter().all(|(k, v)| {
+            other.borrow().get(&*k).map(|ov| cmp(v, ov)).unwrap_or(
+                false,
+            )
+        })
     }
 
-    pub fn is_proper_submap_by<B, F>(&self, other: &Map<K, B>, cmp: F) -> bool
-        where F: Fn(Arc<V>, Arc<B>) -> bool
+    /// Test whether a map is a proper submap of another map, meaning that
+    /// all keys in our map must also be in the other map, with the same values.
+    /// To be a proper submap, ours must also contain fewer keys than the other map.
+    ///
+    /// Use the provided function to decide whether values are equal.
+    pub fn is_proper_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
+    where
+        F: Fn(Arc<V>, Arc<B>) -> bool,
+        RM: Borrow<Map<K, B>>,
     {
-        self.len() != other.len() && self.is_submap_by(other, cmp)
+        self.len() != other.borrow().len() && self.is_submap_by(other, cmp)
     }
 
+    /// Construct a map with only the `n` smallest keys from a given map.
     pub fn take(&self, n: usize) -> Self {
         self.iter().take(n).collect()
     }
 
+    /// Construct a map with the `n` smallest keys removed from a given map.
     pub fn drop(&self, n: usize) -> Self {
         self.iter().skip(n).collect()
     }
 
+    /// Remove the smallest key from a map, and return its value as well as the updated map.
     pub fn pop_min(&self) -> (Option<Arc<V>>, Self) {
         let (pop, next) = self.pop_min_with_key();
         (pop.map(|(_, v)| v), next)
     }
 
+    /// Remove the smallest key from a map, and return that key, its value
+    /// as well as the updated map.
     pub fn pop_min_with_key(&self) -> (Option<(Arc<K>, Arc<V>)>, Self) {
         match self.get_min() {
             None => (None, self.clone()),
@@ -575,11 +791,14 @@ impl<K: Ord, V> Map<K, V> {
         }
     }
 
+    /// Remove the largest key from a map, and return its value as well as the updated map.
     pub fn pop_max(&self) -> (Option<Arc<V>>, Self) {
         let (pop, next) = self.pop_max_with_key();
         (pop.map(|(_, v)| v), next)
     }
 
+    /// Remove the largest key from a map, and return that key, its value
+    /// as well as the updated map.
     pub fn pop_max_with_key(&self) -> (Option<(Arc<K>, Arc<V>)>, Self) {
         match self.get_max() {
             None => (None, self.clone()),
@@ -587,22 +806,35 @@ impl<K: Ord, V> Map<K, V> {
         }
     }
 
+    /// Discard the smallest key from a map, returning the updated map.
     pub fn delete_min(&self) -> Self {
         self.pop_min().1
     }
 
+    /// Discard the largest key from a map, returning the updated map.
     pub fn delete_max(&self) -> Self {
         self.pop_max().1
     }
 }
 
 impl<K: Ord, V: PartialEq> Map<K, V> {
-    pub fn is_submap(&self, other: &Self) -> bool {
-        self.is_submap_by(other, |a, b| a.as_ref().eq(b.as_ref()))
+    /// Test whether a map is a submap of another map, meaning that
+    /// all keys in our map must also be in the other map, with the same values.
+    pub fn is_submap<RM>(&self, other: RM) -> bool
+    where
+        RM: Borrow<Self>,
+    {
+        self.is_submap_by(other.borrow(), |a, b| a.as_ref().eq(b.as_ref()))
     }
 
-    pub fn is_proper_submap(&self, other: &Self) -> bool {
-        self.is_proper_submap_by(other, |a, b| a.as_ref().eq(b.as_ref()))
+    /// Test whether a map is a proper submap of another map, meaning that
+    /// all keys in our map must also be in the other map, with the same values.
+    /// To be a proper submap, ours must also contain fewer keys than the other map.
+    pub fn is_proper_submap<RM>(&self, other: RM) -> bool
+    where
+        RM: Borrow<Self>,
+    {
+        self.is_proper_submap_by(other.borrow(), |a, b| a.as_ref().eq(b.as_ref()))
     }
 }
 
@@ -636,7 +868,8 @@ impl<K: Ord, V: Ord> Ord for Map<K, V> {
 
 impl<K: Ord + Hash, V: Hash> Hash for Map<K, V> {
     fn hash<H>(&self, state: &mut H)
-        where H: Hasher
+    where
+        H: Hasher,
     {
         for i in self.iter() {
             i.hash(state);
@@ -693,12 +926,15 @@ enum IterResult<K, V> {
 
 pub struct Iter<K, V> {
     stack: Vec<IterItem<K, V>>,
-    remaining: usize
+    remaining: usize,
 }
 
 impl<K, V> Iter<K, V> {
     fn new(m: &Map<K, V>) -> Iter<K, V> {
-        Iter { stack: vec![IterItem::Consider(m.clone())], remaining: m.len() }
+        Iter {
+            stack: vec![IterItem::Consider(m.clone())],
+            remaining: m.len(),
+        }
     }
 
     fn step(&mut self) -> IterResult<K, V> {
@@ -739,8 +975,8 @@ impl<K, V> Iterator for Iter<K, V> {
                 IterResult::Done => return None,
                 IterResult::Next(k, v) => {
                     self.remaining -= 1;
-                    return Some((k, v))
-                },
+                    return Some((k, v));
+                }
             }
         }
     }
@@ -782,7 +1018,8 @@ impl<K, V> Iterator for Values<K, V> {
 
 impl<K: Ord, V> FromIterator<(K, V)> for Map<K, V> {
     fn from_iter<T>(i: T) -> Self
-        where T: IntoIterator<Item = (K, V)>
+    where
+        T: IntoIterator<Item = (K, V)>,
     {
         i.into_iter().fold(map![], |m, (k, v)| m.insert(k, v))
     }
@@ -790,7 +1027,8 @@ impl<K: Ord, V> FromIterator<(K, V)> for Map<K, V> {
 
 impl<K: Ord, V> FromIterator<(Arc<K>, Arc<V>)> for Map<K, V> {
     fn from_iter<T>(i: T) -> Self
-        where T: IntoIterator<Item = (Arc<K>, Arc<V>)>
+    where
+        T: IntoIterator<Item = (Arc<K>, Arc<V>)>,
     {
         i.into_iter().fold(map![], |m, (k, v)| m.insert(k, v))
     }
@@ -817,7 +1055,9 @@ impl<K, V> IntoIterator for Map<K, V> {
 // Conversions
 
 impl<'a, K: Ord, V: Clone, RK, RV> From<&'a [(RK, RV)]> for Map<K, V>
-    where Arc<K>: From<&'a RK>, Arc<V>: From<&'a RV>
+where
+    Arc<K>: From<&'a RK>,
+    Arc<V>: From<&'a RV>,
 {
     fn from(m: &'a [(RK, RV)]) -> Map<K, V> {
         m.into_iter()
@@ -827,50 +1067,74 @@ impl<'a, K: Ord, V: Clone, RK, RV> From<&'a [(RK, RV)]> for Map<K, V>
 }
 
 impl<K: Ord, V, RK, RV> From<Vec<(RK, RV)>> for Map<K, V>
-    where Arc<K>: From<RK>, Arc<V>: From<RV>
+where
+    Arc<K>: From<RK>,
+    Arc<V>: From<RV>,
 {
     fn from(m: Vec<(RK, RV)>) -> Map<K, V> {
-        m.into_iter().map(|(k, v)| (Arc::from(k), Arc::from(v))).collect()
+        m.into_iter()
+            .map(|(k, v)| (Arc::from(k), Arc::from(v)))
+            .collect()
     }
 }
 
 impl<'a, K: Ord, V, RK, RV> From<&'a Vec<(RK, RV)>> for Map<K, V>
-    where Arc<K>: From<&'a RK>, Arc<V>: From<&'a RV>
+where
+    Arc<K>: From<&'a RK>,
+    Arc<V>: From<&'a RV>,
 {
     fn from(m: &'a Vec<(RK, RV)>) -> Map<K, V> {
-        m.into_iter().map(|&(ref k, ref v)| (Arc::from(k), Arc::from(v))).collect()
+        m.into_iter()
+            .map(|&(ref k, ref v)| (Arc::from(k), Arc::from(v)))
+            .collect()
     }
 }
 
 impl<K: Ord, V, RK: Eq + Hash, RV> From<HashMap<RK, RV>> for Map<K, V>
-    where Arc<K>: From<RK>, Arc<V>: From<RV>
+where
+    Arc<K>: From<RK>,
+    Arc<V>: From<RV>,
 {
     fn from(m: HashMap<RK, RV>) -> Map<K, V> {
-        m.into_iter().map(|(k, v)| (Arc::from(k), Arc::from(v))).collect()
+        m.into_iter()
+            .map(|(k, v)| (Arc::from(k), Arc::from(v)))
+            .collect()
     }
 }
 
 impl<'a, K: Ord, V, RK: Eq + Hash, RV> From<&'a HashMap<RK, RV>> for Map<K, V>
-    where Arc<K>: From<&'a RK>, Arc<V>: From<&'a RV>
+where
+    Arc<K>: From<&'a RK>,
+    Arc<V>: From<&'a RV>,
 {
     fn from(m: &'a HashMap<RK, RV>) -> Map<K, V> {
-        m.into_iter().map(|(k, v)| (Arc::from(k), Arc::from(v))).collect()
+        m.into_iter()
+            .map(|(k, v)| (Arc::from(k), Arc::from(v)))
+            .collect()
     }
 }
 
 impl<K: Ord, V, RK, RV> From<BTreeMap<RK, RV>> for Map<K, V>
-    where Arc<K>: From<RK>, Arc<V>: From<RV>
+where
+    Arc<K>: From<RK>,
+    Arc<V>: From<RV>,
 {
     fn from(m: BTreeMap<RK, RV>) -> Map<K, V> {
-        m.into_iter().map(|(k, v)| (Arc::from(k), Arc::from(v))).collect()
+        m.into_iter()
+            .map(|(k, v)| (Arc::from(k), Arc::from(v)))
+            .collect()
     }
 }
 
 impl<'a, K: Ord, V, RK, RV> From<&'a BTreeMap<RK, RV>> for Map<K, V>
-    where Arc<K>: From<&'a RK>, Arc<V>: From<&'a RV>
+where
+    Arc<K>: From<&'a RK>,
+    Arc<V>: From<&'a RV>,
 {
     fn from(m: &'a BTreeMap<RK, RV>) -> Map<K, V> {
-        m.into_iter().map(|(k, v)| (Arc::from(k), Arc::from(v))).collect()
+        m.into_iter()
+            .map(|(k, v)| (Arc::from(k), Arc::from(v)))
+            .collect()
     }
 }
 
@@ -895,7 +1159,8 @@ mod test {
 
     #[test]
     fn iterates_in_order() {
-        let map = map!{
+        let map =
+            map!{
             2 => 22,
             1 => 11,
             3 => 33,
@@ -921,7 +1186,8 @@ mod test {
 
     #[test]
     fn into_iter() {
-        let map = map!{
+        let map =
+            map!{
             2 => 22,
             1 => 11,
             3 => 33,
@@ -942,7 +1208,8 @@ mod test {
 
     #[test]
     fn deletes_correctly() {
-        let map = map!{
+        let map =
+            map!{
             2 => 22,
             1 => 11,
             3 => 33,
@@ -970,8 +1237,10 @@ mod test {
 
     #[test]
     fn debug_output() {
-        assert_eq!(format!("{:?}", map!{ 3 => 4, 5 => 6, 1 => 2 }),
-                   "{ 1 => 2, 3 => 4, 5 => 6 }");
+        assert_eq!(
+            format!("{:?}", map!{ 3 => 4, 5 => 6, 1 => 2 }),
+            "{ 1 => 2, 3 => 4, 5 => 6 }"
+        );
     }
 
     quickcheck! {

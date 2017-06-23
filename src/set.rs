@@ -1,12 +1,34 @@
+//! # Ordered Set
+//!
+//! An immutable ordered set implemented as a balanced 2-3 tree.
+//!
+//! This is implemented as a `Map` with no values, so it shares
+//! the exact performance characteristics of `Map`.
+
 use std::sync::Arc;
 use std::iter::{IntoIterator, FromIterator};
 use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter, Error};
 use std::collections::{HashSet, BTreeSet};
 use std::hash::{Hash, Hasher};
-use std::ops::Add;
+use std::ops::{Add, Mul};
+use std::borrow::Borrow;
 use map::{self, Map};
 
+/// Construct a set from a sequence of values.
+///
+/// # Examples
+///
+/// ```
+/// # #[macro_use] extern crate im;
+/// # use im::set::Set;
+/// # fn main() {
+/// assert_eq!(
+///   set![1, 2, 3],
+///   Set::from(vec![1, 2, 3])
+/// );
+/// # }
+/// ```
 #[macro_export]
 macro_rules! set {
     () => { $crate::set::Set::new() };
@@ -20,109 +42,231 @@ macro_rules! set {
     }};
 }
 
+/// # Ordered Set
+///
+/// An immutable ordered set implemented as a balanced 2-3 tree.
+///
+/// This is implemented as a `Map` with no values, so it shares
+/// the exact performance characteristics of `Map`.
 pub struct Set<A>(Map<A, ()>);
 
 impl<A> Set<A> {
+    /// Construct an empty set.
     pub fn new() -> Self {
         Set(Map::new())
+    }
+
+    /// Construct a set with a single value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::set::Set;
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// let set = Set::singleton(123);
+    /// assert!(set.contains(&123));
+    /// # }
+    /// ```
+    pub fn singleton<R>(a: R) -> Self
+    where
+        Arc<A>: From<R>,
+    {
+        Set(Map::<A, ()>::singleton(a, ()))
     }
 
     pub fn iter(&self) -> Iter<A> {
         Iter { it: self.0.iter() }
     }
 
+    /// Test whether a set is empty.
+    ///
+    /// Time: O(1)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::set::Set;
+    /// # fn main() {
+    /// assert!(
+    ///   !set![1, 2, 3].is_empty()
+    /// );
+    /// assert!(
+    ///   Set::<i32>::new().is_empty()
+    /// );
+    /// # }
+    /// ```
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
+    /// Get the size of a set.
+    ///
+    /// Time: O(1)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::set::Set;
+    /// # fn main() {
+    /// assert_eq!(3, set![1, 2, 3].len());
+    /// # }
+    /// ```
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    /// Get the smallest value in a set.
+    ///
+    /// If the set is empty, returns `None`.
     pub fn get_min(&self) -> Option<Arc<A>> {
         self.0.get_min().map(|(a, _)| a)
     }
 
+    /// Get the largest value in a set.
+    ///
+    /// If the set is empty, returns `None`.
     pub fn get_max(&self) -> Option<Arc<A>> {
         self.0.get_max().map(|(a, _)| a)
     }
 }
 
 impl<A: Ord> Set<A> {
-    pub fn singleton<R>(a: R) -> Self where Arc<A>: From<R> {
-        Set::new().insert(a)
-    }
-
-    pub fn insert<R>(&self, a: R) -> Self where Arc<A>: From<R> {
+    /// Insert a value into a set.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::set::Set;
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// let set = set![456];
+    /// assert_eq!(
+    ///   set.insert(123),
+    ///   set![123, 456]
+    /// );
+    /// # }
+    /// ```
+    pub fn insert<R>(&self, a: R) -> Self
+    where
+        Arc<A>: From<R>,
+    {
         Set(self.0.insert(a, ()))
     }
 
+    /// Test if a value is part of a set.
+    ///
+    /// Time: O(log n)
     pub fn contains(&self, a: &A) -> bool {
         self.0.contains_key(a)
     }
 
+    /// Remove a value from a set.
     pub fn remove(&self, a: &A) -> Self {
         Set(self.0.remove(a))
     }
 
+    /// Construct the union of two sets.
     pub fn union(&self, other: &Self) -> Self {
         Set(self.0.union(&other.0))
     }
 
+    /// Construct the union of multiple sets.
     pub fn unions<I>(i: I) -> Self
-        where I: IntoIterator<Item = Self>
+    where
+        I: IntoIterator<Item = Self>,
     {
         i.into_iter().fold(set![], |a, b| a.union(&b))
     }
 
-    pub fn difference(&self, other: &Self) -> Self {
-        Set(self.0.difference(&other.0))
+    /// Construct the difference between two sets.
+    pub fn difference<RS>(&self, other: RS) -> Self
+    where
+        RS: Borrow<Self>,
+    {
+        Set(self.0.difference(&other.borrow().0))
     }
 
-    pub fn intersection(&self, other: &Self) -> Self {
-        Set(self.0.intersection(&other.0))
+    /// Construct the intersection of two sets.
+    pub fn intersection<RS>(&self, other: RS) -> Self
+    where
+        RS: Borrow<Self>,
+    {
+        Set(self.0.intersection(&other.borrow().0))
     }
 
+    /// Split a set into two, with the left hand set containing values which are smaller
+    /// than `split`, and the right hand set containing values which are larger than `split`.
+    ///
+    /// The `split` value itself is discarded.
     pub fn split(&self, split: &A) -> (Self, Self) {
         let (l, r) = self.0.split(split);
         (Set(l), Set(r))
     }
 
+    /// Split a set into two, with the left hand set containing values which are smaller
+    /// than `split`, and the right hand set containing values which are larger than `split`.
+    ///
+    /// Returns a tuple of the two maps and a boolean which is true if the `split` value
+    /// existed in the original set, and false otherwise.
     pub fn split_member(&self, split: &A) -> (Self, bool, Self) {
         let (l, m, r) = self.0.split_lookup(split);
         (Set(l), m.is_some(), Set(r))
     }
 
-    pub fn is_subset(&self, other: &Self) -> bool {
-        self.0.is_submap(&other.0)
+    /// Test whether a set is a subset of another set, meaning that
+    /// all values in our set must also be in the other set.
+    pub fn is_subset<RS>(&self, other: RS) -> bool
+    where
+        RS: Borrow<Self>,
+    {
+        self.0.is_submap(&other.borrow().0)
     }
 
-    pub fn is_proper_subset(&self, other: &Self) -> bool {
-        self.0.is_proper_submap(&other.0)
+    /// Test whether a set is a proper subset of another set, meaning that
+    /// all values in our set must also be in the other set.
+    /// A proper subset must also be smaller than the other set.
+    pub fn is_proper_subset<RS>(&self, other: RS) -> bool
+    where
+        RS: Borrow<Self>,
+    {
+        self.0.is_proper_submap(&other.borrow().0)
     }
 
+    /// Construct a set with only the `n` smallest values from a given set.
     pub fn take(&self, n: usize) -> Self {
         Set(self.0.take(n))
     }
 
+    /// Construct a set with the `n` smallest values removed from a given set.
     pub fn drop(&self, n: usize) -> Self {
         Set(self.0.drop(n))
     }
 
+    /// Remove the smallest value from a set, and return that value as well as the updated set.
     pub fn pop_min(&self) -> (Option<Arc<A>>, Self) {
         let (pair, set) = self.0.pop_min_with_key();
         (pair.map(|(a, _)| a), Set(set))
     }
 
+    /// Remove the largest value from a set, and return that value as well as the updated set.
     pub fn pop_max(&self) -> (Option<Arc<A>>, Self) {
         let (pair, set) = self.0.pop_max_with_key();
         (pair.map(|(a, _)| a), Set(set))
     }
 
+    /// Discard the smallest value from a set, returning the updated set.
     pub fn remove_min(&self) -> Self {
         self.pop_min().1
     }
 
+    /// Discard the largest value from a set, returning the updated set.
     pub fn remove_max(&self) -> Self {
         self.pop_max().1
     }
@@ -158,7 +302,8 @@ impl<A: Ord> Ord for Set<A> {
 
 impl<A: Hash> Hash for Set<A> {
     fn hash<H>(&self, state: &mut H)
-        where H: Hasher
+    where
+        H: Hasher,
     {
         for i in self.iter() {
             i.hash(state);
@@ -177,6 +322,14 @@ impl<'a, A: Ord> Add for &'a Set<A> {
 
     fn add(self, other: Self) -> Self::Output {
         self.union(other)
+    }
+}
+
+impl<'a, A: Ord> Mul for &'a Set<A> {
+    type Output = Set<A>;
+
+    fn mul(self, other: Self) -> Self::Output {
+        self.intersection(other)
     }
 }
 
@@ -216,7 +369,8 @@ impl<A> Iterator for Iter<A> {
 
 impl<A: Ord> FromIterator<A> for Set<A> {
     fn from_iter<T>(i: T) -> Self
-        where T: IntoIterator<Item = A>
+    where
+        T: IntoIterator<Item = A>,
     {
         i.into_iter().fold(set![], |s, a| s.insert(a))
     }
@@ -224,7 +378,8 @@ impl<A: Ord> FromIterator<A> for Set<A> {
 
 impl<A: Ord> FromIterator<Arc<A>> for Set<A> {
     fn from_iter<T>(i: T) -> Self
-        where T: IntoIterator<Item = Arc<A>>
+    where
+        T: IntoIterator<Item = Arc<A>>,
     {
         i.into_iter().fold(set![], |s, a| s.insert(a))
     }
