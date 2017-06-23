@@ -2,11 +2,9 @@
 
 Assorted immutable collection datatypes for Rust.
 
-Currently, there's only a cons list.
-
 ## Documentation
 
-* [API docs](https://bodil.lol/im-rs/2.0.3/im/)
+* [API docs](https://docs.rs/im/)
 
 ## Licence
 
