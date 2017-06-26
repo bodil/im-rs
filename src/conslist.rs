@@ -743,13 +743,6 @@ mod test {
     }
 
     #[test]
-    fn equality() {
-        let l = ConsList::range(1, 5);
-        assert_eq!(l, l);
-        assert_eq!(l, conslist![1, 2, 3, 4, 5]);
-    }
-
-    #[test]
     fn disequality() {
         let l = ConsList::range(1, 5);
         assert_ne!(l, cons(0, &l));
@@ -760,6 +753,12 @@ mod test {
         fn length(vec: Vec<i32>) -> bool {
             let list = ConsList::from(vec.clone());
             vec.len() == list.len()
+        }
+
+        fn equality(vec: Vec<i32>) -> bool {
+            let list1 = ConsList::from(vec.clone());
+            let list2 = ConsList::from(vec.clone());
+            list1 == list2
         }
 
         fn order(vec: Vec<i32>) -> bool {
