@@ -1156,6 +1156,7 @@ impl<K: Ord + Arbitrary + Sync, V: Arbitrary + Sync> Arbitrary for Map<K, V> {
 mod test {
     use super::*;
     use test::is_sorted;
+    use conslist::ConsList;
 
     #[test]
     fn iterates_in_order() {
@@ -1241,6 +1242,19 @@ mod test {
             format!("{:?}", map!{ 3 => 4, 5 => 6, 1 => 2 }),
             "{ 1 => 2, 3 => 4, 5 => 6 }"
         );
+    }
+
+    #[test]
+    fn equality2() {
+        let v1 = "1".to_string();
+        let v2 = "1".to_string();
+        assert_eq!(v1, v2);
+        let p1 = ConsList::<String>::new();
+        let p2 = ConsList::<String>::new();
+        assert_eq!(p1, p2);
+        let c1 = Map::singleton(v1, p1);
+        let c2 = Map::singleton(v2, p2);
+        assert_eq!(c1, c2);
     }
 
     quickcheck! {

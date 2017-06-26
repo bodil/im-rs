@@ -557,19 +557,12 @@ where
     ///
     /// This could potentially be an expensive operation, as we need to walk
     /// both lists to test for equality. We can very quickly determine equality
-    /// if both lists are references to the same cons cell (they're equal) or if
-    /// the lists have different lengths (can't be equal). Otherwise, we walk the
+    /// if the lists have different lengths (can't be equal). Otherwise, we walk the
     /// lists to compare values.
     ///
     /// Time: O(n)
     fn eq(&self, other: &ConsList<A>) -> bool {
-        Arc::ptr_eq(&self.0, &other.0) ||
-            self.len() == other.len() && self.iter().eq(other.iter())
-    }
-
-    fn ne(&self, other: &ConsList<A>) -> bool {
-        !Arc::ptr_eq(&self.0, &other.0) &&
-            (self.len() != other.len() || self.iter().ne(other.iter()))
+        self.len() == other.len() && self.iter().eq(other.iter())
     }
 }
 
@@ -747,6 +740,13 @@ mod test {
         let l = ConsList::range(1, 5);
         assert_ne!(l, cons(0, &l));
         assert_ne!(l, conslist![1, 2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn equality_of_empty_lists() {
+        let l1 = ConsList::<String>::new();
+        let l2 = ConsList::<String>::new();
+        assert_eq!(l1, l2);
     }
 
     quickcheck! {
