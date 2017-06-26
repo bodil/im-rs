@@ -203,12 +203,9 @@ impl<A> ConsList<A> {
     /// If the list is empty, `None` is returned.
     ///
     /// Time: O(1)
-    pub fn head<T>(&self) -> Option<T>
-    where
-        T: From<Arc<A>>,
-    {
+    pub fn head(&self) -> Option<Arc<A>> {
         match *self.0 {
-            Cons(_, ref a, _) => Some(T::from(a.clone())),
+            Cons(_, ref a, _) => Some(a.clone()),
             _ => None,
         }
     }
