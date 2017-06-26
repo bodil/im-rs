@@ -564,12 +564,12 @@ where
     /// Time: O(n)
     fn eq(&self, other: &ConsList<A>) -> bool {
         Arc::ptr_eq(&self.0, &other.0) ||
-            self.len() == other.len() && self.iter().zip(other.iter()).all(|(a, b)| a == b)
+            self.len() == other.len() && self.iter().eq(other.iter())
     }
 
     fn ne(&self, other: &ConsList<A>) -> bool {
         !Arc::ptr_eq(&self.0, &other.0) &&
-            (self.len() != other.len() || self.iter().zip(other.iter()).all(|(a, b)| a != b))
+            (self.len() != other.len() || self.iter().ne(other.iter()))
     }
 }
 
