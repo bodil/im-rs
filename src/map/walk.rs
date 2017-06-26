@@ -125,7 +125,7 @@ pub fn ins_down<K: Ord, V>(
                 Ordering::Equal => {
                     from_zipper(
                         ctx,
-                        Map::two(left.clone(), k1.clone(), v1.clone(), right.clone()),
+                        Map::two(left.clone(), k.clone(), v.clone(), right.clone()),
                     )
                 }
                 Ordering::Less => {

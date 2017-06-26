@@ -1276,5 +1276,43 @@ mod test {
             let right = Map::from_iter(vec);
             left == right
         }
+
+        fn overwrite_values(vec: Vec<(usize, usize)>, index_rand: usize, new_val: usize) -> bool {
+            if vec.len() == 0 {
+                return true
+            }
+            let index = vec[index_rand % vec.len()].0;
+            let map1 = Map::from_iter(vec.clone());
+            let map2 = map1.insert(index, new_val);
+            map2.iter().all(|(k, v)| if *k == index {
+                *v == new_val
+            } else {
+                match map1.get(&k) {
+                    None => false,
+                    Some(other_v) => v == other_v
+                }
+            })
+        }
+
+        fn delete_values(vec: Vec<(usize, usize)>, index_rand: usize) -> bool {
+            if vec.len() == 0 {
+                return true
+            }
+            let index = vec[index_rand % vec.len()].0;
+            let map1 = Map::from_iter(vec.clone());
+            let map2 = map1.remove(&index);
+            map2.keys().all(|k| *k != index) && map1.len() == map2.len() + 1
+        }
+
+        fn delete_and_reinsert_values(vec: Vec<(usize, usize)>, index_rand: usize) -> bool {
+            if vec.len() == 0 {
+                return true
+            }
+            let index = vec[index_rand % vec.len()].0;
+            let map1 = Map::from_iter(vec.clone());
+            let (val, map2) = map1.pop(&index).unwrap();
+            let map3 = map2.insert(index, val);
+            map2.keys().all(|k| *k != index) && map1.len() == map2.len() + 1 && map1 == map3
+        }
     }
 }
