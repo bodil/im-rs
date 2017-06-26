@@ -1314,5 +1314,24 @@ mod test {
             let map3 = map2.insert(index, val);
             map2.keys().all(|k| *k != index) && map1.len() == map2.len() + 1 && map1 == map3
         }
+
+        fn insert_and_delete_values(
+            input_unbounded: Vec<(usize, usize)>, ops: Vec<(bool, usize, usize)>
+        ) -> bool {
+            let input: Vec<(usize, usize)> =
+                input_unbounded.into_iter().map(|(k, v)| (k % 64, v % 64)).collect();
+            let mut map = Map::from(input.clone());
+            let mut tree: BTreeMap<usize, usize> = input.into_iter().collect();
+            for (ins, key, val) in ops {
+                if ins {
+                    tree.insert(key, val);
+                    map = map.insert(key, val)
+                } else {
+                    tree.remove(&key);
+                    map = map.remove(&key)
+                }
+            }
+            map.iter().map(|(k, v)| (*k, *v)).eq(tree.iter().map(|(k, v)| (*k, *v)))
+        }
     }
 }
