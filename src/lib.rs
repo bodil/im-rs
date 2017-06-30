@@ -53,11 +53,15 @@ quickcheck!{}
 
 #[macro_use]
 pub mod conslist;
+#[macro_use]
 pub mod map;
+#[macro_use]
 pub mod set;
-pub mod queue;
+#[macro_use]
 pub mod list;
+pub mod queue;
 pub mod iter;
+pub mod lens;
 
 pub use conslist::ConsList;
 pub use map::Map;

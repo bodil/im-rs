@@ -17,6 +17,9 @@ use std::hash::{Hash, Hasher};
 use std::fmt::{Debug, Formatter, Error};
 use std::ops::Add;
 use std::borrow::Borrow;
+use std::marker::PhantomData;
+
+use lens::PartialLens;
 
 use self::MapNode::{Leaf, Two, Three};
 
@@ -256,6 +259,55 @@ impl<K, V> Map<K, V> {
 }
 
 impl<K: Ord, V> Map<K, V> {
+    /// Make a `PartialLens` from the map to the value described by the
+    /// given `key`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::map::Map;
+    /// # use std::sync::Arc;
+    /// # use im::lens::{self, PartialLens};
+    /// # fn main() {
+    /// let map =
+    ///   map!{
+    ///     "foo" => "bar"
+    /// };
+    /// let lens = Map::lens("foo");
+    /// assert_eq!(lens.try_get(&map), Some(Arc::new("bar")));
+    /// # }
+    /// ```
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::map::Map;
+    /// # use im::lens::{self, PartialLens};
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// // Make a lens into a map of maps
+    /// let map =
+    ///   map!{
+    ///     "foo" => map!{
+    ///       "bar" => "gazonk"
+    ///     }
+    /// };
+    /// let lens1 = Map::lens("foo");
+    /// let lens2 = Map::lens("bar");
+    /// let lens = lens::compose(&lens1, &lens2);
+    /// assert_eq!(lens.try_get(&map), Some(Arc::new("gazonk")));
+    /// # }
+    /// ```
+    pub fn lens<RK>(key: RK) -> MapLens<K, V>
+    where
+        Arc<K>: From<RK>,
+    {
+        MapLens {
+            key: Arc::from(key),
+            value: PhantomData,
+        }
+    }
+
     /// Get the value for a key from a map.
     ///
     /// Time: O(log n)
@@ -1053,6 +1105,49 @@ impl<K, V> IntoIterator for Map<K, V> {
 }
 
 // Conversions
+
+pub struct MapLens<K, V> {
+    key: Arc<K>,
+    value: PhantomData<V>,
+}
+
+impl<K, V> Clone for MapLens<K, V> {
+    fn clone(&self) -> Self {
+        MapLens {
+            key: self.key.clone(),
+            value: PhantomData,
+        }
+    }
+}
+
+impl<K, V> PartialLens for MapLens<K, V>
+where
+    K: Ord,
+{
+    type From = Map<K, V>;
+    type To = V;
+
+    fn try_get<R>(&self, s: R) -> Option<Arc<V>> where R: AsRef<Map<K, V>> {
+        s.as_ref().get(&self.key)
+    }
+
+    fn try_put<Convert, R>(&self, cv: Option<Convert>, s: R) -> Option<Map<K, V>>
+        where
+        R: AsRef<Map<K,V>>,
+        Arc<V>: From<Convert>,
+    {
+        Some(match cv.map(From::from) {
+            None => s.as_ref().remove(&self.key),
+            Some(v) => s.as_ref().insert(self.key.clone(), v)
+        })
+    }
+}
+
+impl<K, V> AsRef<Map<K, V>> for Map<K,V> {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}
 
 impl<'a, K: Ord, V: Clone, RK, RV> From<&'a [(RK, RV)]> for Map<K, V>
 where
