@@ -1,0 +1,71 @@
+use std::cell::Cell;
+
+enum UnfoldItem<A> {
+    Nil,
+    Item(A),
+}
+
+impl<A> Default for UnfoldItem<A> {
+    fn default() -> Self {
+        UnfoldItem::Nil
+    }
+}
+
+pub struct Unfold<F, S> {
+    f: F,
+    value: Cell<UnfoldItem<S>>,
+}
+
+impl<F, S, A> Iterator for Unfold<F, S>
+where
+    F: Fn(S) -> Option<(A, S)>,
+{
+    type Item = A;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.value.take() {
+            UnfoldItem::Nil => unreachable!(),
+            UnfoldItem::Item(value) => {
+                match (self.f)(value) {
+                    None => None,
+                    Some((next, value)) => {
+                        self.value.set(UnfoldItem::Item(value));
+                        Some(next)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Create an iterator of values using a function to update
+/// a state value.
+///
+/// The function is called with the current state as its
+/// argument, and should return an `Option` of a tuple of the
+/// next value to yield from the iterator and the updated state.
+/// If the function returns `None`, the iterator ends.
+///
+/// # Examples
+/// ```
+/// # #[macro_use] extern crate im;
+/// # use im::iter::unfold;
+/// # use im::list::List;
+/// # fn main() {
+/// // Create an infinite stream of numbers, starting at 0.
+/// let mut it = unfold(0, |i| Some((i, i + 1)));
+///
+/// // Make a list out of its first five elements.
+/// let numbers = List::from(it.take(5));
+/// assert_eq!(numbers, list![0, 1, 2, 3, 4]);
+/// # }
+/// ```
+pub fn unfold<F, S, A>(value: S, f: F) -> Unfold<F, S>
+where
+    F: Fn(S) -> Option<(A, S)>,
+{
+    Unfold {
+        f: f,
+        value: Cell::new(UnfoldItem::Item(value)),
+    }
+}

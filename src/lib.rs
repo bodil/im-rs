@@ -57,12 +57,14 @@ pub mod map;
 pub mod set;
 pub mod queue;
 pub mod list;
+pub mod iter;
 
 pub use conslist::ConsList;
 pub use map::Map;
 pub use set::Set;
 pub use queue::Queue;
 pub use list::List;
+pub use iter::unfold;
 
 #[cfg(test)]
 pub mod test;
