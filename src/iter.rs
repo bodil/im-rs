@@ -1,3 +1,5 @@
+//! Iterators over immutable data.
+
 use std::cell::Cell;
 
 enum UnfoldItem<A> {

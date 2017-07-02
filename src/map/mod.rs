@@ -1,4 +1,4 @@
-//! # Ordered Map
+//! An ordered map.
 //!
 //! An immutable ordered map implemented as a balanced 2-3 tree.
 //!

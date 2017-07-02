@@ -1,3 +1,5 @@
+//! A view into a data structure.
+//!
 //! A lens describes a view into a data structure, like an index or key lookup,
 //! with the ability to modify what it sees. It provides a get operation (get
 //! the thing we're a lens for) and a set operation (modify the data structure

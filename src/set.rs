@@ -1,4 +1,4 @@
-//! # Ordered Set
+//! An ordered set.
 //!
 //! An immutable ordered set implemented as a balanced 2-3 tree.
 //!

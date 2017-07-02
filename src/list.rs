@@ -1,8 +1,9 @@
-//! # Catenable List
+//! A catenable list.
 //!
 //! A data structure like the simple `ConsList` but with
 //! efficient (generally O(1) in the worst case) add
-//! and remove operations on both ends.
+//! and remove operations on both ends, implemented as a `Queue`
+//! of `ConsList`s.
 //!
 //! If you need a list but haven't thought hard about your
 //! performance requirements, this is most likely the list you

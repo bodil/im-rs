@@ -1,3 +1,5 @@
+//! A strict queue.
+
 use std::sync::Arc;
 use std::iter::FromIterator;
 use conslist::ConsList;

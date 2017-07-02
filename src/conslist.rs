@@ -1,6 +1,10 @@
-//! # Cons List
+//! A cons list.
 //!
-//! An implementation of immutable proper cons lists.
+//! A cons list is a singly linked list built out of 'cons cells,'
+//! which are cells containing two values, the left hand value being
+//! the head of the list and the right hand value being a reference
+//! to the rest of the list, or a `Nil` value denoting the end of the
+//! list.
 //!
 //! Structure can be shared between lists (and is reference
 //! counted), and append to the front of a list is O(1).
