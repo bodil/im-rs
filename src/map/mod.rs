@@ -1068,19 +1068,14 @@ impl<K, V> Iterator for Values<K, V> {
     }
 }
 
-impl<K: Ord, V> FromIterator<(K, V)> for Map<K, V> {
+impl<K: Ord, V, RK, RV> FromIterator<(RK, RV)> for Map<K, V>
+where
+    Arc<K>: From<RK>,
+    Arc<V>: From<RV>,
+{
     fn from_iter<T>(i: T) -> Self
     where
-        T: IntoIterator<Item = (K, V)>,
-    {
-        i.into_iter().fold(map![], |m, (k, v)| m.insert(k, v))
-    }
-}
-
-impl<K: Ord, V> FromIterator<(Arc<K>, Arc<V>)> for Map<K, V> {
-    fn from_iter<T>(i: T) -> Self
-    where
-        T: IntoIterator<Item = (Arc<K>, Arc<V>)>,
+        T: IntoIterator<Item = (RK, RV)>,
     {
         i.into_iter().fold(map![], |m, (k, v)| m.insert(k, v))
     }
@@ -1127,23 +1122,26 @@ where
     type From = Map<K, V>;
     type To = V;
 
-    fn try_get<R>(&self, s: R) -> Option<Arc<V>> where R: AsRef<Map<K, V>> {
+    fn try_get<R>(&self, s: R) -> Option<Arc<V>>
+    where
+        R: AsRef<Map<K, V>>,
+    {
         s.as_ref().get(&self.key)
     }
 
     fn try_put<Convert, R>(&self, cv: Option<Convert>, s: R) -> Option<Map<K, V>>
-        where
-        R: AsRef<Map<K,V>>,
+    where
+        R: AsRef<Map<K, V>>,
         Arc<V>: From<Convert>,
     {
         Some(match cv.map(From::from) {
             None => s.as_ref().remove(&self.key),
-            Some(v) => s.as_ref().insert(self.key.clone(), v)
+            Some(v) => s.as_ref().insert(self.key.clone(), v),
         })
     }
 }
 
-impl<K, V> AsRef<Map<K, V>> for Map<K,V> {
+impl<K, V> AsRef<Map<K, V>> for Map<K, V> {
     fn as_ref(&self) -> &Self {
         self
     }

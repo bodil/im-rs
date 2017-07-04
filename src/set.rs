@@ -367,19 +367,13 @@ impl<A> Iterator for Iter<A> {
     }
 }
 
-impl<A: Ord> FromIterator<A> for Set<A> {
+impl<A: Ord, RA> FromIterator<RA> for Set<A>
+where
+    Arc<A>: From<RA>,
+{
     fn from_iter<T>(i: T) -> Self
     where
-        T: IntoIterator<Item = A>,
-    {
-        i.into_iter().fold(set![], |s, a| s.insert(a))
-    }
-}
-
-impl<A: Ord> FromIterator<Arc<A>> for Set<A> {
-    fn from_iter<T>(i: T) -> Self
-    where
-        T: IntoIterator<Item = Arc<A>>,
+        T: IntoIterator<Item = RA>,
     {
         i.into_iter().fold(set![], |s, a| s.insert(a))
     }
