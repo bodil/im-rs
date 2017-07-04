@@ -1,40 +1,22 @@
 //! Iterators over immutable data.
 
-use std::cell::Cell;
-
-enum UnfoldItem<A> {
-    Nil,
-    Item(A),
-}
-
-impl<A> Default for UnfoldItem<A> {
-    fn default() -> Self {
-        UnfoldItem::Nil
-    }
-}
-
 pub struct Unfold<F, S> {
     f: F,
-    value: Cell<UnfoldItem<S>>,
+    value: S,
 }
 
 impl<F, S, A> Iterator for Unfold<F, S>
-where
-    F: Fn(S) -> Option<(A, S)>,
+    where
+    F: Fn(&S) -> Option<(A, S)>,
 {
     type Item = A;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.value.take() {
-            UnfoldItem::Nil => unreachable!(),
-            UnfoldItem::Item(value) => {
-                match (self.f)(value) {
-                    None => None,
-                    Some((next, value)) => {
-                        self.value.set(UnfoldItem::Item(value));
-                        Some(next)
-                    }
-                }
+        match (self.f)(&self.value) {
+            None => None,
+            Some((next, value)) => {
+                self.value = value;
+                Some(next)
             }
         }
     }
@@ -55,7 +37,7 @@ where
 /// # use im::list::List;
 /// # fn main() {
 /// // Create an infinite stream of numbers, starting at 0.
-/// let mut it = unfold(0, |i| Some((i, i + 1)));
+/// let mut it = unfold(0, |i| Some((*i, *i + 1)));
 ///
 /// // Make a list out of its first five elements.
 /// let numbers = List::from(it.take(5));
@@ -64,10 +46,10 @@ where
 /// ```
 pub fn unfold<F, S, A>(value: S, f: F) -> Unfold<F, S>
 where
-    F: Fn(S) -> Option<(A, S)>,
+    F: Fn(&S) -> Option<(A, S)>,
 {
     Unfold {
         f: f,
-        value: Cell::new(UnfoldItem::Item(value)),
+        value: value,
     }
 }
