@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 use std::iter::FromIterator;
+use std::fmt;
 use conslist::ConsList;
 
 /// A strict queue backed by a pair of linked lists.
@@ -14,6 +15,20 @@ impl<A> Queue<A> {
     /// Construct an empty queue.
     pub fn new() -> Self {
         Queue(conslist![], conslist![])
+    }
+
+    /// Construct a queue by consuming an `IntoIterator`.
+    ///
+    /// Allows you to construct a queue out of anything that implements
+    /// the `IntoIterator` trait.
+    ///
+    /// Time: O(n)
+    pub fn from<R, I>(it: I) -> Queue<A>
+    where
+        I: IntoIterator<Item = R>,
+        Arc<A>: From<R>,
+    {
+        it.into_iter().map(|a| Arc::from(a)).collect()
     }
 
     /// Test whether a queue is empty.
@@ -64,11 +79,21 @@ impl<A> Queue<A> {
     }
 }
 
+// Core traits
+
 impl<A> Clone for Queue<A> {
     fn clone(&self) -> Self {
         Queue(self.0.clone(), self.1.clone())
     }
 }
+
+impl<A> fmt::Debug for Queue<A> where A: fmt::Debug {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        ConsList::<A>::from(self).fmt(f)
+    }
+}
+
+// Iterators
 
 /// An iterator over a queue of elements of type `A`.
 pub struct Iter<A> {
