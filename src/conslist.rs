@@ -721,11 +721,43 @@ impl<A: Arbitrary + Sync> Arbitrary for ConsList<A> {
     }
 }
 
+// Proptest
+
+#[cfg(any(test, feature = "proptest"))]
+pub mod proptest {
+    use super::*;
+    use proptest::strategy::{Strategy, BoxedStrategy, ValueTree};
+    use std::ops::Range;
+
+    /// A strategy for a cons list of a given size.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// proptest! {
+    ///     #[test]
+    ///     fn proptest_a_conslist(ref l in conslist(".*", 10..100)) {
+    ///         assert!(l.len() < 100);
+    ///         assert!(l.len() >= 10);
+    ///     }
+    /// }
+    /// ```
+    pub fn conslist<A: Strategy + 'static>(
+        element: A,
+        size: Range<usize>,
+    ) -> BoxedStrategy<ConsList<<A::Value as ValueTree>::Value>> {
+        ::proptest::collection::vec(element, size.clone())
+            .prop_map(|v| ConsList::from(v))
+            .boxed()
+    }
+}
+
 // Tests
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use super::proptest::*;
     use test::is_sorted;
 
     #[test]
@@ -784,6 +816,14 @@ mod test {
         fn sort_a_list(l: ConsList<i32>) -> bool {
             let sorted = l.sort();
             l.len() == sorted.len() && is_sorted(sorted)
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn proptest_a_conslist(ref l in conslist(".*", 10..100)) {
+            assert!(l.len() < 100);
+            assert!(l.len() >= 10);
         }
     }
 }

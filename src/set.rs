@@ -476,3 +476,54 @@ impl<A: Ord + Arbitrary + Sync> Arbitrary for Set<A> {
         Set::from_iter(Vec::<A>::arbitrary(g))
     }
 }
+
+// Proptest
+
+#[cfg(any(test, feature = "proptest"))]
+pub mod proptest {
+    use super::*;
+    use proptest::strategy::{Strategy, BoxedStrategy, ValueTree};
+    use std::ops::Range;
+
+    /// A strategy for a set of a given size.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// proptest! {
+    ///     #[test]
+    ///     fn proptest_a_set(ref s in set(".*", 10..100)) {
+    ///         assert!(s.len() < 100);
+    ///         assert!(s.len() >= 10);
+    ///     }
+    /// }
+    /// ```
+    pub fn set<A: Strategy + 'static>(
+        element: A,
+        size: Range<usize>,
+    ) -> BoxedStrategy<Set<<A::Value as ValueTree>::Value>>
+    where
+        <A::Value as ValueTree>::Value: Ord,
+    {
+        ::proptest::collection::vec(element, size.clone())
+            .prop_map(|v| Set::from(v))
+            .prop_filter(
+                "Set minimum size".to_owned(),
+                move |s| s.len() >= size.start,
+            )
+            .boxed()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::proptest::*;
+
+    proptest! {
+        #[test]
+        fn proptest_a_set(ref s in set(".*", 10..100)) {
+            assert!(s.len() < 100);
+            assert!(s.len() >= 10);
+        }
+    }
+}

@@ -156,6 +156,37 @@ impl<A: Arbitrary + Sync> Arbitrary for Queue<A> {
     }
 }
 
+// Proptest
+
+#[cfg(any(test, feature = "proptest"))]
+pub mod proptest {
+    use super::*;
+    use proptest::strategy::{Strategy, BoxedStrategy, ValueTree};
+    use std::ops::Range;
+
+    /// A strategy for generating a queue of a certain size.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// proptest! {
+    ///     #[test]
+    ///     fn proptest_a_queue(ref q in queue(".*", 10..100)) {
+    ///         assert!(q.len() < 100);
+    ///         assert!(q.len() >= 10);
+    ///     }
+    /// }
+    /// ```
+    pub fn queue<T: Strategy + 'static>(
+        element: T,
+        size: Range<usize>,
+    ) -> BoxedStrategy<Queue<<T::Value as ValueTree>::Value>> {
+        ::proptest::collection::vec(element, size)
+            .prop_map(|v| Queue::from(v))
+            .boxed()
+    }
+}
+
 // Tests
 
 #[cfg(test)]

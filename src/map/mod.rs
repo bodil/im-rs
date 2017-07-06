@@ -1243,11 +1243,51 @@ impl<K: Ord + Arbitrary + Sync, V: Arbitrary + Sync> Arbitrary for Map<K, V> {
     }
 }
 
+// Proptest
+
+#[cfg(any(test, feature = "proptest"))]
+pub mod proptest {
+    use super::*;
+    use proptest::strategy::{Strategy, BoxedStrategy, ValueTree};
+    use std::ops::Range;
+
+    /// A strategy for a map of a given size.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// proptest! {
+    ///     #[test]
+    ///     fn proptest_works(ref m in map(0..9999, ".*", 10..100)) {
+    ///         assert!(m.len() < 100);
+    ///         assert!(m.len() >= 10);
+    ///     }
+    /// }
+    /// ```
+    pub fn map<K: Strategy + 'static, V: Strategy + 'static>(
+        key: K,
+        value: V,
+        size: Range<usize>,
+    ) -> BoxedStrategy<Map<<K::Value as ValueTree>::Value, <V::Value as ValueTree>::Value>>
+    where
+        <K::Value as ValueTree>::Value: Ord,
+    {
+        ::proptest::collection::vec((key, value), size.clone())
+            .prop_map(|v| Map::from(v))
+            .prop_filter(
+                "Map minimum size".to_owned(),
+                move |m| m.len() >= size.start,
+            )
+            .boxed()
+    }
+}
+
 // Tests
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use super::proptest::*;
     use test::is_sorted;
     use conslist::ConsList;
 
@@ -1425,6 +1465,14 @@ mod test {
                 }
             }
             map.iter().map(|(k, v)| (*k, *v)).eq(tree.iter().map(|(k, v)| (*k, *v)))
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn proptest_works(ref m in map(0..9999, ".*", 10..100)) {
+            assert!(m.len() < 100);
+            assert!(m.len() >= 10);
         }
     }
 }

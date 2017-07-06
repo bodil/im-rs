@@ -734,11 +734,67 @@ impl<A: Arbitrary + Sync> Arbitrary for List<A> {
     }
 }
 
+// Proptest
+
+#[cfg(any(test, feature = "proptest"))]
+pub mod proptest {
+    use super::*;
+    use proptest::strategy::{Strategy, BoxedStrategy, ValueTree};
+    use std::ops::Range;
+
+    /// A strategy for generating a list of a certain size.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// proptest! {
+    ///     #[test]
+    ///     fn proptest_a_list(ref l in list(".*", 10..100)) {
+    ///         assert!(l.len() < 100);
+    ///         assert!(l.len() >= 10);
+    ///     }
+    /// }
+    /// ```
+    pub fn list<T: Strategy + 'static>(
+        element: T,
+        size: Range<usize>,
+    ) -> BoxedStrategy<List<<T::Value as ValueTree>::Value>> {
+        ::proptest::collection::vec(element, size)
+            .prop_map(|v| List::from(v))
+            .boxed()
+    }
+
+    /// A strategy for an ordered list of a certain size.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// proptest! {
+    ///     #[test]
+    ///     fn proptest_ordered_list(ref l in ordered_list(".*", 10..100)) {
+    ///         assert_eq!(l, l.sort());
+    ///     }
+    /// }
+    /// ```
+    pub fn ordered_list<T: Strategy + 'static>(
+        element: T,
+        size: Range<usize>,
+    ) -> BoxedStrategy<List<<T::Value as ValueTree>::Value>>
+    where
+        <T::Value as ValueTree>::Value: Ord,
+    {
+        ::proptest::collection::vec(element, size)
+            .prop_map(|v| List::from(v).sort())
+            .boxed()
+    }
+}
+
 // Tests
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use super::proptest::*;
     use test::is_sorted;
 
     quickcheck! {
@@ -777,6 +833,19 @@ mod test {
         fn sort_a_list(l: List<i32>) -> bool {
             let sorted = l.sort();
             l.len() == sorted.len() && is_sorted(&sorted)
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn proptest_a_list(ref l in list(".*", 10..100)) {
+            assert!(l.len() < 100);
+            assert!(l.len() >= 10);
+        }
+
+        #[test]
+        fn proptest_ordered_list(ref l in ordered_list(".*", 10..100)) {
+            assert_eq!(l, &l.sort());
         }
     }
 }

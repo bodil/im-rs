@@ -51,6 +51,12 @@ extern crate quickcheck;
 #[cfg(feature = "quickcheck")]
 quickcheck!{}
 
+#[cfg(any(test, feature = "proptest"))]
+#[macro_use]
+extern crate proptest;
+
+#[cfg(feature = "proptest")]
+proptest!{}
 #[macro_use]
 pub mod conslist;
 #[macro_use]
