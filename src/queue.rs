@@ -93,6 +93,14 @@ impl<A> fmt::Debug for Queue<A> where A: fmt::Debug {
     }
 }
 
+impl<A: PartialEq> PartialEq for Queue<A> {
+    fn eq(&self, other: &Self) -> bool {
+        self.iter().eq(other.iter())
+    }
+}
+
+impl<A: Eq> Eq for Queue<A> {}
+
 // Iterators
 
 /// An iterator over a queue of elements of type `A`.
@@ -141,6 +149,35 @@ where
         I: IntoIterator<Item = T>,
     {
         source.into_iter().fold(Queue::new(), |q, v| q.push(v))
+    }
+}
+
+// Conversions
+
+impl<'a, A, T> From<&'a [T]> for Queue<A>
+where
+    Arc<A>: From<&'a T>,
+{
+    fn from(slice: &'a [T]) -> Queue<A> {
+        slice.into_iter().collect()
+    }
+}
+
+impl<A, T> From<Vec<T>> for Queue<A>
+where
+    Arc<A>: From<T>,
+{
+    fn from(vec: Vec<T>) -> Queue<A> {
+        vec.into_iter().collect()
+    }
+}
+
+impl<'a, A, T> From<&'a Vec<T>> for Queue<A>
+where
+    Arc<A>: From<&'a T>,
+{
+    fn from(vec: &'a Vec<T>) -> Queue<A> {
+        vec.into_iter().collect()
     }
 }
 
