@@ -57,6 +57,12 @@ extern crate proptest;
 
 #[cfg(feature = "proptest")]
 proptest!{}
+
+#[cfg(any(test, feature = "serde"))]
+extern crate serde;
+#[cfg(test)]
+extern crate serde_json;
+
 #[macro_use]
 pub mod conslist;
 #[macro_use]
@@ -78,3 +84,6 @@ pub use iter::unfold;
 
 #[cfg(test)]
 pub mod test;
+
+#[cfg(any(test, feature = "serde"))]
+pub mod ser;
