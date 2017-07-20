@@ -44,6 +44,8 @@
 //! of their enjoyment of the word 'snoc,' even though it's
 //! reportedly not a readily intuitive term).
 
+#![cfg_attr(has_specialisation, feature(specialization))]
+
 #[cfg(any(test, feature = "quickcheck"))]
 #[macro_use]
 extern crate quickcheck;

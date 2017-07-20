@@ -578,7 +578,22 @@ impl<A> Add for List<A> {
     }
 }
 
+#[cfg(not(has_specialisation))]
 impl<A: PartialEq> PartialEq for List<A> {
+    fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len() && self.iter().eq(other.iter())
+    }
+}
+
+#[cfg(has_specialisation)]
+impl<A: PartialEq> PartialEq for List<A> {
+    default fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len() && self.iter().eq(other.iter())
+    }
+}
+
+#[cfg(has_specialisation)]
+impl<A: Eq> PartialEq for List<A> {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0) || self.len() == other.len() && self.iter().eq(other.iter())
     }

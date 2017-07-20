@@ -553,6 +553,7 @@ impl<A> Default for ConsList<A> {
     }
 }
 
+#[cfg(not(has_specialisation))]
 impl<A> PartialEq for ConsList<A>
 where
     A: PartialEq,
@@ -567,6 +568,47 @@ where
     /// Time: O(n)
     fn eq(&self, other: &ConsList<A>) -> bool {
         self.len() == other.len() && self.iter().eq(other.iter())
+    }
+}
+
+#[cfg(has_specialisation)]
+impl<A> PartialEq for ConsList<A>
+where
+    A: PartialEq,
+{
+    /// Test if two lists are equal.
+    ///
+    /// This could potentially be an expensive operation, as we need to walk
+    /// both lists to test for equality. We can very quickly determine equality
+    /// if the lists have different lengths (can't be equal). Otherwise, we walk the
+    /// lists to compare values.
+    ///
+    /// If `A` implements `Eq`, we have an additional shortcut available to us: if
+    /// both lists refer to the same cons cell, as determined by `Arc::ptr_eq`, they
+    /// have to be equal.
+    ///
+    /// Time: O(n)
+    default fn eq(&self, other: &ConsList<A>) -> bool {
+        self.len() == other.len() && self.iter().eq(other.iter())
+    }
+}
+
+#[cfg(has_specialisation)]
+impl<A> PartialEq for ConsList<A> where A: Eq {
+    /// Test if two lists are equal.
+    ///
+    /// This could potentially be an expensive operation, as we need to walk
+    /// both lists to test for equality. We can very quickly determine equality
+    /// if the lists have different lengths (can't be equal). Otherwise, we walk the
+    /// lists to compare values.
+    ///
+    /// If `A` implements `Eq`, we have an additional shortcut available to us: if
+    /// both lists refer to the same cons cell, as determined by `Arc::ptr_eq`, they
+    /// have to be equal.
+    ///
+    /// Time: O(n)
+    fn eq(&self, other: &ConsList<A>) -> bool {
+        Arc::ptr_eq(&self.0, &other.0) || (self.len() == other.len() && self.iter().eq(other.iter()))
     }
 }
 

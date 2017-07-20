@@ -95,7 +95,7 @@ impl<A> fmt::Debug for Queue<A> where A: fmt::Debug {
 
 impl<A: PartialEq> PartialEq for Queue<A> {
     fn eq(&self, other: &Self) -> bool {
-        self.iter().eq(other.iter())
+        self.0 == other.0 && self.1 == other.1
     }
 }
 

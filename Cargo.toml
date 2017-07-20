@@ -9,9 +9,13 @@ documentation = "https://docs.rs/im/"
 readme = "README.md"
 categories = ["data-structures"]
 keywords = ["immutable", "persistent"]
+build = "build.rs"
 
 [badges]
 travis-ci = { repository = "bodil/im-rs" }
+
+[build-dependencies]
+rustc_version = "0.2"
 
 [dependencies]
 quickcheck = { version = "0.4", optional = true }

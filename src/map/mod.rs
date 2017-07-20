@@ -898,9 +898,24 @@ impl<K, V> Clone for Map<K, V> {
     }
 }
 
+#[cfg(not(has_specialisation))]
 impl<K: PartialEq, V: PartialEq> PartialEq for Map<K, V> {
     fn eq(&self, other: &Self) -> bool {
-        self.iter().eq(other.iter())
+        self.len() == other.len() && self.iter().eq(other.iter())
+    }
+}
+
+#[cfg(has_specialisation)]
+impl<K: PartialEq, V: PartialEq> PartialEq for Map<K, V> {
+    default fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len() && self.iter().eq(other.iter())
+    }
+}
+
+#[cfg(has_specialisation)]
+impl<K: Eq, V: Eq> PartialEq for Map<K, V> {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0) || (self.len() == other.len() && self.iter().eq(other.iter()))
     }
 }
 
