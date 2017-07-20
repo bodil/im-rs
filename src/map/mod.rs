@@ -915,7 +915,8 @@ impl<K: PartialEq, V: PartialEq> PartialEq for Map<K, V> {
 #[cfg(has_specialisation)]
 impl<K: Eq, V: Eq> PartialEq for Map<K, V> {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0) || (self.len() == other.len() && self.iter().eq(other.iter()))
+        Arc::ptr_eq(&self.0, &other.0) ||
+            (self.len() == other.len() && self.iter().eq(other.iter()))
     }
 }
 
@@ -1137,21 +1138,17 @@ where
     type From = Map<K, V>;
     type To = V;
 
-    fn try_get<R>(&self, s: R) -> Option<Arc<V>>
-    where
-        R: AsRef<Map<K, V>>,
-    {
-        s.as_ref().get(&self.key)
+    fn try_get(&self, s: &Self::From) -> Option<Arc<Self::To>> {
+        s.get(&self.key)
     }
 
-    fn try_put<Convert, R>(&self, cv: Option<Convert>, s: R) -> Option<Map<K, V>>
+    fn try_put<Convert>(&self, cv: Option<Convert>, s: &Self::From) -> Option<Self::From>
     where
-        R: AsRef<Map<K, V>>,
-        Arc<V>: From<Convert>,
+        Arc<Self::To>: From<Convert>,
     {
         Some(match cv.map(From::from) {
-            None => s.as_ref().remove(&self.key),
-            Some(v) => s.as_ref().insert(self.key.clone(), v),
+            None => s.remove(&self.key),
+            Some(v) => s.insert(self.key.clone(), v),
         })
     }
 }
