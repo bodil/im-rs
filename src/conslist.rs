@@ -26,6 +26,7 @@ use std::ops::Deref;
 use std::hash::{Hash, Hasher};
 use std::cmp::Ordering;
 use std::borrow::Borrow;
+use shared::Shared;
 
 use self::ConsListNode::{Cons, Nil};
 
@@ -113,7 +114,7 @@ macro_rules! conslist {
 /// untrained ear.
 pub fn cons<A, RA, RD>(car: RA, cdr: RD) -> ConsList<A>
 where
-    Arc<A>: From<RA>,
+    RA: Shared<A>,
     RD: Borrow<ConsList<A>>,
 {
     cdr.borrow().cons(car)
@@ -149,9 +150,9 @@ impl<A> ConsList<A> {
     /// Construct a list with a single element.
     pub fn singleton<R>(v: R) -> ConsList<A>
     where
-        Arc<A>: From<R>,
+        R: Shared<A>,
     {
-        ConsList(Arc::new(Cons(1, Arc::from(v), conslist![])))
+        ConsList(Arc::new(Cons(1, v.shared(), conslist![])))
     }
 
     /// Construct a list by consuming an `IntoIterator`.
@@ -176,9 +177,9 @@ impl<A> ConsList<A> {
     pub fn from<R, I>(it: I) -> ConsList<A>
     where
         I: IntoIterator<Item = R>,
-        Arc<A>: From<R>,
+        R: Shared<A>,
     {
-        it.into_iter().map(|a| Arc::from(a)).collect()
+        it.into_iter().map(|a| a.shared()).collect()
     }
 
     /// Test whether a list is empty.
@@ -197,9 +198,9 @@ impl<A> ConsList<A> {
     /// Time: O(1)
     pub fn cons<R>(&self, car: R) -> ConsList<A>
     where
-        Arc<A>: From<R>,
+        R: Shared<A>,
     {
-        ConsList(Arc::new(Cons(self.len() + 1, Arc::from(car), self.clone())))
+        ConsList(Arc::new(Cons(self.len() + 1, car.shared(), self.clone())))
     }
 
     /// Get the first element of a list.
@@ -491,9 +492,9 @@ where
     /// ```
     pub fn insert<T>(&self, item: T) -> ConsList<A>
     where
-        Arc<A>: From<T>,
+        T: Shared<A>,
     {
-        self.insert_ref(Arc::from(item))
+        self.insert_ref(item.shared())
     }
 
     fn insert_ref(&self, item: Arc<A>) -> ConsList<A> {
@@ -709,7 +710,7 @@ impl<A> Sum for ConsList<A> {
 
 impl<A, T> FromIterator<T> for ConsList<A>
 where
-    Arc<A>: From<T>,
+    T: Shared<A>,
 {
     fn from_iter<I>(source: I) -> Self
     where
@@ -726,28 +727,28 @@ where
 
 impl<'a, A, R> From<&'a [R]> for ConsList<A>
 where
-    Arc<A>: From<&'a R>,
+    &'a R: Shared<A>,
 {
     fn from(slice: &'a [R]) -> Self {
-        slice.into_iter().map(|a| Arc::from(a)).collect()
+        slice.into_iter().map(|a| a.shared()).collect()
     }
 }
 
 impl<A, R> From<Vec<R>> for ConsList<A>
 where
-    Arc<A>: From<R>,
+    R: Shared<A>,
 {
     fn from(vec: Vec<R>) -> Self {
-        vec.into_iter().map(|a| Arc::from(a)).collect()
+        vec.into_iter().map(|a| a.shared()).collect()
     }
 }
 
 impl<'a, A, R> From<&'a Vec<R>> for ConsList<A>
 where
-    Arc<A>: From<&'a R>,
+    &'a R: Shared<A>,
 {
     fn from(vec: &'a Vec<R>) -> Self {
-        vec.into_iter().map(|a| Arc::from(a)).collect()
+        vec.into_iter().map(|a| a.shared()).collect()
     }
 }
 

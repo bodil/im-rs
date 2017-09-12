@@ -18,6 +18,8 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use shared::Shared;
+
 /// A lens from `From` to `To` where the focus of the lens isn't guaranteed to
 /// exist inside `From`. Operations on these lenses therefore return `Option`s.
 pub trait PartialLens: Clone {
@@ -31,7 +33,7 @@ pub trait PartialLens: Clone {
     /// operation succeeded.
     fn try_put<Convert>(&self, v: Option<Convert>, s: &Self::From) -> Option<Self::From>
         where
-        Arc<Self::To>: From<Convert>;
+        Convert: Shared<Self::To>;
 
     /// Compose this lens with a lens from `To` to a new type `Next`, yielding
     /// a lens from `From` to `Next`.
@@ -57,7 +59,7 @@ pub trait Lens: PartialLens {
     /// Put a value into the lens, returning the updated `From` value.
     fn put<Convert>(&self, v: Convert, s: &Self::From) -> Self::From
         where
-        Arc<Self::To>: From<Convert>,
+        Convert: Shared<Self::To>,
     {
         self.try_put(Some(v), s).unwrap()
     }
@@ -117,7 +119,7 @@ impl<A, B, C, L, R> PartialLens for Compose<A, B, C, L, R>
 
     fn try_put<FromC>(&self, v: Option<FromC>, s: &A) -> Option<A>
         where
-        Arc<C>: From<FromC>,
+        FromC: Shared<C>,
     {
         self.left
             .try_get(&s)
@@ -184,9 +186,9 @@ impl<A, B> PartialLens for GeneralLens<A, B> {
 
     fn try_put<Convert>(&self, v: Option<Convert>, s: &A) -> Option<A>
         where
-        Arc<B>: From<Convert>,
+        Convert: Shared<B>,
     {
-        Some((self.put)(s, From::from(v.unwrap())))
+        Some((self.put)(s, v.unwrap().shared()))
     }
 }
 
@@ -197,9 +199,9 @@ impl<A, B> Lens for GeneralLens<A, B> {
 
     fn put<Convert>(&self, v: Convert, s: &A) -> A
         where
-        Arc<B>: From<Convert>,
+        Convert: Shared<B>,
     {
-        (self.put)(s, From::from(v))
+        (self.put)(s, v.shared())
     }
 }
 

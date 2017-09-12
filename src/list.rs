@@ -20,6 +20,7 @@ use std::hash::{Hash, Hasher};
 use std::fmt::{Debug, Formatter, Error};
 use std::borrow::Borrow;
 use queue::Queue;
+use shared::Shared;
 
 use self::ListNode::{Nil, Cons};
 
@@ -104,7 +105,7 @@ macro_rules! list {
 /// untrained ear.
 pub fn cons<A, RA, RD>(car: RA, cdr: RD) -> List<A>
 where
-    Arc<A>: From<RA>,
+    RA: Shared<A>,
     RD: Borrow<List<A>>,
 {
     cdr.borrow().cons(car)
@@ -138,7 +139,7 @@ impl<A> List<A> {
     /// Construct a list with a single value.
     pub fn singleton<R>(a: R) -> Self
     where
-        Arc<A>: From<R>,
+        R: Shared<A>,
     {
         List::new().push_front(a)
     }
@@ -165,9 +166,9 @@ impl<A> List<A> {
     pub fn from<R, I>(it: I) -> List<A>
     where
         I: IntoIterator<Item = R>,
-        Arc<A>: From<R>,
+        R: Shared<A>,
     {
-        it.into_iter().map(|a| Arc::from(a)).collect()
+        it.into_iter().map(|a| a.shared()).collect()
     }
 
     /// Test whether a list is empty.
@@ -269,16 +270,16 @@ impl<A> List<A> {
     /// current list.
     pub fn cons<R>(&self, a: R) -> Self
     where
-        Arc<A>: From<R>,
+        R: Shared<A>,
     {
-        List(Arc::new(Cons(1, Arc::from(a), Queue::new()))).append(self)
+        List(Arc::new(Cons(1, a.shared(), Queue::new()))).append(self)
     }
 
     /// Construct a list with a new value prepended to the front of the
     /// current list.
     pub fn push_front<R>(&self, a: R) -> Self
     where
-        Arc<A>: From<R>,
+        R: Shared<A>,
     {
         self.cons(a)
     }
@@ -292,16 +293,16 @@ impl<A> List<A> {
     /// doubt did, this method is also available as `List::push_back()`.
     pub fn snoc<R>(&self, a: R) -> Self
     where
-        Arc<A>: From<R>,
+        R: Shared<A>,
     {
-        self.append(&List(Arc::new(Cons(1, Arc::from(a), Queue::new()))))
+        self.append(&List(Arc::new(Cons(1, a.shared(), Queue::new()))))
     }
 
     /// Construct a list with a new value appended to the back of the
     /// current list.
     pub fn push_back<R>(&self, a: R) -> Self
     where
-        Arc<A>: From<R>,
+        R: Shared<A>,
     {
         self.snoc(a)
     }
@@ -522,9 +523,9 @@ impl<A: Ord> List<A> {
     /// ```
     pub fn insert<T>(&self, item: T) -> Self
     where
-        Arc<A>: From<T>,
+        T: Shared<A>,
     {
-        self.insert_ref(Arc::from(item))
+        self.insert_ref(item.shared())
     }
 
     fn insert_ref(&self, item: Arc<A>) -> Self {
@@ -698,7 +699,7 @@ impl<A> Sum for List<A> {
 
 impl<A, T> FromIterator<T> for List<A>
 where
-    Arc<A>: From<T>,
+    T: Shared<A>,
 {
     fn from_iter<I>(source: I) -> Self
     where
@@ -712,7 +713,7 @@ where
 
 impl<'a, A, T> From<&'a [T]> for List<A>
 where
-    Arc<A>: From<&'a T>,
+    &'a T: Shared<A>,
 {
     fn from(slice: &'a [T]) -> List<A> {
         slice.into_iter().collect()
@@ -721,7 +722,7 @@ where
 
 impl<A, T> From<Vec<T>> for List<A>
 where
-    Arc<A>: From<T>,
+    T: Shared<A>,
 {
     fn from(vec: Vec<T>) -> List<A> {
         vec.into_iter().collect()
@@ -730,7 +731,7 @@ where
 
 impl<'a, A, T> From<&'a Vec<T>> for List<A>
 where
-    Arc<A>: From<&'a T>,
+    &'a T: Shared<A>,
 {
     fn from(vec: &'a Vec<T>) -> List<A> {
         vec.into_iter().collect()

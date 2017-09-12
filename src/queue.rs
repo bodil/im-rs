@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::iter::FromIterator;
 use std::fmt;
 use conslist::ConsList;
+use shared::Shared;
 
 /// A strict queue backed by a pair of linked lists.
 ///
@@ -26,9 +27,9 @@ impl<A> Queue<A> {
     pub fn from<R, I>(it: I) -> Queue<A>
     where
         I: IntoIterator<Item = R>,
-        Arc<A>: From<R>,
+        R: Shared<A>,
     {
-        it.into_iter().map(|a| Arc::from(a)).collect()
+        it.into_iter().map(|a| a.shared()).collect()
     }
 
     /// Test whether a queue is empty.
@@ -51,7 +52,7 @@ impl<A> Queue<A> {
     /// Time: O(1)
     pub fn push<R>(&self, v: R) -> Self
     where
-        Arc<A>: From<R>,
+        R: Shared<A>,
     {
         Queue(self.0.clone(), self.1.cons(v))
     }
@@ -142,7 +143,7 @@ impl<'a, A> IntoIterator for &'a Queue<A> {
 
 impl<A, T> FromIterator<T> for Queue<A>
 where
-    Arc<A>: From<T>,
+    T: Shared<A>,
 {
     fn from_iter<I>(source: I) -> Self
     where
@@ -156,7 +157,7 @@ where
 
 impl<'a, A, T> From<&'a [T]> for Queue<A>
 where
-    Arc<A>: From<&'a T>,
+    &'a T: Shared<A>,
 {
     fn from(slice: &'a [T]) -> Queue<A> {
         slice.into_iter().collect()
@@ -165,7 +166,7 @@ where
 
 impl<A, T> From<Vec<T>> for Queue<A>
 where
-    Arc<A>: From<T>,
+    T: Shared<A>,
 {
     fn from(vec: Vec<T>) -> Queue<A> {
         vec.into_iter().collect()
@@ -174,7 +175,7 @@ where
 
 impl<'a, A, T> From<&'a Vec<T>> for Queue<A>
 where
-    Arc<A>: From<&'a T>,
+    &'a T: Shared<A>,
 {
     fn from(vec: &'a Vec<T>) -> Queue<A> {
         vec.into_iter().collect()
