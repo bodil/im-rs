@@ -76,6 +76,7 @@ pub mod list;
 pub mod queue;
 pub mod iter;
 pub mod lens;
+pub mod shared;
 
 pub use conslist::ConsList;
 pub use map::Map;

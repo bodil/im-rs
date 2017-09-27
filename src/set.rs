@@ -14,6 +14,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::{Add, Mul};
 use std::borrow::Borrow;
 use map::{self, Map};
+use shared::Shared;
 
 /// Construct a set from a sequence of values.
 ///
@@ -71,7 +72,7 @@ impl<A> Set<A> {
     /// ```
     pub fn singleton<R>(a: R) -> Self
     where
-        Arc<A>: From<R>,
+        R: Shared<A>,
     {
         Set(Map::<A, ()>::singleton(a, ()))
     }
@@ -155,7 +156,7 @@ impl<A: Ord> Set<A> {
     /// ```
     pub fn insert<R>(&self, a: R) -> Self
     where
-        Arc<A>: From<R>,
+        R: Shared<A>,
     {
         Set(self.0.insert(a, ()))
     }
@@ -369,7 +370,7 @@ impl<A> Iterator for Iter<A> {
 
 impl<A: Ord, RA> FromIterator<RA> for Set<A>
 where
-    Arc<A>: From<RA>,
+    RA: Shared<A>,
 {
     fn from_iter<T>(i: T) -> Self
     where

@@ -19,6 +19,7 @@ use std::ops::Add;
 use std::borrow::Borrow;
 use std::marker::PhantomData;
 
+use shared::Shared;
 use lens::PartialLens;
 
 use self::MapNode::{Leaf, Two, Three};
@@ -97,10 +98,10 @@ impl<K, V> Map<K, V> {
     /// ```
     pub fn singleton<RK, RV>(k: RK, v: RV) -> Map<K, V>
     where
-        Arc<K>: From<RK>,
-        Arc<V>: From<RV>,
+        RK: Shared<K>,
+        RV: Shared<V>,
     {
-        Map::two(map![], Arc::from(k), Arc::from(v), map![])
+        Map::two(map![], k.shared(), v.shared(), map![])
     }
 
     /// Test whether a map is empty.
@@ -300,10 +301,10 @@ impl<K: Ord, V> Map<K, V> {
     /// ```
     pub fn lens<RK>(key: RK) -> MapLens<K, V>
     where
-        Arc<K>: From<RK>,
+        RK: Shared<K>,
     {
         MapLens {
-            key: Arc::from(key),
+            key: key.shared(),
             value: PhantomData,
         }
     }
@@ -355,9 +356,9 @@ impl<K: Ord, V> Map<K, V> {
     /// ```
     pub fn get_or<RV>(&self, k: &K, default: RV) -> Arc<V>
     where
-        Arc<V>: From<RV>,
+        RV: Shared<V>,
     {
-        self.get(k).unwrap_or(Arc::from(default))
+        self.get(k).unwrap_or(default.shared())
     }
 
     /// Test for the presence of a key in a map.
@@ -407,10 +408,10 @@ impl<K: Ord, V> Map<K, V> {
     /// ```
     pub fn insert<RK, RV>(&self, k: RK, v: RV) -> Self
     where
-        Arc<K>: From<RK>,
-        Arc<V>: From<RV>,
+        RK: Shared<K>,
+        RV: Shared<V>,
     {
-        walk::ins_down(conslist![], Arc::from(k), Arc::from(v), self.clone())
+        walk::ins_down(conslist![], k.shared(), v.shared(), self.clone())
     }
 
     fn insert_ref(&self, k: Arc<K>, v: Arc<V>) -> Self {
@@ -426,12 +427,12 @@ impl<K: Ord, V> Map<K, V> {
     /// Time: O(log n)
     pub fn insert_with<RK, RV, F>(self, k: RK, v: RV, f: F) -> Self
     where
-        Arc<K>: From<RK>,
-        Arc<V>: From<RV>,
+        RK: Shared<K>,
+        RV: Shared<V>,
         F: Fn(Arc<V>, Arc<V>) -> Arc<V>,
     {
-        let ak = Arc::from(k);
-        let av = Arc::from(v);
+        let ak = k.shared();
+        let av = v.shared();
         match self.pop_with_key(&ak) {
             None => self.insert_ref(ak, av),
             Some((_, v2, m)) => m.insert_ref(ak, f(v2, av)),
@@ -448,11 +449,11 @@ impl<K: Ord, V> Map<K, V> {
     pub fn insert_with_key<RK, RV, F>(self, k: RK, v: RV, f: F) -> Self
     where
         F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
-        Arc<K>: From<RK>,
-        Arc<V>: From<RV>,
+        RK: Shared<K>,
+        RV: Shared<V>,
     {
-        let ak = Arc::from(k);
-        let av = Arc::from(v);
+        let ak = k.shared();
+        let av = v.shared();
         match self.pop_with_key(&ak) {
             None => self.insert_ref(ak, av),
             Some((_, v2, m)) => m.insert_ref(ak.clone(), f(ak, v2, av)),
@@ -470,11 +471,11 @@ impl<K: Ord, V> Map<K, V> {
     pub fn insert_lookup_with_key<RK, RV, F>(self, k: RK, v: RV, f: F) -> (Option<Arc<V>>, Self)
     where
         F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
-        Arc<K>: From<RK>,
-        Arc<V>: From<RV>,
+        RK: Shared<K>,
+        RV: Shared<V>,
     {
-        let ak = Arc::from(k);
-        let av = Arc::from(v);
+        let ak = k.shared();
+        let av = v.shared();
         match self.pop_with_key(&ak) {
             None => (None, self.insert_ref(ak, av)),
             Some((_, v2, m)) => (Some(v2.clone()), m.insert_ref(ak.clone(), f(ak, v2, av))),
@@ -553,9 +554,9 @@ impl<K: Ord, V> Map<K, V> {
     pub fn alter<RK, F>(&self, f: F, k: RK) -> Self
     where
         F: Fn(Option<Arc<V>>) -> Option<Arc<V>>,
-        Arc<K>: From<RK>,
+        RK: Shared<K>,
     {
-        let ak = Arc::from(k);
+        let ak = k.shared();
         let pop = self.pop_with_key(&*ak);
         match (f(pop.as_ref().map(|&(_, ref v, _)| v.clone())), pop) {
             (None, None) => self.clone(),
@@ -1086,8 +1087,8 @@ impl<K, V> Iterator for Values<K, V> {
 
 impl<K: Ord, V, RK, RV> FromIterator<(RK, RV)> for Map<K, V>
 where
-    Arc<K>: From<RK>,
-    Arc<V>: From<RV>,
+    RK: Shared<K>,
+    RV: Shared<V>,
 {
     fn from_iter<T>(i: T) -> Self
     where
@@ -1144,9 +1145,9 @@ where
 
     fn try_put<Convert>(&self, cv: Option<Convert>, s: &Self::From) -> Option<Self::From>
     where
-        Arc<Self::To>: From<Convert>,
+        Convert: Shared<Self::To>,
     {
-        Some(match cv.map(From::from) {
+        Some(match cv.map(Shared::shared) {
             None => s.remove(&self.key),
             Some(v) => s.insert(self.key.clone(), v),
         })
@@ -1161,84 +1162,84 @@ impl<K, V> AsRef<Map<K, V>> for Map<K, V> {
 
 impl<'a, K: Ord, V: Clone, RK, RV> From<&'a [(RK, RV)]> for Map<K, V>
 where
-    Arc<K>: From<&'a RK>,
-    Arc<V>: From<&'a RV>,
+    &'a RK: Shared<K>,
+    &'a RV: Shared<V>,
 {
     fn from(m: &'a [(RK, RV)]) -> Map<K, V> {
         m.into_iter()
-            .map(|&(ref k, ref v)| (Arc::from(k), Arc::from(v)))
+            .map(|&(ref k, ref v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
 impl<K: Ord, V, RK, RV> From<Vec<(RK, RV)>> for Map<K, V>
 where
-    Arc<K>: From<RK>,
-    Arc<V>: From<RV>,
+    RK: Shared<K>,
+    RV: Shared<V>,
 {
     fn from(m: Vec<(RK, RV)>) -> Map<K, V> {
         m.into_iter()
-            .map(|(k, v)| (Arc::from(k), Arc::from(v)))
+            .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
 impl<'a, K: Ord, V, RK, RV> From<&'a Vec<(RK, RV)>> for Map<K, V>
 where
-    Arc<K>: From<&'a RK>,
-    Arc<V>: From<&'a RV>,
+    &'a RK: Shared<K>,
+    &'a RV: Shared<V>,
 {
     fn from(m: &'a Vec<(RK, RV)>) -> Map<K, V> {
         m.into_iter()
-            .map(|&(ref k, ref v)| (Arc::from(k), Arc::from(v)))
+            .map(|&(ref k, ref v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
 impl<K: Ord, V, RK: Eq + Hash, RV> From<HashMap<RK, RV>> for Map<K, V>
 where
-    Arc<K>: From<RK>,
-    Arc<V>: From<RV>,
+    RK: Shared<K>,
+    RV: Shared<V>,
 {
     fn from(m: HashMap<RK, RV>) -> Map<K, V> {
         m.into_iter()
-            .map(|(k, v)| (Arc::from(k), Arc::from(v)))
+            .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
 impl<'a, K: Ord, V, RK: Eq + Hash, RV> From<&'a HashMap<RK, RV>> for Map<K, V>
 where
-    Arc<K>: From<&'a RK>,
-    Arc<V>: From<&'a RV>,
+    &'a RK: Shared<K>,
+    &'a RV: Shared<V>,
 {
     fn from(m: &'a HashMap<RK, RV>) -> Map<K, V> {
         m.into_iter()
-            .map(|(k, v)| (Arc::from(k), Arc::from(v)))
+            .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
 impl<K: Ord, V, RK, RV> From<BTreeMap<RK, RV>> for Map<K, V>
 where
-    Arc<K>: From<RK>,
-    Arc<V>: From<RV>,
+    RK: Shared<K>,
+    RV: Shared<V>,
 {
     fn from(m: BTreeMap<RK, RV>) -> Map<K, V> {
         m.into_iter()
-            .map(|(k, v)| (Arc::from(k), Arc::from(v)))
+            .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
 impl<'a, K: Ord, V, RK, RV> From<&'a BTreeMap<RK, RV>> for Map<K, V>
 where
-    Arc<K>: From<&'a RK>,
-    Arc<V>: From<&'a RV>,
+    &'a RK: Shared<K>,
+    &'a RV: Shared<V>,
 {
     fn from(m: &'a BTreeMap<RK, RV>) -> Map<K, V> {
         m.into_iter()
-            .map(|(k, v)| (Arc::from(k), Arc::from(v)))
+            .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
     }
 }
