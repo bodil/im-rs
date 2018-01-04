@@ -20,8 +20,8 @@
 //! front of the list.
 
 use std::sync::Arc;
-use std::iter::{Iterator, FromIterator, Sum};
-use std::fmt::{Debug, Formatter, Error};
+use std::iter::{FromIterator, Iterator, Sum};
+use std::fmt::{Debug, Error, Formatter};
 use std::ops::Deref;
 use std::hash::{Hash, Hasher};
 use std::cmp::Ordering;
@@ -268,9 +268,8 @@ impl<A> ConsList<A> {
     }
 
     pub fn uncons2(&self) -> Option<(Arc<A>, Arc<A>, ConsList<A>)> {
-        self.uncons().and_then(
-            |(a1, d)| d.uncons().map(|(a2, d)| (a1, a2, d)),
-        )
+        self.uncons()
+            .and_then(|(a1, d)| d.uncons().map(|(a2, d)| (a1, a2, d)))
     }
 
     /// Get the length of a list.
@@ -347,7 +346,9 @@ impl<A> ConsList<A> {
 
     /// Get an iterator over a list.
     pub fn iter(&self) -> Iter<A> {
-        Iter { current: self.clone() }
+        Iter {
+            current: self.clone(),
+        }
     }
 
     /// Sort a list using a comparator function.
@@ -364,7 +365,8 @@ impl<A> ConsList<A> {
         ) -> ConsList<A> {
             match (la.uncons(), lb.uncons()) {
                 (Some((ref a, _)), Some((ref b, ref lb1)))
-                    if cmp(a.clone(), b.clone()) == Ordering::Greater => {
+                    if cmp(a.clone(), b.clone()) == Ordering::Greater =>
+                {
                     cons(b.clone(), &merge(la, &lb1, cmp))
                 }
                 (Some((a, la1)), Some((_, _))) => cons(a.clone(), &merge(&la1, lb, cmp)),
@@ -595,7 +597,10 @@ where
 }
 
 #[cfg(has_specialisation)]
-impl<A> PartialEq for ConsList<A> where A: Eq {
+impl<A> PartialEq for ConsList<A>
+where
+    A: Eq,
+{
     /// Test if two lists are equal.
     ///
     /// This could potentially be an expensive operation, as we need to walk
@@ -609,7 +614,8 @@ impl<A> PartialEq for ConsList<A> where A: Eq {
     ///
     /// Time: O(n)
     fn eq(&self, other: &ConsList<A>) -> bool {
-        Arc::ptr_eq(&self.0, &other.0) || (self.len() == other.len() && self.iter().eq(other.iter()))
+        Arc::ptr_eq(&self.0, &other.0)
+            || (self.len() == other.len() && self.iter().eq(other.iter()))
     }
 }
 
@@ -665,8 +671,7 @@ where
 // Iterators
 
 pub struct Iter<A> {
-    #[doc(hidden)]
-    current: ConsList<A>,
+    #[doc(hidden)] current: ConsList<A>,
 }
 
 impl<A> Iterator for Iter<A> {
@@ -769,7 +774,7 @@ impl<A: Arbitrary + Sync> Arbitrary for ConsList<A> {
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     use super::*;
-    use proptest::strategy::{Strategy, BoxedStrategy, ValueTree};
+    use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
     use std::ops::Range;
 
     /// A strategy for a cons list of a given size.

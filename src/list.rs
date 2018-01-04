@@ -13,16 +13,16 @@
 //! be looking for the `Queue`. When in doubt, choose the `List`.
 
 use std::sync::Arc;
-use std::iter::{Sum, FromIterator};
+use std::iter::{FromIterator, Sum};
 use std::ops::{Add, Deref};
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
-use std::fmt::{Debug, Formatter, Error};
+use std::fmt::{Debug, Error, Formatter};
 use std::borrow::Borrow;
 use queue::Queue;
 use shared::Shared;
 
-use self::ListNode::{Nil, Cons};
+use self::ListNode::{Cons, Nil};
 
 /// Construct a list from a sequence of elements.
 ///
@@ -256,13 +256,11 @@ impl<A> List<A> {
     {
         match *self.0 {
             Nil => other.borrow().clone(),
-            Cons(l, ref a, ref q) => {
-                List(Arc::new(Cons(
-                    l + other.borrow().len(),
-                    a.clone(),
-                    q.push(other.borrow().clone()),
-                )))
-            }
+            Cons(l, ref a, ref q) => List(Arc::new(Cons(
+                l + other.borrow().len(),
+                a.clone(),
+                q.push(other.borrow().clone()),
+            ))),
         }
     }
 
@@ -340,14 +338,15 @@ impl<A> List<A> {
     }
 
     pub fn uncons2(&self) -> Option<(Arc<A>, Arc<A>, List<A>)> {
-        self.uncons().and_then(
-            |(a1, d)| d.uncons().map(|(a2, d)| (a1, a2, d)),
-        )
+        self.uncons()
+            .and_then(|(a1, d)| d.uncons().map(|(a2, d)| (a1, a2, d)))
     }
 
     /// Get an iterator over a list.
     pub fn iter(&self) -> Iter<A> {
-        Iter { current: self.clone() }
+        Iter {
+            current: self.clone(),
+        }
     }
 
     /// Construct a list which is the reverse of the current list.
@@ -384,7 +383,8 @@ impl<A> List<A> {
         fn merge<A>(la: &List<A>, lb: &List<A>, cmp: &Fn(Arc<A>, Arc<A>) -> Ordering) -> List<A> {
             match (la.uncons(), lb.uncons()) {
                 (Some((ref a, _)), Some((ref b, ref lb1)))
-                    if cmp(a.clone(), b.clone()) == Ordering::Greater => {
+                    if cmp(a.clone(), b.clone()) == Ordering::Greater =>
+                {
                     cons(b.clone(), &merge(la, &lb1, cmp))
                 }
                 (Some((a, la1)), Some((_, _))) => cons(a.clone(), &merge(&la1, lb, cmp)),
@@ -755,7 +755,7 @@ impl<A: Arbitrary + Sync> Arbitrary for List<A> {
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     use super::*;
-    use proptest::strategy::{Strategy, BoxedStrategy, ValueTree};
+    use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
     use std::ops::Range;
 
     /// A strategy for generating a list of a certain size.

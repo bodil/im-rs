@@ -1,8 +1,8 @@
 use std::ops::Deref;
 use std::marker::PhantomData;
 use std::fmt;
-use serde::ser::{Serialize, Serializer, SerializeSeq, SerializeMap};
-use serde::de::{Deserialize, Deserializer, Visitor, SeqAccess, MapAccess};
+use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
+use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use list::List;
 use conslist::ConsList;
 use set::Set;
@@ -62,8 +62,6 @@ where
     }
 }
 
-
-
 struct MapVisitor<'de, S, K, V>
 where
     S: From<Vec<(K, V)>>,
@@ -121,8 +119,6 @@ where
         Ok(From::from(v))
     }
 }
-
-
 
 // List
 
@@ -249,7 +245,7 @@ impl<K: Serialize + Ord, V: Serialize> Serialize for Map<K, V> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use serde_json::{to_string, from_str};
+    use serde_json::{from_str, to_string};
 
     quickcheck! {
         fn list(list: List<i32>) -> bool {

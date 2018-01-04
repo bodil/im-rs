@@ -65,18 +65,18 @@ impl<A> Queue<A> {
     pub fn pop(&self) -> Option<(Arc<A>, Queue<A>)> {
         match self {
             &Queue(ref l, ref r) if l.is_empty() && r.is_empty() => None,
-            &Queue(ref l, ref r) => {
-                match l.uncons() {
-                    None => Queue(r.reverse(), conslist![]).pop(),
-                    Some((a, d)) => Some((a, Queue(d, r.clone()))),
-                }
-            }
+            &Queue(ref l, ref r) => match l.uncons() {
+                None => Queue(r.reverse(), conslist![]).pop(),
+                Some((a, d)) => Some((a, Queue(d, r.clone()))),
+            },
         }
     }
 
     /// Get an iterator over a queue.
     pub fn iter(&self) -> Iter<A> {
-        Iter { current: self.clone() }
+        Iter {
+            current: self.clone(),
+        }
     }
 }
 
@@ -88,7 +88,10 @@ impl<A> Clone for Queue<A> {
     }
 }
 
-impl<A> fmt::Debug for Queue<A> where A: fmt::Debug {
+impl<A> fmt::Debug for Queue<A>
+where
+    A: fmt::Debug,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         ConsList::<A>::from(self).fmt(f)
     }
@@ -199,7 +202,7 @@ impl<A: Arbitrary + Sync> Arbitrary for Queue<A> {
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     use super::*;
-    use proptest::strategy::{Strategy, BoxedStrategy, ValueTree};
+    use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
     use std::ops::Range;
 
     /// A strategy for generating a queue of a certain size.

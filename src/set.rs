@@ -6,10 +6,10 @@
 //! the exact performance characteristics of `Map`.
 
 use std::sync::Arc;
-use std::iter::{IntoIterator, FromIterator};
+use std::iter::{FromIterator, IntoIterator};
 use std::cmp::Ordering;
-use std::fmt::{Debug, Formatter, Error};
-use std::collections::{HashSet, BTreeSet};
+use std::fmt::{Debug, Error, Formatter};
+use std::collections::{BTreeSet, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Mul};
 use std::borrow::Borrow;
@@ -483,7 +483,7 @@ impl<A: Ord + Arbitrary + Sync> Arbitrary for Set<A> {
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     use super::*;
-    use proptest::strategy::{Strategy, BoxedStrategy, ValueTree};
+    use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
     use std::ops::Range;
 
     /// A strategy for a set of a given size.
@@ -508,10 +508,9 @@ pub mod proptest {
     {
         ::proptest::collection::vec(element, size.clone())
             .prop_map(|v| Set::from(v))
-            .prop_filter(
-                "Set minimum size".to_owned(),
-                move |s| s.len() >= size.start,
-            )
+            .prop_filter("Set minimum size".to_owned(), move |s| {
+                s.len() >= size.start
+            })
             .boxed()
     }
 }

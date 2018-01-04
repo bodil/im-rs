@@ -10,11 +10,11 @@
 mod walk;
 
 use std::sync::Arc;
-use std::iter::{Iterator, FromIterator};
+use std::iter::{FromIterator, Iterator};
 use std::collections::{BTreeMap, HashMap};
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
-use std::fmt::{Debug, Formatter, Error};
+use std::fmt::{Debug, Error, Formatter};
 use std::ops::Add;
 use std::borrow::Borrow;
 use std::marker::PhantomData;
@@ -22,9 +22,7 @@ use std::marker::PhantomData;
 use shared::Shared;
 use lens::PartialLens;
 
-use self::MapNode::{Leaf, Two, Three};
-
-
+use self::MapNode::{Leaf, Three, Two};
 
 /// Construct a map from a sequence of key/value pairs.
 ///
@@ -71,7 +69,16 @@ pub struct Map<K, V>(Arc<MapNode<K, V>>);
 pub enum MapNode<K, V> {
     Leaf,
     Two(usize, Map<K, V>, Arc<K>, Arc<V>, Map<K, V>),
-    Three(usize, Map<K, V>, Arc<K>, Arc<V>, Map<K, V>, Arc<K>, Arc<V>, Map<K, V>),
+    Three(
+        usize,
+        Map<K, V>,
+        Arc<K>,
+        Arc<V>,
+        Map<K, V>,
+        Arc<K>,
+        Arc<V>,
+        Map<K, V>,
+    ),
 }
 
 impl<K, V> Map<K, V> {
@@ -232,9 +239,13 @@ impl<K, V> Map<K, V> {
     }
 
     fn two(left: Map<K, V>, k: Arc<K>, v: Arc<V>, right: Map<K, V>) -> Map<K, V> {
-        Map(Arc::new(
-            Two(left.len() + right.len() + 1, left, k, v, right),
-        ))
+        Map(Arc::new(Two(
+            left.len() + right.len() + 1,
+            left,
+            k,
+            v,
+            right,
+        )))
     }
 
     fn three(
@@ -492,12 +503,10 @@ impl<K: Ord, V> Map<K, V> {
     {
         match self.pop_with_key(k) {
             None => self.clone(),
-            Some((k, v, m)) => {
-                match f(v) {
-                    None => m,
-                    Some(v) => m.insert(k, v),
-                }
-            }
+            Some((k, v, m)) => match f(v) {
+                None => m,
+                Some(v) => m.insert(k, v),
+            },
         }
     }
 
@@ -511,12 +520,10 @@ impl<K: Ord, V> Map<K, V> {
     {
         match self.pop_with_key(k) {
             None => self.clone(),
-            Some((k, v, m)) => {
-                match f(k.clone(), v) {
-                    None => m,
-                    Some(v) => m.insert(k, v),
-                }
-            }
+            Some((k, v, m)) => match f(k.clone(), v) {
+                None => m,
+                Some(v) => m.insert(k, v),
+            },
         }
     }
 
@@ -534,12 +541,10 @@ impl<K: Ord, V> Map<K, V> {
     {
         match self.pop_with_key(k) {
             None => (None, self.clone()),
-            Some((k, v, m)) => {
-                match f(k.clone(), v.clone()) {
-                    None => (Some(v), m),
-                    Some(v) => (Some(v.clone()), m.insert(k, v)),
-                }
-            }
+            Some((k, v, m)) => match f(k.clone(), v.clone()) {
+                None => (Some(v), m),
+                Some(v) => (Some(v.clone()), m.insert(k, v)),
+            },
         }
     }
 
@@ -677,17 +682,16 @@ impl<K: Ord, V> Map<K, V> {
         F: Fn(Arc<K>, Arc<V>, Arc<B>) -> Option<Arc<V>>,
         RM: Borrow<Map<K, B>>,
     {
-        other.borrow().iter().fold(self.clone(), |m, (k, v2)| {
-            match m.pop(&*k) {
+        other
+            .borrow()
+            .iter()
+            .fold(self.clone(), |m, (k, v2)| match m.pop(&*k) {
                 None => m,
-                Some((v1, m)) => {
-                    match f(k.clone(), v1, v2) {
-                        None => m,
-                        Some(v) => m.insert(k, v),
-                    }
-                }
-            }
-        })
+                Some((v1, m)) => match f(k.clone(), v1, v2) {
+                    None => m,
+                    Some(v) => m.insert(k, v),
+                },
+            })
     }
 
     /// Construct the intersection of two maps, keeping the values from the current map.
@@ -745,22 +749,16 @@ impl<K: Ord, V> Map<K, V> {
         F2: Fn(Map<K, B>) -> Map<K, C>,
     {
         let (left, right, both) = other.borrow().iter().fold(
-            (
-                self.clone(),
-                other.borrow().clone(),
-                map![],
-            ),
+            (self.clone(), other.borrow().clone(), map![]),
             |(l, r, m), (k, vr)| match l.pop(&*k) {
                 None => (l, r, m),
-                Some((vl, ml)) => {
-                    (
-                        ml,
-                        r.remove(&*k),
-                        combine(k.clone(), vl, vr)
-                            .map(|v| m.insert(k, v))
-                            .unwrap_or(m),
-                    )
-                }
+                Some((vl, ml)) => (
+                    ml,
+                    r.remove(&*k),
+                    combine(k.clone(), vl, vr)
+                        .map(|v| m.insert(k, v))
+                        .unwrap_or(m),
+                ),
             },
         );
         both.union(&only1(left)).union(&only2(right))
@@ -800,9 +798,11 @@ impl<K: Ord, V> Map<K, V> {
         RM: Borrow<Map<K, B>>,
     {
         self.iter().all(|(k, v)| {
-            other.borrow().get(&*k).map(|ov| cmp(v, ov)).unwrap_or(
-                false,
-            )
+            other
+                .borrow()
+                .get(&*k)
+                .map(|ov| cmp(v, ov))
+                .unwrap_or(false)
         })
     }
 
@@ -916,8 +916,8 @@ impl<K: PartialEq, V: PartialEq> PartialEq for Map<K, V> {
 #[cfg(has_specialisation)]
 impl<K: Eq, V: Eq> PartialEq for Map<K, V> {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0) ||
-            (self.len() == other.len() && self.iter().eq(other.iter()))
+        Arc::ptr_eq(&self.0, &other.0)
+            || (self.len() == other.len() && self.iter().eq(other.iter()))
     }
 }
 
@@ -1009,25 +1009,23 @@ impl<K, V> Iter<K, V> {
     fn step(&mut self) -> IterResult<K, V> {
         match self.stack.pop() {
             None => IterResult::Done,
-            Some(IterItem::Consider(m)) => {
-                match *m.0 {
-                    Leaf => return IterResult::Walk,
-                    Two(_, ref left, ref k, ref v, ref right) => {
-                        self.stack.push(IterItem::Consider(right.clone()));
-                        self.stack.push(IterItem::Yield(k.clone(), v.clone()));
-                        self.stack.push(IterItem::Consider(left.clone()));
-                        IterResult::Walk
-                    }
-                    Three(_, ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => {
-                        self.stack.push(IterItem::Consider(right.clone()));
-                        self.stack.push(IterItem::Yield(k2.clone(), v2.clone()));
-                        self.stack.push(IterItem::Consider(mid.clone()));
-                        self.stack.push(IterItem::Yield(k1.clone(), v1.clone()));
-                        self.stack.push(IterItem::Consider(left.clone()));
-                        IterResult::Walk
-                    }
+            Some(IterItem::Consider(m)) => match *m.0 {
+                Leaf => return IterResult::Walk,
+                Two(_, ref left, ref k, ref v, ref right) => {
+                    self.stack.push(IterItem::Consider(right.clone()));
+                    self.stack.push(IterItem::Yield(k.clone(), v.clone()));
+                    self.stack.push(IterItem::Consider(left.clone()));
+                    IterResult::Walk
                 }
-            }
+                Three(_, ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => {
+                    self.stack.push(IterItem::Consider(right.clone()));
+                    self.stack.push(IterItem::Yield(k2.clone(), v2.clone()));
+                    self.stack.push(IterItem::Consider(mid.clone()));
+                    self.stack.push(IterItem::Yield(k1.clone(), v1.clone()));
+                    self.stack.push(IterItem::Consider(left.clone()));
+                    IterResult::Walk
+                }
+            },
             Some(IterItem::Yield(k, v)) => IterResult::Next(k, v),
         }
     }
@@ -1261,7 +1259,7 @@ impl<K: Ord + Arbitrary + Sync, V: Arbitrary + Sync> Arbitrary for Map<K, V> {
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     use super::*;
-    use proptest::strategy::{Strategy, BoxedStrategy, ValueTree};
+    use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
     use std::ops::Range;
 
     /// A strategy for a map of a given size.
@@ -1287,10 +1285,9 @@ pub mod proptest {
     {
         ::proptest::collection::vec((key, value), size.clone())
             .prop_map(|v| Map::from(v))
-            .prop_filter(
-                "Map minimum size".to_owned(),
-                move |m| m.len() >= size.start,
-            )
+            .prop_filter("Map minimum size".to_owned(), move |m| {
+                m.len() >= size.start
+            })
             .boxed()
     }
 }
@@ -1306,8 +1303,7 @@ mod test {
 
     #[test]
     fn iterates_in_order() {
-        let map =
-            map!{
+        let map = map!{
             2 => 22,
             1 => 11,
             3 => 33,
@@ -1333,8 +1329,7 @@ mod test {
 
     #[test]
     fn into_iter() {
-        let map =
-            map!{
+        let map = map!{
             2 => 22,
             1 => 11,
             3 => 33,
@@ -1355,8 +1350,7 @@ mod test {
 
     #[test]
     fn deletes_correctly() {
-        let map =
-            map!{
+        let map = map!{
             2 => 22,
             1 => 11,
             3 => 33,

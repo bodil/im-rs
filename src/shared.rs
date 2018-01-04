@@ -1,5 +1,6 @@
-// This module works around the fact that you can't rely on 
-// `Arc<T>: From<U>` to only have one possible implementation anymore (that is, where `U = T`).
+// This module works around the fact that you can't rely on
+// `Arc<T>: From<U>` to only have one possible implementation anymore
+// (that is, where `U = T`).
 
 use std::sync::Arc;
 

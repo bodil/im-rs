@@ -32,13 +32,13 @@ pub trait PartialLens: Clone {
     /// Put a value into the lens, returning the updated `From` value if the
     /// operation succeeded.
     fn try_put<Convert>(&self, v: Option<Convert>, s: &Self::From) -> Option<Self::From>
-        where
+    where
         Convert: Shared<Self::To>;
 
     /// Compose this lens with a lens from `To` to a new type `Next`, yielding
     /// a lens from `From` to `Next`.
     fn try_chain<L, Next>(&self, next: &L) -> Compose<Self::From, Self::To, Next, Self, L>
-        where
+    where
         L: PartialLens<From = Self::To, To = Next>,
     {
         compose(self, next)
@@ -58,7 +58,7 @@ pub trait Lens: PartialLens {
 
     /// Put a value into the lens, returning the updated `From` value.
     fn put<Convert>(&self, v: Convert, s: &Self::From) -> Self::From
-        where
+    where
         Convert: Shared<Self::To>,
     {
         self.try_put(Some(v), s).unwrap()
@@ -67,7 +67,7 @@ pub trait Lens: PartialLens {
     /// Compose this lens with a lens from `To` to a new type `Next`, yielding
     /// a lens from `From` to `Next`.
     fn chain<L, Next>(&self, next: &L) -> Compose<Self::From, Self::To, Next, Self, L>
-        where
+    where
         L: Lens<From = Self::To, To = Next>,
     {
         compose(self, next)
@@ -75,7 +75,7 @@ pub trait Lens: PartialLens {
 }
 
 pub struct Compose<A, B, C, L, R>
-    where
+where
     L: PartialLens<From = A, To = B>,
     R: PartialLens<From = B, To = C>,
 {
@@ -87,7 +87,7 @@ pub struct Compose<A, B, C, L, R>
 }
 
 impl<A, B, C, L, R> Clone for Compose<A, B, C, L, R>
-    where
+where
     L: PartialLens<From = A, To = B>,
     R: PartialLens<From = B, To = C>,
 {
@@ -103,7 +103,7 @@ impl<A, B, C, L, R> Clone for Compose<A, B, C, L, R>
 }
 
 impl<A, B, C, L, R> PartialLens for Compose<A, B, C, L, R>
-    where
+where
     L: PartialLens<From = A, To = B>,
     R: PartialLens<From = B, To = C>,
 {
@@ -118,7 +118,7 @@ impl<A, B, C, L, R> PartialLens for Compose<A, B, C, L, R>
     }
 
     fn try_put<FromC>(&self, v: Option<FromC>, s: &A) -> Option<A>
-        where
+    where
         FromC: Shared<C>,
     {
         self.left
@@ -129,7 +129,7 @@ impl<A, B, C, L, R> PartialLens for Compose<A, B, C, L, R>
 }
 
 impl<A, B, C, L, R> Lens for Compose<A, B, C, L, R>
-    where
+where
     L: Lens<From = A, To = B>,
     R: Lens<From = B, To = C>,
 {
@@ -138,7 +138,7 @@ impl<A, B, C, L, R> Lens for Compose<A, B, C, L, R>
 /// Compose a lens from `A` to `B` with a lens from `B` to `C`, yielding
 /// a lens from `A` to `C`.
 pub fn compose<A, B, C, L, R>(left: &L, right: &R) -> Compose<A, B, C, L, R>
-    where
+where
     L: PartialLens<From = A, To = B>,
     R: PartialLens<From = B, To = C>,
 {
@@ -185,7 +185,7 @@ impl<A, B> PartialLens for GeneralLens<A, B> {
     }
 
     fn try_put<Convert>(&self, v: Option<Convert>, s: &A) -> Option<A>
-        where
+    where
         Convert: Shared<B>,
     {
         Some((self.put)(s, v.unwrap().shared()))
@@ -198,7 +198,7 @@ impl<A, B> Lens for GeneralLens<A, B> {
     }
 
     fn put<Convert>(&self, v: Convert, s: &A) -> A
-        where
+    where
         Convert: Shared<B>,
     {
         (self.put)(s, v.shared())
@@ -278,7 +278,7 @@ mod test {
     #[derive(Clone)]
     struct Inner {
         omg: Arc<String>,
-        wtf: Arc<String>
+        wtf: Arc<String>,
     }
 
     #[derive(Clone)]
@@ -290,8 +290,13 @@ mod test {
     fn struct_lens() {
         let l = lens!(Outer: inner: Inner: omg: String);
         let omglol = "omg lol".to_string();
-        let inner = Inner { omg: Arc::new(omglol.clone()), wtf: Arc::new("nope".to_string()) };
-        let outer = Outer { inner: Arc::new(inner) };
+        let inner = Inner {
+            omg: Arc::new(omglol.clone()),
+            wtf: Arc::new("nope".to_string()),
+        };
+        let outer = Outer {
+            inner: Arc::new(inner),
+        };
         assert_eq!(Arc::new(omglol), l.get(&outer))
     }
 }
