@@ -66,9 +66,14 @@ extern crate serde;
 extern crate serde_json;
 
 #[macro_use]
+extern crate lazy_static;
+
+#[macro_use]
 pub mod conslist;
 #[macro_use]
 pub mod map;
+#[macro_use]
+pub mod hashmap;
 #[macro_use]
 pub mod set;
 #[macro_use]
@@ -80,6 +85,7 @@ pub mod shared;
 
 pub use conslist::ConsList;
 pub use map::Map;
+pub use hashmap::HashMap;
 pub use set::Set;
 pub use queue::Queue;
 pub use list::List;
