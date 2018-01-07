@@ -213,6 +213,8 @@ impl<K, V, S> HashMap<K, V, S> {
     /// Please note that the order is consistent between maps using
     /// the same hasher, but no other ordering guarantee is offered.
     /// Items will not come out in insertion order or sort order.
+    /// They will, however, come out in the same order every time for
+    /// the same map.
     #[inline]
     pub fn iter(&self) -> Iter<K, V> {
         self.root.iter()
@@ -225,6 +227,7 @@ impl<K, V, S> HashMap<K, V, S> {
     /// Items will not come out in insertion order or sort order.
     /// They will, however, come out in the same order every time for
     /// the same map.
+    #[inline]
     pub fn keys(&self) -> Keys<K, V> {
         Keys { it: self.iter() }
     }
@@ -236,6 +239,7 @@ impl<K, V, S> HashMap<K, V, S> {
     /// Items will not come out in insertion order or sort order.
     /// They will, however, come out in the same order every time for
     /// the same map.
+    #[inline]
     pub fn values(&self) -> Values<K, V> {
         Values { it: self.iter() }
     }
@@ -247,6 +251,7 @@ where
     S: BuildHasher,
 {
     /// Construct an empty hash map using the provided hasher.
+    #[inline]
     pub fn with_hasher(hasher: &Arc<S>) -> Self {
         HashMap {
             size: 0,
@@ -256,6 +261,7 @@ where
     }
 
     /// Construct an empty hash map using the same hasher as the current hash map.
+    #[inline]
     pub fn new_from<K1, V1>(&self) -> HashMap<K1, V1, S>
     where
         K1: Hash + Eq,
@@ -339,6 +345,7 @@ where
     /// );
     /// # }
     /// ```
+    #[inline]
     pub fn contains_key(&self, k: &K) -> bool {
         self.get(k).is_some()
     }
@@ -364,6 +371,7 @@ where
     /// );
     /// # }
     /// ```
+    #[inline]
     pub fn insert<RK, RV>(&self, k: RK, v: RV) -> Self
     where
         RK: Shared<K>,
@@ -575,12 +583,14 @@ where
 
     /// Construct the union of two maps, keeping the values in the current map
     /// when keys exist in both maps.
+    #[inline]
     pub fn union(&self, other: &Self) -> Self {
         self.union_with_key(other, |_, v, _| v)
     }
 
     /// Construct the union of two maps, using a function to decide what to do
     /// with the value when a key is in both maps.
+    #[inline]
     pub fn union_with<F, RM>(&self, other: RM, f: F) -> Self
     where
         F: Fn(Arc<V>, Arc<V>) -> Arc<V>,
@@ -606,6 +616,7 @@ where
     }
 
     /// Construct the difference between two maps by discarding keys which occur in both maps.
+    #[inline]
     pub fn difference<B, RM>(&self, other: RM) -> Self
     where
         RM: Borrow<HashMap<K, B, S>>,
@@ -615,6 +626,7 @@ where
 
     /// Construct the difference between two maps by using a function to decide
     /// what to do if a key occurs in both.
+    #[inline]
     pub fn difference_with<B, RM, F>(&self, other: RM, f: F) -> Self
     where
         F: Fn(Arc<V>, Arc<B>) -> Option<Arc<V>>,
@@ -644,6 +656,7 @@ where
     }
 
     /// Construct the intersection of two maps, keeping the values from the current map.
+    #[inline]
     pub fn intersection<B, RM>(&self, other: RM) -> Self
     where
         RM: Borrow<HashMap<K, B, S>>,
@@ -653,6 +666,7 @@ where
 
     /// Construct the intersection of two maps, calling a function with both values for each
     /// key and using the result as the value for the key.
+    #[inline]
     pub fn intersection_with<B, C, RM, F>(&self, other: RM, f: F) -> HashMap<K, C, S>
     where
         F: Fn(Arc<V>, Arc<B>) -> Arc<C>,
@@ -783,6 +797,7 @@ where
     /// assert_eq!(lens.try_get(&map), Some(Arc::new("gazonk")));
     /// # }
     /// ```
+    #[inline]
     pub fn lens<RK>(key: RK) -> HashMapLens<K, V, S>
     where
         RK: Shared<K>,
@@ -824,6 +839,7 @@ where
 // Core traits
 
 impl<K, V, S> Clone for HashMap<K, V, S> {
+    #[inline]
     fn clone(&self) -> Self {
         HashMap {
             root: self.root.clone(),
@@ -928,6 +944,7 @@ impl<K, V> Default for HashMap<K, V, RandomState>
 where
     K: Hash + Eq,
 {
+    #[inline]
     fn default() -> Self {
         HashMap::new()
     }
@@ -1019,6 +1036,7 @@ impl<'a, K, V, S> IntoIterator for &'a HashMap<K, V, S> {
     type Item = (Arc<K>, Arc<V>);
     type IntoIter = nodes::Iter<K, V>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
@@ -1028,6 +1046,7 @@ impl<K, V, S> IntoIterator for HashMap<K, V, S> {
     type Item = (Arc<K>, Arc<V>);
     type IntoIter = nodes::Iter<K, V>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
@@ -1042,6 +1061,7 @@ pub struct HashMapLens<K, V, S> {
 }
 
 impl<K, V, S> Clone for HashMapLens<K, V, S> {
+    #[inline]
     fn clone(&self) -> Self {
         HashMapLens {
             key: self.key.clone(),
@@ -1075,6 +1095,7 @@ where
 }
 
 impl<K, V, S> AsRef<HashMap<K, V, S>> for HashMap<K, V, S> {
+    #[inline]
     fn as_ref(&self) -> &Self {
         self
     }
