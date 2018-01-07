@@ -7,8 +7,6 @@
 //! large datasets, you should consider whether you need an ordered
 //! map, or whether a hash map would suit you better.
 
-mod walk;
-
 use std::sync::Arc;
 use std::iter::{FromIterator, Iterator};
 use std::collections::{BTreeMap, HashMap};
@@ -23,6 +21,8 @@ use shared::Shared;
 use lens::PartialLens;
 
 use self::MapNode::{Leaf, Three, Two};
+
+mod walk;
 
 /// Construct a map from a sequence of key/value pairs.
 ///
@@ -571,14 +571,14 @@ impl<K: Ord, V> Map<K, V> {
         }
     }
 
-    /// Remove a key/value pair from a list, if it exists.
+    /// Remove a key/value pair from a map, if it exists.
     ///
     /// Time: O(log n)
     pub fn remove(&self, k: &K) -> Self {
         self.pop(k).map(|(_, m)| m).unwrap_or_else(|| self.clone())
     }
 
-    /// Remove a key/value pair from a list, if it exists, and return the removed value
+    /// Remove a key/value pair from a map, if it exists, and return the removed value
     /// as well as the updated list.
     ///
     /// Time: O(log n)
@@ -586,7 +586,7 @@ impl<K: Ord, V> Map<K, V> {
         self.pop_with_key(k).map(|(_, v, m)| (v, m))
     }
 
-    /// Remove a key/value pair from a list, if it exists, and return the removed key and value
+    /// Remove a key/value pair from a map, if it exists, and return the removed key and value
     /// as well as the updated list.
     ///
     /// Time: O(log n)
