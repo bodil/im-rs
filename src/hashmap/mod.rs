@@ -69,6 +69,21 @@ macro_rules! hashmap {
     }};
 }
 
+/// # Hash Map
+///
+/// An immutable hash map using [hash array mapped tries] [1].
+///
+/// Most operations on this map are theoretically O(log n), but
+/// will in practice be closer to O(1).
+///
+/// Map entries will have a predictable order based on the hasher
+/// being used. Unless otherwise specified, all maps will share an
+/// instance of the default `std::collections::hash_map::RandomState`
+/// hasher, which will produce consistent hashes for the duration of
+/// its lifetime, but not between restarts of your program.
+///
+/// [1]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
+
 pub struct HashMap<K, V, S = RandomState> {
     size: usize,
     root: Node<K, V>,
