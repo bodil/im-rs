@@ -68,6 +68,7 @@ extern crate serde_json;
 #[macro_use]
 extern crate lazy_static;
 
+pub mod hash;
 #[macro_use]
 pub mod conslist;
 #[macro_use]

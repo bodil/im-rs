@@ -1,13 +1,16 @@
 use std::ops::Deref;
 use std::marker::PhantomData;
 use std::fmt;
+use std::hash::Hash;
 use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use hash::SharedHasher;
 use list::List;
 use conslist::ConsList;
 use set::Set;
 use queue::Queue;
 use map::Map;
+use hashmap::HashMap;
 
 struct SeqVisitor<'de, S, A>
 where
@@ -240,6 +243,31 @@ impl<K: Serialize + Ord, V: Serialize> Serialize for Map<K, V> {
     }
 }
 
+// HashMap
+
+impl<'de, K: Deserialize<'de> + Hash + Eq, V: Deserialize<'de>, S: SharedHasher> Deserialize<'de>
+    for HashMap<K, V, S> {
+    fn deserialize<D>(des: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        des.deserialize_map(MapVisitor::<'de, HashMap<K, V, S>, K, V>::new())
+    }
+}
+
+impl<K: Serialize + Hash + Eq, V: Serialize, S: SharedHasher> Serialize for HashMap<K, V, S> {
+    fn serialize<Ser>(&self, ser: Ser) -> Result<Ser::Ok, Ser::Error>
+    where
+        Ser: Serializer,
+    {
+        let mut s = ser.serialize_map(Some(self.len()))?;
+        for (k, v) in self.iter() {
+            s.serialize_entry(k.deref(), v.deref())?;
+        }
+        s.end()
+    }
+}
+
 // Tests
 
 #[cfg(test)]
@@ -266,6 +294,10 @@ mod test {
 
         fn map(list: Map<i32, i32>) -> bool {
             from_str::<Map<i32, i32>>(&to_string(&list).unwrap()).unwrap() == list
+        }
+
+        fn hash_map(list: HashMap<i32, i32>) -> bool {
+            from_str::<HashMap<i32, i32>>(&to_string(&list).unwrap()).unwrap() == list
         }
     }
 }

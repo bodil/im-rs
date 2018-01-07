@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 use std::collections::hash_map::RandomState;
-use std::hash::{BuildHasher, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 use std::iter::FromIterator;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};
@@ -25,6 +25,7 @@ use std::collections;
 
 use shared::Shared;
 use lens::PartialLens;
+use hash::SharedHasher;
 
 mod bits;
 
@@ -33,10 +34,6 @@ use self::hash::hash_key;
 
 mod nodes;
 use self::nodes::{Iter, Node};
-
-lazy_static! {
-    static ref DEFAULT_HASHER: Arc<RandomState> = Arc::new(RandomState::new());
-}
 
 /// Construct a hash map from a sequence of key/value pairs.
 ///
@@ -97,11 +94,7 @@ where
     /// Construct an empty hash map.
     #[inline]
     pub fn new() -> Self {
-        HashMap {
-            size: 0,
-            root: nodes::empty(),
-            hasher: DEFAULT_HASHER.clone(),
-        }
+        Default::default()
     }
 
     /// Construct a hash map with a single mapping.
@@ -127,38 +120,6 @@ where
         RV: Shared<V>,
     {
         HashMap::new().insert(k, v)
-    }
-
-    /// Construct the union of a sequence of maps, selecting the value of the
-    /// leftmost when a key appears in more than one map.
-    pub fn unions<I>(i: I) -> Self
-    where
-        I: IntoIterator<Item = Self>,
-    {
-        i.into_iter().fold(HashMap::new(), |a, b| a.union(&b))
-    }
-
-    /// Construct the union of a sequence of maps, using a function to decide what to do
-    /// with the value when a key is in more than one map.
-    pub fn unions_with<I, F>(i: I, f: F) -> Self
-    where
-        I: IntoIterator<Item = Self>,
-        F: Fn(Arc<V>, Arc<V>) -> Arc<V>,
-    {
-        i.into_iter()
-            .fold(HashMap::new(), |a, b| a.union_with(&b, &f))
-    }
-
-    /// Construct the union of a sequence of maps, using a function to decide what to do
-    /// with the value when a key is in more than one map. The function receives the key
-    /// as well as both values.
-    pub fn unions_with_key<I, F>(i: I, f: F) -> Self
-    where
-        I: IntoIterator<Item = Self>,
-        F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
-    {
-        i.into_iter()
-            .fold(HashMap::new(), |a, b| a.union_with_key(&b, &f))
     }
 }
 
@@ -248,7 +209,7 @@ impl<K, V, S> HashMap<K, V, S> {
 impl<K, V, S> HashMap<K, V, S>
 where
     K: Hash + Eq,
-    S: BuildHasher,
+    S: SharedHasher,
 {
     /// Construct an empty hash map using the provided hasher.
     #[inline]
@@ -615,6 +576,38 @@ where
         })
     }
 
+    /// Construct the union of a sequence of maps, selecting the value of the
+    /// leftmost when a key appears in more than one map.
+    pub fn unions<I>(i: I) -> Self
+    where
+        I: IntoIterator<Item = Self>,
+    {
+        i.into_iter().fold(Default::default(), |a, b| a.union(&b))
+    }
+
+    /// Construct the union of a sequence of maps, using a function to decide what to do
+    /// with the value when a key is in more than one map.
+    pub fn unions_with<I, F>(i: I, f: F) -> Self
+    where
+        I: IntoIterator<Item = Self>,
+        F: Fn(Arc<V>, Arc<V>) -> Arc<V>,
+    {
+        i.into_iter()
+            .fold(Default::default(), |a, b| a.union_with(&b, &f))
+    }
+
+    /// Construct the union of a sequence of maps, using a function to decide what to do
+    /// with the value when a key is in more than one map. The function receives the key
+    /// as well as both values.
+    pub fn unions_with_key<I, F>(i: I, f: F) -> Self
+    where
+        I: IntoIterator<Item = Self>,
+        F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
+    {
+        i.into_iter()
+            .fold(Default::default(), |a, b| a.union_with_key(&b, &f))
+    }
+
     /// Construct the difference between two maps by discarding keys which occur in both maps.
     #[inline]
     pub fn difference<B, RM>(&self, other: RM) -> Self
@@ -814,7 +807,7 @@ impl<K, V, S> HashMap<K, V, S>
 where
     K: Hash + Eq,
     V: PartialEq,
-    S: BuildHasher,
+    S: SharedHasher,
 {
     /// Test whether a map is a submap of another map, meaning that
     /// all keys in our map must also be in the other map, with the same values.
@@ -940,13 +933,18 @@ where
     }
 }
 
-impl<K, V> Default for HashMap<K, V, RandomState>
+impl<K, V, S> Default for HashMap<K, V, S>
 where
     K: Hash + Eq,
+    S: SharedHasher,
 {
     #[inline]
     fn default() -> Self {
-        HashMap::new()
+        HashMap {
+            size: 0,
+            root: nodes::empty(),
+            hasher: S::shared_hasher(),
+        }
     }
 }
 
@@ -1017,18 +1015,19 @@ impl<K, V> Iterator for Values<K, V> {
     }
 }
 
-impl<K, V, RK, RV> FromIterator<(RK, RV)> for HashMap<K, V>
+impl<K, V, RK, RV, S> FromIterator<(RK, RV)> for HashMap<K, V, S>
 where
     K: Hash + Eq,
     RK: Shared<K>,
     RV: Shared<V>,
+    S: SharedHasher,
 {
     fn from_iter<T>(i: T) -> Self
     where
         T: IntoIterator<Item = (RK, RV)>,
     {
         i.into_iter()
-            .fold(HashMap::new(), |m, (k, v)| m.insert(k, v))
+            .fold(Default::default(), |m, (k, v)| m.insert(k, v))
     }
 }
 
@@ -1074,7 +1073,7 @@ impl<K, V, S> Clone for HashMapLens<K, V, S> {
 impl<K, V, S> PartialLens for HashMapLens<K, V, S>
 where
     K: Hash + Eq,
-    S: BuildHasher,
+    S: SharedHasher,
 {
     type From = HashMap<K, V, S>;
     type To = V;
@@ -1101,10 +1100,11 @@ impl<K, V, S> AsRef<HashMap<K, V, S>> for HashMap<K, V, S> {
     }
 }
 
-impl<'a, K: Hash + Eq, V: Clone, RK, RV> From<&'a [(RK, RV)]> for HashMap<K, V>
+impl<'a, K: Hash + Eq, V: Clone, RK, RV, S> From<&'a [(RK, RV)]> for HashMap<K, V, S>
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
+    S: SharedHasher,
 {
     fn from(m: &'a [(RK, RV)]) -> Self {
         m.into_iter()
@@ -1113,10 +1113,11 @@ where
     }
 }
 
-impl<K: Hash + Eq, V, RK, RV> From<Vec<(RK, RV)>> for HashMap<K, V>
+impl<K: Hash + Eq, V, RK, RV, S> From<Vec<(RK, RV)>> for HashMap<K, V, S>
 where
     RK: Shared<K>,
     RV: Shared<V>,
+    S: SharedHasher,
 {
     fn from(m: Vec<(RK, RV)>) -> Self {
         m.into_iter()
@@ -1125,10 +1126,11 @@ where
     }
 }
 
-impl<'a, K: Hash + Eq, V, RK, RV> From<&'a Vec<(RK, RV)>> for HashMap<K, V>
+impl<'a, K: Hash + Eq, V, RK, RV, S> From<&'a Vec<(RK, RV)>> for HashMap<K, V, S>
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
+    S: SharedHasher,
 {
     fn from(m: &'a Vec<(RK, RV)>) -> Self {
         m.into_iter()
@@ -1137,10 +1139,11 @@ where
     }
 }
 
-impl<K: Hash + Eq, V, RK: Hash + Eq, RV> From<collections::HashMap<RK, RV>> for HashMap<K, V>
+impl<K: Hash + Eq, V, RK: Hash + Eq, RV, S> From<collections::HashMap<RK, RV>> for HashMap<K, V, S>
 where
     RK: Shared<K>,
     RV: Shared<V>,
+    S: SharedHasher,
 {
     fn from(m: collections::HashMap<RK, RV>) -> Self {
         m.into_iter()
@@ -1149,11 +1152,12 @@ where
     }
 }
 
-impl<'a, K: Hash + Eq, V, RK: Hash + Eq, RV> From<&'a collections::HashMap<RK, RV>>
-    for HashMap<K, V>
+impl<'a, K: Hash + Eq, V, RK: Hash + Eq, RV, S> From<&'a collections::HashMap<RK, RV>>
+    for HashMap<K, V, S>
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
+    S: SharedHasher,
 {
     fn from(m: &'a collections::HashMap<RK, RV>) -> Self {
         m.into_iter()
@@ -1162,10 +1166,11 @@ where
     }
 }
 
-impl<K: Hash + Eq, V, RK, RV> From<collections::BTreeMap<RK, RV>> for HashMap<K, V>
+impl<K: Hash + Eq, V, RK, RV, S> From<collections::BTreeMap<RK, RV>> for HashMap<K, V, S>
 where
     RK: Shared<K>,
     RV: Shared<V>,
+    S: SharedHasher,
 {
     fn from(m: collections::BTreeMap<RK, RV>) -> Self {
         m.into_iter()
@@ -1174,10 +1179,11 @@ where
     }
 }
 
-impl<'a, K: Hash + Eq, V, RK, RV> From<&'a collections::BTreeMap<RK, RV>> for HashMap<K, V>
+impl<'a, K: Hash + Eq, V, RK, RV, S> From<&'a collections::BTreeMap<RK, RV>> for HashMap<K, V, S>
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
+    S: SharedHasher,
 {
     fn from(m: &'a collections::BTreeMap<RK, RV>) -> Self {
         m.into_iter()
