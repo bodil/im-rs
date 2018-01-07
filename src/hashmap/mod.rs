@@ -341,7 +341,7 @@ where
         self.insert_ref(k.shared(), v.shared())
     }
 
-    pub fn insert_ref(&self, k: Arc<K>, v: Arc<V>) -> Self {
+    fn insert_ref(&self, k: Arc<K>, v: Arc<V>) -> Self {
         let (added, new_node) =
             self.root
                 .insert(&*self.hasher, 0, hash_key(&*self.hasher, &k), &k, &v);
