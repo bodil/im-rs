@@ -1,6 +1,6 @@
 [package]
 name = "im"
-version = "8.0.0"
+version = "8.0.1-alpha.0"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 license = "LGPL-3.0+"
 description = "Assorted immutable collection datatypes"
