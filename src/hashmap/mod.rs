@@ -33,7 +33,8 @@ mod hash;
 use self::hash::hash_key;
 
 mod nodes;
-use self::nodes::{Iter, Node};
+use self::nodes::Node;
+pub use self::nodes::Iter;
 
 /// Construct a hash map from a sequence of key/value pairs.
 ///

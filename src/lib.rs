@@ -78,6 +78,8 @@ pub mod hashmap;
 #[macro_use]
 pub mod set;
 #[macro_use]
+pub mod hashset;
+#[macro_use]
 pub mod list;
 pub mod queue;
 pub mod iter;
