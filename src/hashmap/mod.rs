@@ -61,7 +61,7 @@ macro_rules! hashmap {
     ( $( $key:expr => $value:expr ),* ) => {{
         let mut map = $crate::hashmap::HashMap::new();
         $({
-            map = map.insert($key, $value);
+            map.insert_mut($key, $value);
         })*;
         map
     }};
@@ -217,7 +217,7 @@ where
     pub fn with_hasher(hasher: &Arc<S>) -> Self {
         HashMap {
             size: 0,
-            root: nodes::empty(),
+            root: Node::empty(),
             hasher: hasher.clone(),
         }
     }
@@ -230,7 +230,7 @@ where
     {
         HashMap {
             size: 0,
-            root: nodes::empty(),
+            root: Node::empty(),
             hasher: self.hasher.clone(),
         }
     }
@@ -354,6 +354,58 @@ where
                 self.size
             },
             hasher: self.hasher.clone(),
+        }
+    }
+
+    /// Insert a key/value mapping into a map, mutating it in place when it is
+    /// safe to do so.
+    ///
+    /// If you are the sole owner of the map, it is safe to mutate it without
+    /// losing immutability guarantees, gaining us a considerable performance
+    /// advantage. If the map is in use elsewhere, this operation will safely
+    /// clone the map before mutating it, acting just like the immutable `insert`
+    /// operation.
+    ///
+    /// If the map already has a mapping for the given key, the previous value
+    /// is overwritten.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// let mut map = hashmap!{};
+    /// map.insert_mut(123, "123");
+    /// map.insert_mut(456, "456");
+    /// assert_eq!(
+    ///   map,
+    ///   hashmap!{123 => "123", 456 => "456"}
+    /// );
+    /// # }
+    /// ```
+    #[inline]
+    pub fn insert_mut<RK, RV>(&mut self, k: RK, v: RV)
+    where
+        RK: Shared<K>,
+        RV: Shared<V>,
+    {
+        self.insert_mut_ref(k.shared(), v.shared())
+    }
+
+    fn insert_mut_ref(&mut self, k: Arc<K>, v: Arc<V>) {
+        let (added, new_node) =
+            self.root
+                .insert_mut(&*self.hasher, 0, hash_key(&*self.hasher, &k), &k, &v);
+        match new_node {
+            None => (),
+            Some(new_root) => self.root = new_root,
+        }
+        if added {
+            self.size += 1
         }
     }
 
@@ -513,12 +565,45 @@ where
         }
     }
 
+    /// Remove a key/value mapping from a map if it exists, mutating it in place
+    /// when it is safe to do so.
+    ///
+    /// If you are the sole owner of the map, it is safe to mutate it without
+    /// losing immutability guarantees, gaining us a considerable performance
+    /// advantage. If the map is in use elsewhere, this operation will safely
+    /// clone the map before mutating it, acting just like the immutable `insert`
+    /// operation.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// let mut map = hashmap!{123 => "123", 456 => "456"};
+    /// map.remove_mut(&123);
+    /// map.remove_mut(&456);
+    /// assert!(map.is_empty());
+    /// # }
+    /// ```
+    #[inline]
+    pub fn remove_mut(&mut self, k: &K) {
+        self.pop_with_key_mut(k);
+    }
+
     /// Remove a key/value pair from a map, if it exists, and return the removed value
     /// as well as the updated list.
     ///
     /// Time: O(log n)
     pub fn pop(&self, k: &K) -> Option<(Arc<V>, Self)> {
         self.pop_with_key(k).map(|(_, v, m)| (v, m))
+    }
+
+    pub fn pop_mut(&mut self, k: &K) -> Option<Arc<V>> {
+        self.pop_with_key_mut(k).map(|(_, v)| v)
     }
 
     /// Remove a key/value pair from a map, if it exists, and return the removed key and value
@@ -541,6 +626,16 @@ where
                 },
             )
         })
+    }
+
+    pub fn pop_with_key_mut(&mut self, k: &K) -> Option<(Arc<K>, Arc<V>)> {
+        match self.root.remove_mut(0, hash_key(&*self.hasher, k), k) {
+            (None, _) => None,
+            (Some(r), _) => {
+                self.size -= 1;
+                Some(r)
+            }
+        }
     }
 
     /// Construct the union of two maps, keeping the values in the current map
@@ -866,9 +961,6 @@ where
     V: PartialEq,
 {
     default fn eq(&self, other: &Self) -> bool {
-        if self.root.ptr_eq(&other.root) {
-            return true;
-        }
         if Arc::ptr_eq(&self.hasher, &other.hasher) {
             return self.iter().eq(other.iter());
         }
@@ -905,7 +997,12 @@ where
     V: PartialOrd,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.iter().partial_cmp(other.iter())
+        if Arc::ptr_eq(&self.hasher, &other.hasher) {
+            return self.iter().partial_cmp(other.iter());
+        }
+        let m1: ::std::collections::HashMap<Arc<K>, Arc<V>> = self.iter().collect();
+        let m2: ::std::collections::HashMap<Arc<K>, Arc<V>> = other.iter().collect();
+        m1.iter().partial_cmp(m2.iter())
     }
 }
 
@@ -915,7 +1012,12 @@ where
     V: Ord,
 {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.iter().cmp(other.iter())
+        if Arc::ptr_eq(&self.hasher, &other.hasher) {
+            return self.iter().cmp(other.iter());
+        }
+        let m1: ::std::collections::HashMap<Arc<K>, Arc<V>> = self.iter().collect();
+        let m2: ::std::collections::HashMap<Arc<K>, Arc<V>> = other.iter().collect();
+        m1.iter().cmp(m2.iter())
     }
 }
 
@@ -943,7 +1045,7 @@ where
     fn default() -> Self {
         HashMap {
             size: 0,
-            root: nodes::empty(),
+            root: Node::empty(),
             hasher: S::shared_hasher(),
         }
     }
@@ -1310,6 +1412,30 @@ mod test {
                 let l = map.len();
                 assert_eq!(m.get(k).map(|v| *v), map.get(k).map(|v| *v));
                 map = map.remove(&k);
+                assert_eq!(None, map.get(k));
+                assert_eq!(l - 1, map.len());
+            }
+        }
+
+        #[test]
+        fn insert_mut(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+            let mut mut_map = HashMap::new();
+            let mut map = HashMap::new();
+            for (k, v) in m.iter() {
+                map = map.insert(*k, *v);
+                mut_map.insert_mut(*k, *v);
+            }
+            assert_eq!(map, mut_map);
+        }
+
+        #[test]
+        fn remove_mut(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+            let mut map: HashMap<i16, i16> =
+                FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+            for k in m.keys() {
+                let l = map.len();
+                assert_eq!(m.get(k).map(|v| *v), map.get(k).map(|v| *v));
+                map.remove_mut(&k);
                 assert_eq!(None, map.get(k));
                 assert_eq!(l - 1, map.len());
             }

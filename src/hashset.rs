@@ -1,6 +1,6 @@
 //! A hash set.
 //!
-//! An immutable has set backed by a `HashMap`.
+//! An immutable hash set backed by a `HashMap`.
 //!
 //! This is implemented as a `HashMap` with no values, so it shares
 //! the exact performance characteristics of `HashMap`.
@@ -12,6 +12,7 @@ use std::collections::{self, BTreeSet};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Mul};
 use std::borrow::Borrow;
+use std::cmp::Ordering;
 use hashmap::{self, HashMap};
 use shared::Shared;
 
@@ -36,7 +37,7 @@ macro_rules! hashset {
     ( $($x:expr),* ) => {{
         let mut l = $crate::hashset::HashSet::new();
         $(
-            l = l.insert($x);
+            l.insert_mut($x);
         )*
             l
     }};
@@ -44,7 +45,7 @@ macro_rules! hashset {
 
 /// A hash set.
 ///
-/// An immutable has set backed by a `HashMap`.
+/// An immutable hash set backed by a `HashMap`.
 ///
 /// This is implemented as a `HashMap` with no values, so it shares
 /// the exact performance characteristics of `HashMap`.
@@ -147,6 +148,41 @@ where
         HashSet(self.0.insert(a, ()))
     }
 
+    /// Insert a value into a set, mutating it in place when it is
+    /// safe to do so.
+    ///
+    /// If you are the sole owner of the set, it is safe to mutate it without
+    /// losing immutability guarantees, gaining us a considerable performance
+    /// advantage. If the set is in use elsewhere, this operation will safely
+    /// clone the map before mutating it, acting just like the immutable `insert`
+    /// operation.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashset::HashSet;
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// let mut set = hashset!{};
+    /// set.insert_mut(123);
+    /// set.insert_mut(456);
+    /// assert_eq!(
+    ///   set,
+    ///   hashset!{123, 456}
+    /// );
+    /// # }
+    /// ```
+    #[inline]
+    pub fn insert_mut<R>(&mut self, a: R)
+    where
+        R: Shared<A>,
+    {
+        self.0.insert_mut(a, ())
+    }
+
     /// Test if a value is part of a set.
     ///
     /// Time: O(log n)
@@ -223,6 +259,18 @@ impl<A: Hash + Eq> PartialEq for HashSet<A> {
 }
 
 impl<A: Hash + Eq> Eq for HashSet<A> {}
+
+impl<A: Hash + Eq + PartialOrd> PartialOrd for HashSet<A> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<A: Hash + Eq + Ord> Ord for HashSet<A> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0)
+    }
+}
 
 impl<A: Hash + Eq> Hash for HashSet<A> {
     fn hash<H>(&self, state: &mut H)

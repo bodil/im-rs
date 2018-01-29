@@ -30,17 +30,6 @@ fn conslist_cons(b: &mut Bencher) {
 }
 
 #[bench]
-fn vec_snoc(b: &mut Bencher) {
-    b.iter(|| {
-        let mut l = Vec::new();
-        for i in 0..1000 {
-            l = l.clone();
-            l.push(i);
-        }
-    })
-}
-
-#[bench]
 fn list_snoc(b: &mut Bencher) {
     b.iter(|| {
         let mut l = List::new();
@@ -69,17 +58,6 @@ fn conslist_uncons(b: &mut Bencher) {
         for _ in 0..1000 {
             p = p.clone();
             p.pop();
-        }
-    })
-}
-
-#[bench]
-fn vec_uncons(b: &mut Bencher) {
-    let l = List::from(0..1001);
-    b.iter(|| {
-        let mut p = l.clone();
-        for _ in 0..1000 {
-            p = p.tail().unwrap()
         }
     })
 }
