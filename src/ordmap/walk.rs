@@ -5,13 +5,13 @@ use std::cmp::Ordering;
 use std::ops::Deref;
 use conslist::ConsList;
 
-use super::Map;
+use super::OrdMap;
 use super::MapNode::{Leaf, Three, Two};
 use self::TreeContext::{ThreeLeft, ThreeMiddle, ThreeRight, TwoLeft, TwoRight};
 
 // Lookup
 
-pub fn lookup<K: Ord, V>(m: &Map<K, V>, k: &K) -> Option<Arc<V>> {
+pub fn lookup<K: Ord, V>(m: &OrdMap<K, V>, k: &K) -> Option<Arc<V>> {
     match *m.0 {
         Leaf => None,
         Two(_, ref left, ref k1, ref v, ref right) => match k.cmp(k1) {
@@ -34,11 +34,11 @@ pub fn lookup<K: Ord, V>(m: &Map<K, V>, k: &K) -> Option<Arc<V>> {
 // Insertion
 
 pub enum TreeContext<K, V> {
-    TwoLeft(Arc<K>, Arc<V>, Map<K, V>),
-    TwoRight(Map<K, V>, Arc<K>, Arc<V>),
-    ThreeLeft(Arc<K>, Arc<V>, Map<K, V>, Arc<K>, Arc<V>, Map<K, V>),
-    ThreeMiddle(Map<K, V>, Arc<K>, Arc<V>, Arc<K>, Arc<V>, Map<K, V>),
-    ThreeRight(Map<K, V>, Arc<K>, Arc<V>, Map<K, V>, Arc<K>, Arc<V>),
+    TwoLeft(Arc<K>, Arc<V>, OrdMap<K, V>),
+    TwoRight(OrdMap<K, V>, Arc<K>, Arc<V>),
+    ThreeLeft(Arc<K>, Arc<V>, OrdMap<K, V>, Arc<K>, Arc<V>, OrdMap<K, V>),
+    ThreeMiddle(OrdMap<K, V>, Arc<K>, Arc<V>, Arc<K>, Arc<V>, OrdMap<K, V>),
+    ThreeRight(OrdMap<K, V>, Arc<K>, Arc<V>, OrdMap<K, V>, Arc<K>, Arc<V>),
 }
 
 // Delightfully, #[derive(Clone)] doesn't seem to be able to
@@ -77,22 +77,22 @@ impl<K, V> Clone for TreeContext<K, V> {
 }
 
 #[derive(Clone)]
-struct KickUp<K, V>(Map<K, V>, Arc<K>, Arc<V>, Map<K, V>);
+struct KickUp<K, V>(OrdMap<K, V>, Arc<K>, Arc<V>, OrdMap<K, V>);
 
-fn from_zipper<K, V>(ctx: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
+fn from_zipper<K, V>(ctx: ConsList<TreeContext<K, V>>, tree: OrdMap<K, V>) -> OrdMap<K, V> {
     match ctx.uncons() {
         None => tree,
         Some((x, xs)) => match x.deref().clone() {
-            TwoLeft(k1, v1, right) => from_zipper(xs, Map::two(tree, k1, v1, right)),
-            TwoRight(left, k1, v1) => from_zipper(xs, Map::two(left, k1, v1, tree)),
+            TwoLeft(k1, v1, right) => from_zipper(xs, OrdMap::two(tree, k1, v1, right)),
+            TwoRight(left, k1, v1) => from_zipper(xs, OrdMap::two(left, k1, v1, tree)),
             ThreeLeft(k1, v1, mid, k2, v2, right) => {
-                from_zipper(xs, Map::three(tree, k1, v1, mid, k2, v2, right))
+                from_zipper(xs, OrdMap::three(tree, k1, v1, mid, k2, v2, right))
             }
             ThreeMiddle(left, k1, v1, k2, v2, right) => {
-                from_zipper(xs, Map::three(left, k1, v1, tree, k2, v2, right))
+                from_zipper(xs, OrdMap::three(left, k1, v1, tree, k2, v2, right))
             }
             ThreeRight(left, k1, v1, mid, k2, v2) => {
-                from_zipper(xs, Map::three(left, k1, v1, mid, k2, v2, tree))
+                from_zipper(xs, OrdMap::three(left, k1, v1, mid, k2, v2, tree))
             }
         },
     }
@@ -102,14 +102,14 @@ pub fn ins_down<K: Ord, V>(
     ctx: ConsList<TreeContext<K, V>>,
     k: Arc<K>,
     v: Arc<V>,
-    m: Map<K, V>,
-) -> Map<K, V> {
+    m: OrdMap<K, V>,
+) -> OrdMap<K, V> {
     match *m.0 {
-        Leaf => ins_up(ctx, KickUp(Map::new(), k.clone(), v.clone(), Map::new())),
+        Leaf => ins_up(ctx, KickUp(OrdMap::new(), k.clone(), v.clone(), OrdMap::new())),
         Two(_, ref left, ref k1, ref v1, ref right) => match k.cmp(k1) {
             Ordering::Equal => from_zipper(
                 ctx,
-                Map::two(left.clone(), k.clone(), v.clone(), right.clone()),
+                OrdMap::two(left.clone(), k.clone(), v.clone(), right.clone()),
             ),
             Ordering::Less => ins_down(
                 ctx.cons(TwoLeft(k1.clone(), v1.clone(), right.clone())),
@@ -127,7 +127,7 @@ pub fn ins_down<K: Ord, V>(
         Three(_, ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => match k.cmp(k1) {
             Ordering::Equal => from_zipper(
                 ctx,
-                Map::three(
+                OrdMap::three(
                     left.clone(),
                     k,
                     v,
@@ -140,7 +140,7 @@ pub fn ins_down<K: Ord, V>(
             c1 => match (c1, k.cmp(k2)) {
                 (_, Ordering::Equal) => from_zipper(
                     ctx,
-                    Map::three(
+                    OrdMap::three(
                         left.clone(),
                         k1.clone(),
                         v1.clone(),
@@ -194,16 +194,16 @@ pub fn ins_down<K: Ord, V>(
     }
 }
 
-fn ins_up<K, V>(ctx: ConsList<TreeContext<K, V>>, kickup: KickUp<K, V>) -> Map<K, V> {
+fn ins_up<K, V>(ctx: ConsList<TreeContext<K, V>>, kickup: KickUp<K, V>) -> OrdMap<K, V> {
     match ctx.uncons() {
         None => match kickup {
-            KickUp(left, k, v, right) => Map::two(left, k, v, right),
+            KickUp(left, k, v, right) => OrdMap::two(left, k, v, right),
         },
         Some((x, xs)) => match (x.deref().clone(), kickup) {
             (TwoLeft(ref k1, ref v1, ref right), KickUp(ref left, ref k, ref v, ref mid)) => {
                 from_zipper(
                     xs,
-                    Map::three(
+                    OrdMap::three(
                         left.clone(),
                         k.clone(),
                         v.clone(),
@@ -217,7 +217,7 @@ fn ins_up<K, V>(ctx: ConsList<TreeContext<K, V>>, kickup: KickUp<K, V>) -> Map<K
             (TwoRight(ref left, ref k1, ref v1), KickUp(ref mid, ref k, ref v, ref right)) => {
                 from_zipper(
                     xs,
-                    Map::three(
+                    OrdMap::three(
                         left.clone(),
                         k1.clone(),
                         v1.clone(),
@@ -234,10 +234,10 @@ fn ins_up<K, V>(ctx: ConsList<TreeContext<K, V>>, kickup: KickUp<K, V>) -> Map<K
             ) => ins_up(
                 xs,
                 KickUp(
-                    Map::two(a.clone(), k.clone(), v.clone(), b.clone()),
+                    OrdMap::two(a.clone(), k.clone(), v.clone(), b.clone()),
                     k1.clone(),
                     v1.clone(),
-                    Map::two(c.clone(), k2.clone(), v2.clone(), d.clone()),
+                    OrdMap::two(c.clone(), k2.clone(), v2.clone(), d.clone()),
                 ),
             ),
             (
@@ -246,10 +246,10 @@ fn ins_up<K, V>(ctx: ConsList<TreeContext<K, V>>, kickup: KickUp<K, V>) -> Map<K
             ) => ins_up(
                 xs,
                 KickUp(
-                    Map::two(a.clone(), k1.clone(), v1.clone(), b.clone()),
+                    OrdMap::two(a.clone(), k1.clone(), v1.clone(), b.clone()),
                     k.clone(),
                     v.clone(),
-                    Map::two(c.clone(), k2.clone(), v2.clone(), d.clone()),
+                    OrdMap::two(c.clone(), k2.clone(), v2.clone(), d.clone()),
                 ),
             ),
             (
@@ -258,10 +258,10 @@ fn ins_up<K, V>(ctx: ConsList<TreeContext<K, V>>, kickup: KickUp<K, V>) -> Map<K
             ) => ins_up(
                 xs,
                 KickUp(
-                    Map::two(a.clone(), k1.clone(), v1.clone(), b.clone()),
+                    OrdMap::two(a.clone(), k1.clone(), v1.clone(), b.clone()),
                     k2.clone(),
                     v2.clone(),
-                    Map::two(c.clone(), k.clone(), v.clone(), d.clone()),
+                    OrdMap::two(c.clone(), k.clone(), v.clone(), d.clone()),
                 ),
             ),
         },
@@ -273,12 +273,12 @@ fn ins_up<K, V>(ctx: ConsList<TreeContext<K, V>>, kickup: KickUp<K, V>) -> Map<K
 pub fn pop_down<K: Ord, V>(
     ctx: ConsList<TreeContext<K, V>>,
     k: &K,
-    m: Map<K, V>,
-) -> Option<(Arc<K>, Arc<V>, Map<K, V>)> {
+    m: OrdMap<K, V>,
+) -> Option<(Arc<K>, Arc<V>, OrdMap<K, V>)> {
     match *m.0 {
         Leaf => None,
         Two(_, ref left, ref k1, ref v1, ref right) => match (&*right.0, k.cmp(k1)) {
-            (&Leaf, Ordering::Equal) => Some((k1.clone(), v1.clone(), pop_up(ctx, Map::new()))),
+            (&Leaf, Ordering::Equal) => Some((k1.clone(), v1.clone(), pop_up(ctx, OrdMap::new()))),
             (_, Ordering::Equal) => {
                 let (max_key, max_val) = max_node(left.clone());
                 Some((
@@ -312,7 +312,7 @@ pub fn pop_down<K: Ord, V>(
                     v1.clone(),
                     from_zipper(
                         ctx,
-                        Map::two(Map::new(), k2.clone(), v2.clone(), Map::new()),
+                        OrdMap::two(OrdMap::new(), k2.clone(), v2.clone(), OrdMap::new()),
                     ),
                 )),
                 (true, _, Ordering::Equal) => Some((
@@ -320,7 +320,7 @@ pub fn pop_down<K: Ord, V>(
                     v2.clone(),
                     from_zipper(
                         ctx,
-                        Map::two(Map::new(), k1.clone(), v1.clone(), Map::new()),
+                        OrdMap::two(OrdMap::new(), k1.clone(), v1.clone(), OrdMap::new()),
                     ),
                 )),
                 (_, Ordering::Equal, _) => {
@@ -400,24 +400,24 @@ pub fn pop_down<K: Ord, V>(
     }
 }
 
-fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
+fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: OrdMap<K, V>) -> OrdMap<K, V> {
     match xs.uncons() {
         None => tree,
         Some((x, ctx)) => match (x.deref().clone(), tree.is_empty()) {
             (TwoLeft(ref k1, ref v1, ref right), true) if right.is_empty() => from_zipper(
                 ctx,
-                Map::two(Map::new(), k1.clone(), v1.clone(), Map::new()),
+                OrdMap::two(OrdMap::new(), k1.clone(), v1.clone(), OrdMap::new()),
             ),
             (TwoRight(ref left, ref k1, ref v1), true) if left.is_empty() => from_zipper(
                 ctx,
-                Map::two(Map::new(), k1.clone(), v1.clone(), Map::new()),
+                OrdMap::two(OrdMap::new(), k1.clone(), v1.clone(), OrdMap::new()),
             ),
 
             (TwoLeft(ref k1, ref v1, ref right), _) => match *right.0 {
                 Leaf => unreachable!(),
                 Two(_, ref m, ref k2, ref v2, ref r) => pop_up(
                     ctx,
-                    Map::three(
+                    OrdMap::three(
                         tree,
                         k1.clone(),
                         v1.clone(),
@@ -429,11 +429,11 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                 ),
                 Three(_, ref b, ref k2, ref v2, ref c, ref k3, ref v3, ref d) => from_zipper(
                     ctx,
-                    Map::two(
-                        Map::two(tree, k1.clone(), v1.clone(), b.clone()),
+                    OrdMap::two(
+                        OrdMap::two(tree, k1.clone(), v1.clone(), b.clone()),
                         k2.clone(),
                         v2.clone(),
-                        Map::two(c.clone(), k3.clone(), v3.clone(), d.clone()),
+                        OrdMap::two(c.clone(), k3.clone(), v3.clone(), d.clone()),
                     ),
                 ),
             },
@@ -441,7 +441,7 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                 Leaf => unreachable!(),
                 Two(_, ref l, ref k1, ref v1, ref m) => pop_up(
                     ctx,
-                    Map::three(
+                    OrdMap::three(
                         l.clone(),
                         k1.clone(),
                         v1.clone(),
@@ -453,11 +453,11 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                 ),
                 Three(_, ref a, ref k1, ref v1, ref b, ref k2, ref v2, ref c) => from_zipper(
                     ctx,
-                    Map::two(
-                        Map::two(a.clone(), k1.clone(), v1.clone(), b.clone()),
+                    OrdMap::two(
+                        OrdMap::two(a.clone(), k1.clone(), v1.clone(), b.clone()),
                         k2.clone(),
                         v2.clone(),
-                        Map::two(c.clone(), k3.clone(), v3.clone(), tree),
+                        OrdMap::two(c.clone(), k3.clone(), v3.clone(), tree),
                     ),
                 ),
             },
@@ -466,14 +466,14 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
             {
                 from_zipper(
                     ctx,
-                    Map::three(
-                        Map::new(),
+                    OrdMap::three(
+                        OrdMap::new(),
                         k1.clone(),
                         v1.clone(),
-                        Map::new(),
+                        OrdMap::new(),
                         k2.clone(),
                         v2.clone(),
-                        Map::new(),
+                        OrdMap::new(),
                     ),
                 )
             }
@@ -482,14 +482,14 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
             {
                 from_zipper(
                     ctx,
-                    Map::three(
-                        Map::new(),
+                    OrdMap::three(
+                        OrdMap::new(),
                         k1.clone(),
                         v1.clone(),
-                        Map::new(),
+                        OrdMap::new(),
                         k2.clone(),
                         v2.clone(),
-                        Map::new(),
+                        OrdMap::new(),
                     ),
                 )
             }
@@ -498,14 +498,14 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
             {
                 from_zipper(
                     ctx,
-                    Map::three(
-                        Map::new(),
+                    OrdMap::three(
+                        OrdMap::new(),
                         k1.clone(),
                         v1.clone(),
-                        Map::new(),
+                        OrdMap::new(),
                         k2.clone(),
                         v2.clone(),
-                        Map::new(),
+                        OrdMap::new(),
                     ),
                 )
             }
@@ -513,8 +513,8 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                 Leaf => unreachable!(),
                 Two(_, ref b, ref k2, ref v2, ref c) => from_zipper(
                     ctx,
-                    Map::two(
-                        Map::three(
+                    OrdMap::two(
+                        OrdMap::three(
                             tree,
                             k1.clone(),
                             v1.clone(),
@@ -530,11 +530,11 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                 ),
                 Three(_, ref b, ref k2, ref v2, ref c, ref k3, ref v3, ref d) => from_zipper(
                     ctx,
-                    Map::three(
-                        Map::two(tree, k1.clone(), v1.clone(), b.clone()),
+                    OrdMap::three(
+                        OrdMap::two(tree, k1.clone(), v1.clone(), b.clone()),
                         k2.clone(),
                         v2.clone(),
-                        Map::two(c.clone(), k3.clone(), v3.clone(), d.clone()),
+                        OrdMap::two(c.clone(), k3.clone(), v3.clone(), d.clone()),
                         k4.clone(),
                         v4.clone(),
                         e.clone(),
@@ -545,8 +545,8 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                 match (&*left.0, &*right.0) {
                     (&Two(_, ref a, ref k1, ref v1, ref b), _) => from_zipper(
                         ctx,
-                        Map::two(
-                            Map::three(
+                        OrdMap::two(
+                            OrdMap::three(
                                 a.clone(),
                                 k1.clone(),
                                 v1.clone(),
@@ -562,11 +562,11 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                     ),
                     (_, &Two(_, ref c, ref k3, ref v3, ref d)) => from_zipper(
                         ctx,
-                        Map::two(
+                        OrdMap::two(
                             left.clone(),
                             kl.clone(),
                             vl.clone(),
-                            Map::three(
+                            OrdMap::three(
                                 tree,
                                 kr.clone(),
                                 vr.clone(),
@@ -580,11 +580,11 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                     (&Three(_, ref a, ref k1, ref v1, ref b, ref k2, ref v2, ref c), _) => {
                         from_zipper(
                             ctx,
-                            Map::three(
-                                Map::two(a.clone(), k1.clone(), v1.clone(), b.clone()),
+                            OrdMap::three(
+                                OrdMap::two(a.clone(), k1.clone(), v1.clone(), b.clone()),
                                 k2.clone(),
                                 v2.clone(),
-                                Map::two(c.clone(), kl.clone(), vl.clone(), tree),
+                                OrdMap::two(c.clone(), kl.clone(), vl.clone(), tree),
                                 kr.clone(),
                                 vr.clone(),
                                 right.clone(),
@@ -594,14 +594,14 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                     (_, &Three(_, ref c, ref k3, ref v3, ref d, ref k4, ref v4, ref e)) => {
                         from_zipper(
                             ctx,
-                            Map::three(
+                            OrdMap::three(
                                 left.clone(),
                                 kl.clone(),
                                 vl.clone(),
-                                Map::two(tree, kr.clone(), vr.clone(), c.clone()),
+                                OrdMap::two(tree, kr.clone(), vr.clone(), c.clone()),
                                 k3.clone(),
                                 v3.clone(),
-                                Map::two(d.clone(), k4.clone(), v4.clone(), e.clone()),
+                                OrdMap::two(d.clone(), k4.clone(), v4.clone(), e.clone()),
                             ),
                         )
                     }
@@ -612,11 +612,11 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                 Leaf => unreachable!(),
                 Two(_, ref b, ref k2, ref v2, ref c) => from_zipper(
                     ctx,
-                    Map::two(
+                    OrdMap::two(
                         a.clone(),
                         k1.clone(),
                         v1.clone(),
-                        Map::three(
+                        OrdMap::three(
                             b.clone(),
                             k2.clone(),
                             v2.clone(),
@@ -629,14 +629,14 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
                 ),
                 Three(_, ref b, ref k2, ref v2, ref c, ref k3, ref v3, ref d) => from_zipper(
                     ctx,
-                    Map::three(
+                    OrdMap::three(
                         a.clone(),
                         k1.clone(),
                         v1.clone(),
-                        Map::two(b.clone(), k2.clone(), v2.clone(), c.clone()),
+                        OrdMap::two(b.clone(), k2.clone(), v2.clone(), c.clone()),
                         k3.clone(),
                         v3.clone(),
-                        Map::two(d.clone(), k4.clone(), v4.clone(), tree),
+                        OrdMap::two(d.clone(), k4.clone(), v4.clone(), tree),
                     ),
                 ),
             },
@@ -644,7 +644,7 @@ fn pop_up<K, V>(xs: ConsList<TreeContext<K, V>>, tree: Map<K, V>) -> Map<K, V> {
     }
 }
 
-fn max_node<K, V>(m: Map<K, V>) -> (Arc<K>, Arc<V>) {
+fn max_node<K, V>(m: OrdMap<K, V>) -> (Arc<K>, Arc<V>) {
     match *m.0 {
         Leaf => unreachable!(),
         Two(_, _, ref k, ref v, ref right) if right.is_empty() => (k.clone(), v.clone()),
@@ -654,11 +654,11 @@ fn max_node<K, V>(m: Map<K, V>) -> (Arc<K>, Arc<V>) {
     }
 }
 
-fn remove_max_node<K, V>(ctx: ConsList<TreeContext<K, V>>, m: Map<K, V>) -> Map<K, V> {
+fn remove_max_node<K, V>(ctx: ConsList<TreeContext<K, V>>, m: OrdMap<K, V>) -> OrdMap<K, V> {
     match *m.0 {
         Leaf => unreachable!(),
         Two(_, ref left, _, _, ref right) if left.is_empty() && right.is_empty() => {
-            pop_up(ctx, Map::new())
+            pop_up(ctx, OrdMap::new())
         }
         Two(_, ref left, ref k, ref v, ref right) => remove_max_node(
             ctx.cons(TwoRight(left.clone(), k.clone(), v.clone())),
@@ -668,8 +668,8 @@ fn remove_max_node<K, V>(ctx: ConsList<TreeContext<K, V>>, m: Map<K, V>) -> Map<
             if left.is_empty() && mid.is_empty() && right.is_empty() =>
         {
             pop_up(
-                ctx.cons(TwoRight(Map::new(), k1.clone(), v1.clone())),
-                Map::new(),
+                ctx.cons(TwoRight(OrdMap::new(), k1.clone(), v1.clone())),
+                OrdMap::new(),
             )
         }
         Three(_, ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => remove_max_node(

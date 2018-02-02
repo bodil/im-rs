@@ -30,24 +30,24 @@ mod walk;
 ///
 /// ```
 /// # #[macro_use] extern crate im;
-/// # use im::map::Map;
+/// # use im::ordmap::OrdMap;
 /// # fn main() {
 /// assert_eq!(
-///   map!{
+///   ordmap!{
 ///     1 => 11,
 ///     2 => 22,
 ///     3 => 33
 ///   },
-///   Map::from(vec![(1, 11), (2, 22), (3, 33)])
+///   OrdMap::from(vec![(1, 11), (2, 22), (3, 33)])
 /// );
 /// # }
 /// ```
 #[macro_export]
-macro_rules! map {
-    () => { $crate::map::Map::new() };
+macro_rules! ordmap {
+    () => { $crate::ordmap::OrdMap::new() };
 
     ( $( $key:expr => $value:expr ),* ) => {{
-        let mut map = $crate::map::Map::new();
+        let mut map = $crate::ordmap::OrdMap::new();
         $({
             map = map.insert($key, $value);
         })*;
@@ -63,28 +63,28 @@ macro_rules! map {
 /// choice for a generic map datatype, but if you're using it for
 /// large datasets, you should consider whether you need an ordered
 /// map, or whether a hash map would suit you better.
-pub struct Map<K, V>(Arc<MapNode<K, V>>);
+pub struct OrdMap<K, V>(Arc<MapNode<K, V>>);
 
 #[doc(hidden)]
 pub enum MapNode<K, V> {
     Leaf,
-    Two(usize, Map<K, V>, Arc<K>, Arc<V>, Map<K, V>),
+    Two(usize, OrdMap<K, V>, Arc<K>, Arc<V>, OrdMap<K, V>),
     Three(
         usize,
-        Map<K, V>,
+        OrdMap<K, V>,
         Arc<K>,
         Arc<V>,
-        Map<K, V>,
+        OrdMap<K, V>,
         Arc<K>,
         Arc<V>,
-        Map<K, V>,
+        OrdMap<K, V>,
     ),
 }
 
-impl<K, V> Map<K, V> {
+impl<K, V> OrdMap<K, V> {
     /// Construct an empty map.
-    pub fn new() -> Map<K, V> {
-        Map(Arc::new(Leaf))
+    pub fn new() -> Self {
+        OrdMap(Arc::new(Leaf))
     }
 
     /// Construct a map with a single mapping.
@@ -93,22 +93,22 @@ impl<K, V> Map<K, V> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::map::Map;
+    /// # use im::ordmap::OrdMap;
     /// # use std::sync::Arc;
     /// # fn main() {
-    /// let map = Map::singleton(123, "onetwothree");
+    /// let map = OrdMap::singleton(123, "onetwothree");
     /// assert_eq!(
     ///   map.get(&123),
     ///   Some(Arc::new("onetwothree"))
     /// );
     /// # }
     /// ```
-    pub fn singleton<RK, RV>(k: RK, v: RV) -> Map<K, V>
+    pub fn singleton<RK, RV>(k: RK, v: RV) -> Self
     where
         RK: Shared<K>,
         RV: Shared<V>,
     {
-        Map::two(map![], k.shared(), v.shared(), map![])
+        OrdMap::two(ordmap![], k.shared(), v.shared(), ordmap![])
     }
 
     /// Test whether a map is empty.
@@ -119,13 +119,13 @@ impl<K, V> Map<K, V> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::map::Map;
+    /// # use im::ordmap::OrdMap;
     /// # fn main() {
     /// assert!(
-    ///   !map!{1 => 2}.is_empty()
+    ///   !ordmap!{1 => 2}.is_empty()
     /// );
     /// assert!(
-    ///   Map::<i32, i32>::new().is_empty()
+    ///   OrdMap::<i32, i32>::new().is_empty()
     /// );
     /// # }
     /// ```
@@ -159,9 +159,9 @@ impl<K, V> Map<K, V> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::map::Map;
+    /// # use im::ordmap::OrdMap;
     /// # fn main() {
-    /// assert_eq!(3, map!{
+    /// assert_eq!(3, ordmap!{
     ///   1 => 11,
     ///   2 => 22,
     ///   3 => 33
@@ -185,10 +185,10 @@ impl<K, V> Map<K, V> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::map::Map;
+    /// # use im::ordmap::OrdMap;
     /// # use std::sync::Arc;
     /// # fn main() {
-    /// assert_eq!(Some((Arc::new(3), Arc::new(33))), map!{
+    /// assert_eq!(Some((Arc::new(3), Arc::new(33))), ordmap!{
     ///   1 => 11,
     ///   2 => 22,
     ///   3 => 33
@@ -216,10 +216,10 @@ impl<K, V> Map<K, V> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::map::Map;
+    /// # use im::ordmap::OrdMap;
     /// # use std::sync::Arc;
     /// # fn main() {
-    /// assert_eq!(Some((Arc::new(1), Arc::new(11))), map!{
+    /// assert_eq!(Some((Arc::new(1), Arc::new(11))), ordmap!{
     ///   1 => 11,
     ///   2 => 22,
     ///   3 => 33
@@ -238,8 +238,8 @@ impl<K, V> Map<K, V> {
         }
     }
 
-    fn two(left: Map<K, V>, k: Arc<K>, v: Arc<V>, right: Map<K, V>) -> Map<K, V> {
-        Map(Arc::new(Two(
+    fn two(left: OrdMap<K, V>, k: Arc<K>, v: Arc<V>, right: OrdMap<K, V>) -> Self {
+        OrdMap(Arc::new(Two(
             left.len() + right.len() + 1,
             left,
             k,
@@ -249,15 +249,15 @@ impl<K, V> Map<K, V> {
     }
 
     fn three(
-        left: Map<K, V>,
+        left: OrdMap<K, V>,
         k1: Arc<K>,
         v1: Arc<V>,
-        mid: Map<K, V>,
+        mid: OrdMap<K, V>,
         k2: Arc<K>,
         v2: Arc<V>,
-        right: Map<K, V>,
-    ) -> Map<K, V> {
-        Map(Arc::new(Three(
+        right: OrdMap<K, V>,
+    ) -> OrdMap<K, V> {
+        OrdMap(Arc::new(Three(
             left.len() + mid.len() + right.len() + 2,
             left,
             k1,
@@ -270,7 +270,7 @@ impl<K, V> Map<K, V> {
     }
 }
 
-impl<K: Ord, V> Map<K, V> {
+impl<K: Ord, V> OrdMap<K, V> {
     /// Make a `PartialLens` from the map to the value described by the
     /// given `key`.
     ///
@@ -278,43 +278,43 @@ impl<K: Ord, V> Map<K, V> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::map::Map;
+    /// # use im::ordmap::OrdMap;
     /// # use std::sync::Arc;
     /// # use im::lens::{self, PartialLens};
     /// # fn main() {
     /// let map =
-    ///   map!{
+    ///   ordmap!{
     ///     "foo" => "bar"
     /// };
-    /// let lens = Map::lens("foo");
+    /// let lens = OrdMap::lens("foo");
     /// assert_eq!(lens.try_get(&map), Some(Arc::new("bar")));
     /// # }
     /// ```
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::map::Map;
+    /// # use im::ordmap::OrdMap;
     /// # use im::lens::{self, PartialLens};
     /// # use std::sync::Arc;
     /// # fn main() {
     /// // Make a lens into a map of maps
     /// let map =
-    ///   map!{
-    ///     "foo" => map!{
+    ///   ordmap!{
+    ///     "foo" => ordmap!{
     ///       "bar" => "gazonk"
     ///     }
     /// };
-    /// let lens1 = Map::lens("foo");
-    /// let lens2 = Map::lens("bar");
+    /// let lens1 = OrdMap::lens("foo");
+    /// let lens2 = OrdMap::lens("bar");
     /// let lens = lens::compose(&lens1, &lens2);
     /// assert_eq!(lens.try_get(&map), Some(Arc::new("gazonk")));
     /// # }
     /// ```
-    pub fn lens<RK>(key: RK) -> MapLens<K, V>
+    pub fn lens<RK>(key: RK) -> OrdMapLens<K, V>
     where
         RK: Shared<K>,
     {
-        MapLens {
+        OrdMapLens {
             key: key.shared(),
             value: PhantomData,
         }
@@ -328,10 +328,10 @@ impl<K: Ord, V> Map<K, V> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::map::Map;
+    /// # use im::ordmap::OrdMap;
     /// # use std::sync::Arc;
     /// # fn main() {
-    /// let map = map!{123 => "lol"};
+    /// let map = ordmap!{123 => "lol"};
     /// assert_eq!(
     ///   map.get(&123),
     ///   Some(Arc::new("lol"))
@@ -351,10 +351,10 @@ impl<K: Ord, V> Map<K, V> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::map::Map;
+    /// # use im::ordmap::OrdMap;
     /// # use std::sync::Arc;
     /// # fn main() {
-    /// let map = map!{123 => "lol"};
+    /// let map = ordmap!{123 => "lol"};
     /// assert_eq!(
     ///   map.get_or(&123, "hi"),
     ///   Arc::new("lol")
@@ -380,10 +380,10 @@ impl<K: Ord, V> Map<K, V> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::map::Map;
+    /// # use im::ordmap::OrdMap;
     /// # use std::sync::Arc;
     /// # fn main() {
-    /// let map = map!{123 => "lol"};
+    /// let map = ordmap!{123 => "lol"};
     /// assert!(
     ///   map.contains_key(&123)
     /// );
@@ -407,13 +407,13 @@ impl<K: Ord, V> Map<K, V> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::map::Map;
+    /// # use im::ordmap::OrdMap;
     /// # use std::sync::Arc;
     /// # fn main() {
-    /// let map = map!{};
+    /// let map = ordmap!{};
     /// assert_eq!(
     ///   map.insert(123, "123"),
-    ///   map!{123 => "123"}
+    ///   ordmap!{123 => "123"}
     /// );
     /// # }
     /// ```
@@ -632,7 +632,7 @@ impl<K: Ord, V> Map<K, V> {
     where
         I: IntoIterator<Item = Self>,
     {
-        i.into_iter().fold(map![], |a, b| a.union(&b))
+        i.into_iter().fold(ordmap![], |a, b| a.union(&b))
     }
 
     /// Construct the union of a sequence of maps, using a function to decide what to do
@@ -642,7 +642,7 @@ impl<K: Ord, V> Map<K, V> {
         I: IntoIterator<Item = Self>,
         F: Fn(Arc<V>, Arc<V>) -> Arc<V>,
     {
-        i.into_iter().fold(map![], |a, b| a.union_with(&b, &f))
+        i.into_iter().fold(ordmap![], |a, b| a.union_with(&b, &f))
     }
 
     /// Construct the union of a sequence of maps, using a function to decide what to do
@@ -653,13 +653,13 @@ impl<K: Ord, V> Map<K, V> {
         I: IntoIterator<Item = Self>,
         F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
     {
-        i.into_iter().fold(map![], |a, b| a.union_with_key(&b, &f))
+        i.into_iter().fold(ordmap![], |a, b| a.union_with_key(&b, &f))
     }
 
     /// Construct the difference between two maps by discarding keys which occur in both maps.
     pub fn difference<B, RM>(&self, other: RM) -> Self
     where
-        RM: Borrow<Map<K, B>>,
+        RM: Borrow<OrdMap<K, B>>,
     {
         self.difference_with_key(other, |_, _, _| None)
     }
@@ -669,7 +669,7 @@ impl<K: Ord, V> Map<K, V> {
     pub fn difference_with<B, RM, F>(&self, other: RM, f: F) -> Self
     where
         F: Fn(Arc<V>, Arc<B>) -> Option<Arc<V>>,
-        RM: Borrow<Map<K, B>>,
+        RM: Borrow<OrdMap<K, B>>,
     {
         self.difference_with_key(other, |_, a, b| f(a, b))
     }
@@ -680,7 +680,7 @@ impl<K: Ord, V> Map<K, V> {
     pub fn difference_with_key<B, RM, F>(&self, other: RM, f: F) -> Self
     where
         F: Fn(Arc<K>, Arc<V>, Arc<B>) -> Option<Arc<V>>,
-        RM: Borrow<Map<K, B>>,
+        RM: Borrow<OrdMap<K, B>>,
     {
         other
             .borrow()
@@ -697,17 +697,17 @@ impl<K: Ord, V> Map<K, V> {
     /// Construct the intersection of two maps, keeping the values from the current map.
     pub fn intersection<B, RM>(&self, other: RM) -> Self
     where
-        RM: Borrow<Map<K, B>>,
+        RM: Borrow<OrdMap<K, B>>,
     {
         self.intersection_with_key(other, |_, v, _| v)
     }
 
     /// Construct the intersection of two maps, calling a function with both values for each
     /// key and using the result as the value for the key.
-    pub fn intersection_with<B, C, RM, F>(&self, other: RM, f: F) -> Map<K, C>
+    pub fn intersection_with<B, C, RM, F>(&self, other: RM, f: F) -> OrdMap<K, C>
     where
         F: Fn(Arc<V>, Arc<B>) -> Arc<C>,
-        RM: Borrow<Map<K, B>>,
+        RM: Borrow<OrdMap<K, B>>,
     {
         self.intersection_with_key(other, |_, v1, v2| f(v1, v2))
     }
@@ -715,12 +715,12 @@ impl<K: Ord, V> Map<K, V> {
     /// Construct the intersection of two maps, calling a function
     /// with the key and both values for each
     /// key and using the result as the value for the key.
-    pub fn intersection_with_key<B, C, RM, F>(&self, other: RM, f: F) -> Map<K, C>
+    pub fn intersection_with_key<B, C, RM, F>(&self, other: RM, f: F) -> OrdMap<K, C>
     where
         F: Fn(Arc<K>, Arc<V>, Arc<B>) -> Arc<C>,
-        RM: Borrow<Map<K, B>>,
+        RM: Borrow<OrdMap<K, B>>,
     {
-        other.borrow().iter().fold(map![], |m, (k, v2)| {
+        other.borrow().iter().fold(ordmap![], |m, (k, v2)| {
             self.get(&*k)
                 .map(|v1| m.insert(k.clone(), f(k, v1, v2)))
                 .unwrap_or(m)
@@ -741,15 +741,15 @@ impl<K: Ord, V> Map<K, V> {
         combine: FC,
         only1: F1,
         only2: F2,
-    ) -> Map<K, C>
+    ) -> OrdMap<K, C>
     where
-        RM: Borrow<Map<K, B>>,
+        RM: Borrow<OrdMap<K, B>>,
         FC: Fn(Arc<K>, Arc<V>, Arc<B>) -> Option<Arc<C>>,
-        F1: Fn(Self) -> Map<K, C>,
-        F2: Fn(Map<K, B>) -> Map<K, C>,
+        F1: Fn(Self) -> OrdMap<K, C>,
+        F2: Fn(OrdMap<K, B>) -> OrdMap<K, C>,
     {
         let (left, right, both) = other.borrow().iter().fold(
-            (self.clone(), other.borrow().clone(), map![]),
+            (self.clone(), other.borrow().clone(), ordmap![]),
             |(l, r, m), (k, vr)| match l.pop(&*k) {
                 None => (l, r, m),
                 Some((vl, ml)) => (
@@ -779,7 +779,7 @@ impl<K: Ord, V> Map<K, V> {
     /// Returns both the two maps and the value of `split`.
     pub fn split_lookup(&self, split: &K) -> (Self, Option<Arc<V>>, Self) {
         self.iter().fold(
-            (map![], None, map![]),
+            (ordmap![], None, ordmap![]),
             |(l, m, r), (k, v)| match k.as_ref().cmp(split) {
                 Ordering::Less => (l.insert(k, v), m, r),
                 Ordering::Equal => (l, Some(v), r),
@@ -795,7 +795,7 @@ impl<K: Ord, V> Map<K, V> {
     pub fn is_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
     where
         F: Fn(Arc<V>, Arc<B>) -> bool,
-        RM: Borrow<Map<K, B>>,
+        RM: Borrow<OrdMap<K, B>>,
     {
         self.iter().all(|(k, v)| {
             other
@@ -814,7 +814,7 @@ impl<K: Ord, V> Map<K, V> {
     pub fn is_proper_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
     where
         F: Fn(Arc<V>, Arc<B>) -> bool,
-        RM: Borrow<Map<K, B>>,
+        RM: Borrow<OrdMap<K, B>>,
     {
         self.len() != other.borrow().len() && self.is_submap_by(other, cmp)
     }
@@ -870,7 +870,7 @@ impl<K: Ord, V> Map<K, V> {
     }
 }
 
-impl<K: Ord, V: PartialEq> Map<K, V> {
+impl<K: Ord, V: PartialEq> OrdMap<K, V> {
     /// Test whether a map is a submap of another map, meaning that
     /// all keys in our map must also be in the other map, with the same values.
     pub fn is_submap<RM>(&self, other: RM) -> bool
@@ -893,49 +893,49 @@ impl<K: Ord, V: PartialEq> Map<K, V> {
 
 // Core traits
 
-impl<K, V> Clone for Map<K, V> {
+impl<K, V> Clone for OrdMap<K, V> {
     fn clone(&self) -> Self {
-        Map(self.0.clone())
+        OrdMap(self.0.clone())
     }
 }
 
 #[cfg(not(has_specialisation))]
-impl<K: PartialEq, V: PartialEq> PartialEq for Map<K, V> {
+impl<K: PartialEq, V: PartialEq> PartialEq for OrdMap<K, V> {
     fn eq(&self, other: &Self) -> bool {
         self.len() == other.len() && self.iter().eq(other.iter())
     }
 }
 
 #[cfg(has_specialisation)]
-impl<K: PartialEq, V: PartialEq> PartialEq for Map<K, V> {
+impl<K: PartialEq, V: PartialEq> PartialEq for OrdMap<K, V> {
     default fn eq(&self, other: &Self) -> bool {
         self.len() == other.len() && self.iter().eq(other.iter())
     }
 }
 
 #[cfg(has_specialisation)]
-impl<K: Eq, V: Eq> PartialEq for Map<K, V> {
+impl<K: Eq, V: Eq> PartialEq for OrdMap<K, V> {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
             || (self.len() == other.len() && self.iter().eq(other.iter()))
     }
 }
 
-impl<K: Eq, V: Eq> Eq for Map<K, V> {}
+impl<K: Eq, V: Eq> Eq for OrdMap<K, V> {}
 
-impl<K: PartialOrd, V: PartialOrd> PartialOrd for Map<K, V> {
+impl<K: PartialOrd, V: PartialOrd> PartialOrd for OrdMap<K, V> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.iter().partial_cmp(other.iter())
     }
 }
 
-impl<K: Ord, V: Ord> Ord for Map<K, V> {
+impl<K: Ord, V: Ord> Ord for OrdMap<K, V> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.iter().cmp(other.iter())
     }
 }
 
-impl<K: Ord + Hash, V: Hash> Hash for Map<K, V> {
+impl<K: Ord + Hash, V: Hash> Hash for OrdMap<K, V> {
     fn hash<H>(&self, state: &mut H)
     where
         H: Hasher,
@@ -946,21 +946,21 @@ impl<K: Ord + Hash, V: Hash> Hash for Map<K, V> {
     }
 }
 
-impl<K, V> Default for Map<K, V> {
+impl<K, V> Default for OrdMap<K, V> {
     fn default() -> Self {
-        map![]
+        ordmap![]
     }
 }
 
-impl<'a, K: Ord, V> Add for &'a Map<K, V> {
-    type Output = Map<K, V>;
+impl<'a, K: Ord, V> Add for &'a OrdMap<K, V> {
+    type Output = OrdMap<K, V>;
 
     fn add(self, other: Self) -> Self::Output {
         self.union(other)
     }
 }
 
-impl<K: Debug, V: Debug> Debug for Map<K, V> {
+impl<K: Debug, V: Debug> Debug for OrdMap<K, V> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "{{ ")?;
         let mut it = self.iter().peekable();
@@ -983,7 +983,7 @@ impl<K: Debug, V: Debug> Debug for Map<K, V> {
 // Iterators
 
 enum IterItem<K, V> {
-    Consider(Map<K, V>),
+    Consider(OrdMap<K, V>),
     Yield(Arc<K>, Arc<V>),
 }
 
@@ -999,7 +999,7 @@ pub struct Iter<K, V> {
 }
 
 impl<K, V> Iter<K, V> {
-    fn new(m: &Map<K, V>) -> Iter<K, V> {
+    fn new(m: &OrdMap<K, V>) -> Iter<K, V> {
         Iter {
             stack: vec![IterItem::Consider(m.clone())],
             remaining: m.len(),
@@ -1083,7 +1083,7 @@ impl<K, V> Iterator for Values<K, V> {
     }
 }
 
-impl<K: Ord, V, RK, RV> FromIterator<(RK, RV)> for Map<K, V>
+impl<K: Ord, V, RK, RV> FromIterator<(RK, RV)> for OrdMap<K, V>
 where
     RK: Shared<K>,
     RV: Shared<V>,
@@ -1092,11 +1092,11 @@ where
     where
         T: IntoIterator<Item = (RK, RV)>,
     {
-        i.into_iter().fold(map![], |m, (k, v)| m.insert(k, v))
+        i.into_iter().fold(ordmap![], |m, (k, v)| m.insert(k, v))
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a Map<K, V> {
+impl<'a, K, V> IntoIterator for &'a OrdMap<K, V> {
     type Item = (Arc<K>, Arc<V>);
     type IntoIter = Iter<K, V>;
 
@@ -1105,7 +1105,7 @@ impl<'a, K, V> IntoIterator for &'a Map<K, V> {
     }
 }
 
-impl<K, V> IntoIterator for Map<K, V> {
+impl<K, V> IntoIterator for OrdMap<K, V> {
     type Item = (Arc<K>, Arc<V>);
     type IntoIter = Iter<K, V>;
 
@@ -1116,25 +1116,25 @@ impl<K, V> IntoIterator for Map<K, V> {
 
 // Conversions
 
-pub struct MapLens<K, V> {
+pub struct OrdMapLens<K, V> {
     key: Arc<K>,
     value: PhantomData<V>,
 }
 
-impl<K, V> Clone for MapLens<K, V> {
+impl<K, V> Clone for OrdMapLens<K, V> {
     fn clone(&self) -> Self {
-        MapLens {
+        OrdMapLens {
             key: self.key.clone(),
             value: PhantomData,
         }
     }
 }
 
-impl<K, V> PartialLens for MapLens<K, V>
+impl<K, V> PartialLens for OrdMapLens<K, V>
 where
     K: Ord,
 {
-    type From = Map<K, V>;
+    type From = OrdMap<K, V>;
     type To = V;
 
     fn try_get(&self, s: &Self::From) -> Option<Arc<Self::To>> {
@@ -1152,90 +1152,90 @@ where
     }
 }
 
-impl<K, V> AsRef<Map<K, V>> for Map<K, V> {
+impl<K, V> AsRef<OrdMap<K, V>> for OrdMap<K, V> {
     fn as_ref(&self) -> &Self {
         self
     }
 }
 
-impl<'a, K: Ord, V: Clone, RK, RV> From<&'a [(RK, RV)]> for Map<K, V>
+impl<'a, K: Ord, V: Clone, RK, RV> From<&'a [(RK, RV)]> for OrdMap<K, V>
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
 {
-    fn from(m: &'a [(RK, RV)]) -> Map<K, V> {
+    fn from(m: &'a [(RK, RV)]) -> OrdMap<K, V> {
         m.into_iter()
             .map(|&(ref k, ref v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
-impl<K: Ord, V, RK, RV> From<Vec<(RK, RV)>> for Map<K, V>
+impl<K: Ord, V, RK, RV> From<Vec<(RK, RV)>> for OrdMap<K, V>
 where
     RK: Shared<K>,
     RV: Shared<V>,
 {
-    fn from(m: Vec<(RK, RV)>) -> Map<K, V> {
+    fn from(m: Vec<(RK, RV)>) -> OrdMap<K, V> {
         m.into_iter()
             .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
-impl<'a, K: Ord, V, RK, RV> From<&'a Vec<(RK, RV)>> for Map<K, V>
+impl<'a, K: Ord, V, RK, RV> From<&'a Vec<(RK, RV)>> for OrdMap<K, V>
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
 {
-    fn from(m: &'a Vec<(RK, RV)>) -> Map<K, V> {
+    fn from(m: &'a Vec<(RK, RV)>) -> OrdMap<K, V> {
         m.into_iter()
             .map(|&(ref k, ref v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
-impl<K: Ord, V, RK: Eq + Hash, RV> From<HashMap<RK, RV>> for Map<K, V>
+impl<K: Ord, V, RK: Eq + Hash, RV> From<HashMap<RK, RV>> for OrdMap<K, V>
 where
     RK: Shared<K>,
     RV: Shared<V>,
 {
-    fn from(m: HashMap<RK, RV>) -> Map<K, V> {
+    fn from(m: HashMap<RK, RV>) -> OrdMap<K, V> {
         m.into_iter()
             .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
-impl<'a, K: Ord, V, RK: Eq + Hash, RV> From<&'a HashMap<RK, RV>> for Map<K, V>
+impl<'a, K: Ord, V, RK: Eq + Hash, RV> From<&'a HashMap<RK, RV>> for OrdMap<K, V>
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
 {
-    fn from(m: &'a HashMap<RK, RV>) -> Map<K, V> {
+    fn from(m: &'a HashMap<RK, RV>) -> OrdMap<K, V> {
         m.into_iter()
             .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
-impl<K: Ord, V, RK, RV> From<BTreeMap<RK, RV>> for Map<K, V>
+impl<K: Ord, V, RK, RV> From<BTreeMap<RK, RV>> for OrdMap<K, V>
 where
     RK: Shared<K>,
     RV: Shared<V>,
 {
-    fn from(m: BTreeMap<RK, RV>) -> Map<K, V> {
+    fn from(m: BTreeMap<RK, RV>) -> OrdMap<K, V> {
         m.into_iter()
             .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
-impl<'a, K: Ord, V, RK, RV> From<&'a BTreeMap<RK, RV>> for Map<K, V>
+impl<'a, K: Ord, V, RK, RV> From<&'a BTreeMap<RK, RV>> for OrdMap<K, V>
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
 {
-    fn from(m: &'a BTreeMap<RK, RV>) -> Map<K, V> {
+    fn from(m: &'a BTreeMap<RK, RV>) -> OrdMap<K, V> {
         m.into_iter()
             .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
@@ -1248,9 +1248,9 @@ where
 use quickcheck::{Arbitrary, Gen};
 
 #[cfg(any(test, feature = "quickcheck"))]
-impl<K: Ord + Arbitrary + Sync, V: Arbitrary + Sync> Arbitrary for Map<K, V> {
+impl<K: Ord + Arbitrary + Sync, V: Arbitrary + Sync> Arbitrary for OrdMap<K, V> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
-        Map::from_iter(Vec::<(K, V)>::arbitrary(g))
+        OrdMap::from_iter(Vec::<(K, V)>::arbitrary(g))
     }
 }
 
@@ -1279,13 +1279,13 @@ pub mod proptest {
         key: K,
         value: V,
         size: Range<usize>,
-    ) -> BoxedStrategy<Map<<K::Value as ValueTree>::Value, <V::Value as ValueTree>::Value>>
+    ) -> BoxedStrategy<OrdMap<<K::Value as ValueTree>::Value, <V::Value as ValueTree>::Value>>
     where
         <K::Value as ValueTree>::Value: Ord,
     {
         ::proptest::collection::vec((key, value), size.clone())
-            .prop_map(|v| Map::from(v))
-            .prop_filter("Map minimum size".to_owned(), move |m| {
+            .prop_map(|v| OrdMap::from(v))
+            .prop_filter("OrdMap minimum size".to_owned(), move |m| {
                 m.len() >= size.start
             })
             .boxed()
@@ -1303,7 +1303,7 @@ mod test {
 
     #[test]
     fn iterates_in_order() {
-        let map = map!{
+        let map = ordmap!{
             2 => 22,
             1 => 11,
             3 => 33,
@@ -1329,7 +1329,7 @@ mod test {
 
     #[test]
     fn into_iter() {
-        let map = map!{
+        let map = ordmap!{
             2 => 22,
             1 => 11,
             3 => 33,
@@ -1350,7 +1350,7 @@ mod test {
 
     #[test]
     fn deletes_correctly() {
-        let map = map!{
+        let map = ordmap!{
             2 => 22,
             1 => 11,
             3 => 33,
@@ -1379,7 +1379,7 @@ mod test {
     #[test]
     fn debug_output() {
         assert_eq!(
-            format!("{:?}", map!{ 3 => 4, 5 => 6, 1 => 2 }),
+            format!("{:?}", ordmap!{ 3 => 4, 5 => 6, 1 => 2 }),
             "{ 1 => 2, 3 => 4, 5 => 6 }"
         );
     }
@@ -1392,8 +1392,8 @@ mod test {
         let p1 = ConsList::<String>::new();
         let p2 = ConsList::<String>::new();
         assert_eq!(p1, p2);
-        let c1 = Map::singleton(v1, p1);
-        let c2 = Map::singleton(v2, p2);
+        let c1 = OrdMap::singleton(v1, p1);
+        let c2 = OrdMap::singleton(v2, p2);
         assert_eq!(c1, c2);
     }
 
@@ -1402,18 +1402,18 @@ mod test {
             let mut vec = input;
             vec.sort();
             vec.dedup();
-            let map = Map::from_iter(vec.iter().map(|i| (i, i)));
+            let map = OrdMap::from_iter(vec.iter().map(|i| (i, i)));
             vec.len() == map.len()
         }
 
         fn order(vec: Vec<(i32, i32)>) -> bool {
-            let map = Map::from_iter(vec.into_iter());
+            let map = OrdMap::from_iter(vec.into_iter());
             is_sorted(map.keys().map(|k| *k))
         }
 
         fn equality(vec: Vec<(i32, i32)>) -> bool {
-            let left = Map::from_iter(vec.clone());
-            let right = Map::from_iter(vec);
+            let left = OrdMap::from_iter(vec.clone());
+            let right = OrdMap::from_iter(vec);
             left == right
         }
 
@@ -1422,7 +1422,7 @@ mod test {
                 return true
             }
             let index = vec[index_rand % vec.len()].0;
-            let map1 = Map::from_iter(vec.clone());
+            let map1 = OrdMap::from_iter(vec.clone());
             let map2 = map1.insert(index, new_val);
             map2.iter().all(|(k, v)| if *k == index {
                 *v == new_val
@@ -1439,7 +1439,7 @@ mod test {
                 return true
             }
             let index = vec[index_rand % vec.len()].0;
-            let map1 = Map::from_iter(vec.clone());
+            let map1 = OrdMap::from_iter(vec.clone());
             let map2 = map1.remove(&index);
             map2.keys().all(|k| *k != index) && map1.len() == map2.len() + 1
         }
@@ -1449,7 +1449,7 @@ mod test {
                 return true
             }
             let index = vec[index_rand % vec.len()].0;
-            let map1 = Map::from_iter(vec.clone());
+            let map1 = OrdMap::from_iter(vec.clone());
             let (val, map2) = map1.pop(&index).unwrap();
             let map3 = map2.insert(index, val);
             map2.keys().all(|k| *k != index) && map1.len() == map2.len() + 1 && map1 == map3
@@ -1460,7 +1460,7 @@ mod test {
         ) -> bool {
             let input: Vec<(usize, usize)> =
                 input_unbounded.into_iter().map(|(k, v)| (k % 64, v % 64)).collect();
-            let mut map = Map::from(input.clone());
+            let mut map = OrdMap::from(input.clone());
             let mut tree: BTreeMap<usize, usize> = input.into_iter().collect();
             for (ins, key, val) in ops {
                 if ins {

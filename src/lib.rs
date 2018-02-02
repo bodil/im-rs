@@ -72,11 +72,11 @@ pub mod hash;
 #[macro_use]
 pub mod conslist;
 #[macro_use]
-pub mod map;
+pub mod ordmap;
 #[macro_use]
 pub mod hashmap;
 #[macro_use]
-pub mod set;
+pub mod ordset;
 #[macro_use]
 pub mod hashset;
 #[macro_use]
@@ -86,16 +86,20 @@ pub mod iter;
 pub mod lens;
 pub mod shared;
 
-pub use conslist::ConsList;
-pub use map::Map;
-pub use hashmap::HashMap;
-pub use set::Set;
-pub use queue::Queue;
-pub use list::List;
-pub use iter::unfold;
-
 #[cfg(test)]
 pub mod test;
 
 #[cfg(any(test, feature = "serde"))]
 pub mod ser;
+
+pub use ordmap::OrdMap;
+pub use hashmap::HashMap;
+pub use ordset::OrdSet;
+pub use hashset::HashSet;
+pub use queue::Queue;
+pub use list::List;
+pub use conslist::ConsList;
+pub use iter::unfold;
+
+pub type Set<A> = HashSet<A>;
+pub type Map<K, V> = HashMap<K, V>;

@@ -160,9 +160,9 @@ where
     /// # use im::hashset::HashSet;
     /// # use std::sync::Arc;
     /// # fn main() {
-    /// let set = hashset![456];
+    /// let set = hashset![123];
     /// assert_eq!(
-    ///   set.insert(123),
+    ///   set.insert(456),
     ///   hashset![123, 456]
     /// );
     /// # }

@@ -13,7 +13,7 @@ use std::collections::{BTreeSet, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Mul};
 use std::borrow::Borrow;
-use map::{self, Map};
+use ordmap::{self, OrdMap};
 use shared::Shared;
 
 /// Construct a set from a sequence of values.
@@ -22,20 +22,20 @@ use shared::Shared;
 ///
 /// ```
 /// # #[macro_use] extern crate im;
-/// # use im::set::Set;
+/// # use im::ordset::OrdSet;
 /// # fn main() {
 /// assert_eq!(
-///   set![1, 2, 3],
-///   Set::from(vec![1, 2, 3])
+///   ordset![1, 2, 3],
+///   OrdSet::from(vec![1, 2, 3])
 /// );
 /// # }
 /// ```
 #[macro_export]
-macro_rules! set {
-    () => { $crate::set::Set::new() };
+macro_rules! ordset {
+    () => { $crate::ordset::OrdSet::new() };
 
     ( $($x:expr),* ) => {{
-        let mut l = $crate::set::Set::new();
+        let mut l = $crate::ordset::OrdSet::new();
         $(
             l = l.insert($x);
         )*
@@ -49,12 +49,12 @@ macro_rules! set {
 ///
 /// This is implemented as a `Map` with no values, so it shares
 /// the exact performance characteristics of `Map`.
-pub struct Set<A>(Map<A, ()>);
+pub struct OrdSet<A>(OrdMap<A, ()>);
 
-impl<A> Set<A> {
+impl<A> OrdSet<A> {
     /// Construct an empty set.
     pub fn new() -> Self {
-        Set(Map::new())
+        OrdSet(OrdMap::new())
     }
 
     /// Construct a set with a single value.
@@ -63,10 +63,10 @@ impl<A> Set<A> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::set::Set;
+    /// # use im::ordset::OrdSet;
     /// # use std::sync::Arc;
     /// # fn main() {
-    /// let set = Set::singleton(123);
+    /// let set = OrdSet::singleton(123);
     /// assert!(set.contains(&123));
     /// # }
     /// ```
@@ -74,7 +74,7 @@ impl<A> Set<A> {
     where
         R: Shared<A>,
     {
-        Set(Map::<A, ()>::singleton(a, ()))
+        OrdSet(OrdMap::<A, ()>::singleton(a, ()))
     }
 
     pub fn iter(&self) -> Iter<A> {
@@ -89,13 +89,13 @@ impl<A> Set<A> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::set::Set;
+    /// # use im::ordset::OrdSet;
     /// # fn main() {
     /// assert!(
-    ///   !set![1, 2, 3].is_empty()
+    ///   !ordset![1, 2, 3].is_empty()
     /// );
     /// assert!(
-    ///   Set::<i32>::new().is_empty()
+    ///   OrdSet::<i32>::new().is_empty()
     /// );
     /// # }
     /// ```
@@ -111,9 +111,9 @@ impl<A> Set<A> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::set::Set;
+    /// # use im::ordset::OrdSet;
     /// # fn main() {
-    /// assert_eq!(3, set![1, 2, 3].len());
+    /// assert_eq!(3, ordset![1, 2, 3].len());
     /// # }
     /// ```
     pub fn len(&self) -> usize {
@@ -135,7 +135,7 @@ impl<A> Set<A> {
     }
 }
 
-impl<A: Ord> Set<A> {
+impl<A: Ord> OrdSet<A> {
     /// Insert a value into a set.
     ///
     /// Time: O(log n)
@@ -144,13 +144,13 @@ impl<A: Ord> Set<A> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::set::Set;
+    /// # use im::ordset::OrdSet;
     /// # use std::sync::Arc;
     /// # fn main() {
-    /// let set = set![456];
+    /// let set = ordset![456];
     /// assert_eq!(
     ///   set.insert(123),
-    ///   set![123, 456]
+    ///   ordset![123, 456]
     /// );
     /// # }
     /// ```
@@ -158,7 +158,7 @@ impl<A: Ord> Set<A> {
     where
         R: Shared<A>,
     {
-        Set(self.0.insert(a, ()))
+        OrdSet(self.0.insert(a, ()))
     }
 
     /// Test if a value is part of a set.
@@ -170,12 +170,12 @@ impl<A: Ord> Set<A> {
 
     /// Remove a value from a set.
     pub fn remove(&self, a: &A) -> Self {
-        Set(self.0.remove(a))
+        OrdSet(self.0.remove(a))
     }
 
     /// Construct the union of two sets.
     pub fn union(&self, other: &Self) -> Self {
-        Set(self.0.union(&other.0))
+        OrdSet(self.0.union(&other.0))
     }
 
     /// Construct the union of multiple sets.
@@ -183,7 +183,7 @@ impl<A: Ord> Set<A> {
     where
         I: IntoIterator<Item = Self>,
     {
-        i.into_iter().fold(set![], |a, b| a.union(&b))
+        i.into_iter().fold(ordset![], |a, b| a.union(&b))
     }
 
     /// Construct the difference between two sets.
@@ -191,7 +191,7 @@ impl<A: Ord> Set<A> {
     where
         RS: Borrow<Self>,
     {
-        Set(self.0.difference(&other.borrow().0))
+        OrdSet(self.0.difference(&other.borrow().0))
     }
 
     /// Construct the intersection of two sets.
@@ -199,7 +199,7 @@ impl<A: Ord> Set<A> {
     where
         RS: Borrow<Self>,
     {
-        Set(self.0.intersection(&other.borrow().0))
+        OrdSet(self.0.intersection(&other.borrow().0))
     }
 
     /// Split a set into two, with the left hand set containing values which are smaller
@@ -208,7 +208,7 @@ impl<A: Ord> Set<A> {
     /// The `split` value itself is discarded.
     pub fn split(&self, split: &A) -> (Self, Self) {
         let (l, r) = self.0.split(split);
-        (Set(l), Set(r))
+        (OrdSet(l), OrdSet(r))
     }
 
     /// Split a set into two, with the left hand set containing values which are smaller
@@ -218,7 +218,7 @@ impl<A: Ord> Set<A> {
     /// existed in the original set, and false otherwise.
     pub fn split_member(&self, split: &A) -> (Self, bool, Self) {
         let (l, m, r) = self.0.split_lookup(split);
-        (Set(l), m.is_some(), Set(r))
+        (OrdSet(l), m.is_some(), OrdSet(r))
     }
 
     /// Test whether a set is a subset of another set, meaning that
@@ -242,24 +242,24 @@ impl<A: Ord> Set<A> {
 
     /// Construct a set with only the `n` smallest values from a given set.
     pub fn take(&self, n: usize) -> Self {
-        Set(self.0.take(n))
+        OrdSet(self.0.take(n))
     }
 
     /// Construct a set with the `n` smallest values removed from a given set.
     pub fn drop(&self, n: usize) -> Self {
-        Set(self.0.drop(n))
+        OrdSet(self.0.drop(n))
     }
 
     /// Remove the smallest value from a set, and return that value as well as the updated set.
     pub fn pop_min(&self) -> (Option<Arc<A>>, Self) {
         let (pair, set) = self.0.pop_min_with_key();
-        (pair.map(|(a, _)| a), Set(set))
+        (pair.map(|(a, _)| a), OrdSet(set))
     }
 
     /// Remove the largest value from a set, and return that value as well as the updated set.
     pub fn pop_max(&self) -> (Option<Arc<A>>, Self) {
         let (pair, set) = self.0.pop_max_with_key();
-        (pair.map(|(a, _)| a), Set(set))
+        (pair.map(|(a, _)| a), OrdSet(set))
     }
 
     /// Discard the smallest value from a set, returning the updated set.
@@ -275,33 +275,33 @@ impl<A: Ord> Set<A> {
 
 // Core traits
 
-impl<A> Clone for Set<A> {
+impl<A> Clone for OrdSet<A> {
     fn clone(&self) -> Self {
-        Set(self.0.clone())
+        OrdSet(self.0.clone())
     }
 }
 
-impl<A: PartialEq> PartialEq for Set<A> {
+impl<A: PartialEq> PartialEq for OrdSet<A> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl<A: Eq> Eq for Set<A> {}
+impl<A: Eq> Eq for OrdSet<A> {}
 
-impl<A: PartialOrd> PartialOrd for Set<A> {
+impl<A: PartialOrd> PartialOrd for OrdSet<A> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.0.partial_cmp(&other.0)
     }
 }
 
-impl<A: Ord> Ord for Set<A> {
+impl<A: Ord> Ord for OrdSet<A> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.0.cmp(&other.0)
     }
 }
 
-impl<A: Hash> Hash for Set<A> {
+impl<A: Hash> Hash for OrdSet<A> {
     fn hash<H>(&self, state: &mut H)
     where
         H: Hasher,
@@ -312,29 +312,29 @@ impl<A: Hash> Hash for Set<A> {
     }
 }
 
-impl<A> Default for Set<A> {
+impl<A> Default for OrdSet<A> {
     fn default() -> Self {
-        set![]
+        ordset![]
     }
 }
 
-impl<'a, A: Ord> Add for &'a Set<A> {
-    type Output = Set<A>;
+impl<'a, A: Ord> Add for &'a OrdSet<A> {
+    type Output = OrdSet<A>;
 
     fn add(self, other: Self) -> Self::Output {
         self.union(other)
     }
 }
 
-impl<'a, A: Ord> Mul for &'a Set<A> {
-    type Output = Set<A>;
+impl<'a, A: Ord> Mul for &'a OrdSet<A> {
+    type Output = OrdSet<A>;
 
     fn mul(self, other: Self) -> Self::Output {
         self.intersection(other)
     }
 }
 
-impl<A: Debug> Debug for Set<A> {
+impl<A: Debug> Debug for OrdSet<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "{{ ")?;
         let mut it = self.iter().peekable();
@@ -357,7 +357,7 @@ impl<A: Debug> Debug for Set<A> {
 // Iterators
 
 pub struct Iter<A> {
-    it: map::Iter<A, ()>,
+    it: ordmap::Iter<A, ()>,
 }
 
 impl<A> Iterator for Iter<A> {
@@ -368,7 +368,7 @@ impl<A> Iterator for Iter<A> {
     }
 }
 
-impl<A: Ord, RA> FromIterator<RA> for Set<A>
+impl<A: Ord, RA> FromIterator<RA> for OrdSet<A>
 where
     RA: Shared<A>,
 {
@@ -376,11 +376,11 @@ where
     where
         T: IntoIterator<Item = RA>,
     {
-        i.into_iter().fold(set![], |s, a| s.insert(a))
+        i.into_iter().fold(ordset![], |s, a| s.insert(a))
     }
 }
 
-impl<'a, A> IntoIterator for &'a Set<A> {
+impl<'a, A> IntoIterator for &'a OrdSet<A> {
     type Item = Arc<A>;
     type IntoIter = Iter<A>;
 
@@ -389,7 +389,7 @@ impl<'a, A> IntoIterator for &'a Set<A> {
     }
 }
 
-impl<A> IntoIterator for Set<A> {
+impl<A> IntoIterator for OrdSet<A> {
     type Item = Arc<A>;
     type IntoIter = Iter<A>;
 
@@ -400,67 +400,67 @@ impl<A> IntoIterator for Set<A> {
 
 // Conversions
 
-impl<'a, A: Ord + Clone> From<&'a [A]> for Set<A> {
+impl<'a, A: Ord + Clone> From<&'a [A]> for OrdSet<A> {
     fn from(slice: &'a [A]) -> Self {
         slice.into_iter().cloned().collect()
     }
 }
 
-impl<'a, A: Ord> From<&'a [Arc<A>]> for Set<A> {
+impl<'a, A: Ord> From<&'a [Arc<A>]> for OrdSet<A> {
     fn from(slice: &'a [Arc<A>]) -> Self {
         slice.into_iter().cloned().collect()
     }
 }
 
-impl<A: Ord> From<Vec<A>> for Set<A> {
+impl<A: Ord> From<Vec<A>> for OrdSet<A> {
     fn from(vec: Vec<A>) -> Self {
         vec.into_iter().collect()
     }
 }
 
-impl<'a, A: Ord + Clone> From<&'a Vec<A>> for Set<A> {
+impl<'a, A: Ord + Clone> From<&'a Vec<A>> for OrdSet<A> {
     fn from(vec: &Vec<A>) -> Self {
         vec.into_iter().cloned().collect()
     }
 }
 
-impl<'a, A: Ord> From<&'a Vec<Arc<A>>> for Set<A> {
+impl<'a, A: Ord> From<&'a Vec<Arc<A>>> for OrdSet<A> {
     fn from(vec: &Vec<Arc<A>>) -> Self {
         vec.into_iter().cloned().collect()
     }
 }
 
-impl<A: Eq + Hash + Ord> From<HashSet<A>> for Set<A> {
+impl<A: Eq + Hash + Ord> From<HashSet<A>> for OrdSet<A> {
     fn from(hash_set: HashSet<A>) -> Self {
         hash_set.into_iter().collect()
     }
 }
 
-impl<'a, A: Eq + Hash + Ord + Clone> From<&'a HashSet<A>> for Set<A> {
+impl<'a, A: Eq + Hash + Ord + Clone> From<&'a HashSet<A>> for OrdSet<A> {
     fn from(hash_set: &HashSet<A>) -> Self {
         hash_set.into_iter().cloned().collect()
     }
 }
 
-impl<'a, A: Eq + Hash + Ord> From<&'a HashSet<Arc<A>>> for Set<A> {
+impl<'a, A: Eq + Hash + Ord> From<&'a HashSet<Arc<A>>> for OrdSet<A> {
     fn from(hash_set: &HashSet<Arc<A>>) -> Self {
         hash_set.into_iter().cloned().collect()
     }
 }
 
-impl<A: Ord> From<BTreeSet<A>> for Set<A> {
+impl<A: Ord> From<BTreeSet<A>> for OrdSet<A> {
     fn from(btree_set: BTreeSet<A>) -> Self {
         btree_set.into_iter().collect()
     }
 }
 
-impl<'a, A: Ord + Clone> From<&'a BTreeSet<A>> for Set<A> {
+impl<'a, A: Ord + Clone> From<&'a BTreeSet<A>> for OrdSet<A> {
     fn from(btree_set: &BTreeSet<A>) -> Self {
         btree_set.into_iter().cloned().collect()
     }
 }
 
-impl<'a, A: Ord> From<&'a BTreeSet<Arc<A>>> for Set<A> {
+impl<'a, A: Ord> From<&'a BTreeSet<Arc<A>>> for OrdSet<A> {
     fn from(btree_set: &BTreeSet<Arc<A>>) -> Self {
         btree_set.into_iter().cloned().collect()
     }
@@ -472,9 +472,9 @@ impl<'a, A: Ord> From<&'a BTreeSet<Arc<A>>> for Set<A> {
 use quickcheck::{Arbitrary, Gen};
 
 #[cfg(any(test, feature = "quickcheck"))]
-impl<A: Ord + Arbitrary + Sync> Arbitrary for Set<A> {
+impl<A: Ord + Arbitrary + Sync> Arbitrary for OrdSet<A> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
-        Set::from_iter(Vec::<A>::arbitrary(g))
+        OrdSet::from_iter(Vec::<A>::arbitrary(g))
     }
 }
 
@@ -499,16 +499,16 @@ pub mod proptest {
     ///     }
     /// }
     /// ```
-    pub fn set<A: Strategy + 'static>(
+    pub fn ordset<A: Strategy + 'static>(
         element: A,
         size: Range<usize>,
-    ) -> BoxedStrategy<Set<<A::Value as ValueTree>::Value>>
+    ) -> BoxedStrategy<OrdSet<<A::Value as ValueTree>::Value>>
     where
         <A::Value as ValueTree>::Value: Ord,
     {
         ::proptest::collection::vec(element, size.clone())
-            .prop_map(|v| Set::from(v))
-            .prop_filter("Set minimum size".to_owned(), move |s| {
+            .prop_map(|v| OrdSet::from(v))
+            .prop_filter("OrdSet minimum size".to_owned(), move |s| {
                 s.len() >= size.start
             })
             .boxed()
@@ -521,7 +521,7 @@ mod test {
 
     proptest! {
         #[test]
-        fn proptest_a_set(ref s in set(".*", 10..100)) {
+        fn proptest_a_set(ref s in ordset(".*", 10..100)) {
             assert!(s.len() < 100);
             assert!(s.len() >= 10);
         }
