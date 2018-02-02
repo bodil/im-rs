@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 use std::iter::{FromIterator, Iterator};
-use std::collections::{BTreeMap, HashMap};
+use std::collections;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::fmt::{Debug, Error, Formatter};
@@ -19,6 +19,7 @@ use std::marker::PhantomData;
 
 use shared::Shared;
 use lens::PartialLens;
+use hashmap::HashMap;
 
 use self::MapNode::{Leaf, Three, Two};
 
@@ -653,7 +654,8 @@ impl<K: Ord, V> OrdMap<K, V> {
         I: IntoIterator<Item = Self>,
         F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
     {
-        i.into_iter().fold(ordmap![], |a, b| a.union_with_key(&b, &f))
+        i.into_iter()
+            .fold(ordmap![], |a, b| a.union_with_key(&b, &f))
     }
 
     /// Construct the difference between two maps by discarding keys which occur in both maps.
@@ -1194,54 +1196,65 @@ where
     }
 }
 
-impl<K: Ord, V, RK: Eq + Hash, RV> From<HashMap<RK, RV>> for OrdMap<K, V>
+impl<K: Ord, V, RK: Eq + Hash, RV> From<collections::HashMap<RK, RV>> for OrdMap<K, V>
 where
     RK: Shared<K>,
     RV: Shared<V>,
 {
-    fn from(m: HashMap<RK, RV>) -> OrdMap<K, V> {
+    fn from(m: collections::HashMap<RK, RV>) -> OrdMap<K, V> {
         m.into_iter()
             .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
-impl<'a, K: Ord, V, RK: Eq + Hash, RV> From<&'a HashMap<RK, RV>> for OrdMap<K, V>
+impl<'a, K: Ord, V, RK: Eq + Hash, RV> From<&'a collections::HashMap<RK, RV>> for OrdMap<K, V>
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
 {
-    fn from(m: &'a HashMap<RK, RV>) -> OrdMap<K, V> {
+    fn from(m: &'a collections::HashMap<RK, RV>) -> OrdMap<K, V> {
         m.into_iter()
             .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
-impl<K: Ord, V, RK, RV> From<BTreeMap<RK, RV>> for OrdMap<K, V>
+impl<K: Ord, V, RK, RV> From<collections::BTreeMap<RK, RV>> for OrdMap<K, V>
 where
     RK: Shared<K>,
     RV: Shared<V>,
 {
-    fn from(m: BTreeMap<RK, RV>) -> OrdMap<K, V> {
+    fn from(m: collections::BTreeMap<RK, RV>) -> OrdMap<K, V> {
         m.into_iter()
             .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
-impl<'a, K: Ord, V, RK, RV> From<&'a BTreeMap<RK, RV>> for OrdMap<K, V>
+impl<'a, K: Ord, V, RK, RV> From<&'a collections::BTreeMap<RK, RV>> for OrdMap<K, V>
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
 {
-    fn from(m: &'a BTreeMap<RK, RV>) -> OrdMap<K, V> {
+    fn from(m: &'a collections::BTreeMap<RK, RV>) -> OrdMap<K, V> {
         m.into_iter()
             .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
     }
 }
 
+impl<K: Ord, V, S> From<HashMap<K, V, S>> for OrdMap<K, V> {
+    fn from(m: HashMap<K, V, S>) -> Self {
+        m.into_iter().collect()
+    }
+}
+
+impl<'a, K: Ord, V, S> From<&'a HashMap<K, V, S>> for OrdMap<K, V> {
+    fn from(m: &'a HashMap<K, V, S>) -> Self {
+        m.into_iter().collect()
+    }
+}
 // QuickCheck
 
 #[cfg(any(test, feature = "quickcheck"))]
@@ -1461,7 +1474,7 @@ mod test {
             let input: Vec<(usize, usize)> =
                 input_unbounded.into_iter().map(|(k, v)| (k % 64, v % 64)).collect();
             let mut map = OrdMap::from(input.clone());
-            let mut tree: BTreeMap<usize, usize> = input.into_iter().collect();
+            let mut tree: collections::BTreeMap<usize, usize> = input.into_iter().collect();
             for (ins, key, val) in ops {
                 if ins {
                     tree.insert(key, val);

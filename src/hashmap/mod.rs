@@ -26,6 +26,7 @@ use std::collections;
 use shared::Shared;
 use lens::PartialLens;
 use hash::SharedHasher;
+use ordmap::OrdMap;
 
 mod bits;
 
@@ -1292,6 +1293,24 @@ where
         m.into_iter()
             .map(|(k, v)| (k.shared(), v.shared()))
             .collect()
+    }
+}
+
+impl<K: Hash + Eq, V, S> From<OrdMap<K, V>> for HashMap<K, V, S>
+where
+    S: SharedHasher,
+{
+    fn from(m: OrdMap<K, V>) -> Self {
+        m.into_iter().collect()
+    }
+}
+
+impl<'a, K: Hash + Eq, V, S> From<&'a OrdMap<K, V>> for HashMap<K, V, S>
+where
+    S: SharedHasher,
+{
+    fn from(m: &'a OrdMap<K, V>) -> Self {
+        m.into_iter().collect()
     }
 }
 

@@ -9,11 +9,13 @@ use std::sync::Arc;
 use std::iter::{FromIterator, IntoIterator};
 use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};
-use std::collections::{BTreeSet, HashSet};
+use std::collections;
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Mul};
 use std::borrow::Borrow;
+
 use ordmap::{self, OrdMap};
+use hashset::HashSet;
 use shared::Shared;
 
 /// Construct a set from a sequence of values.
@@ -430,39 +432,51 @@ impl<'a, A: Ord> From<&'a Vec<Arc<A>>> for OrdSet<A> {
     }
 }
 
-impl<A: Eq + Hash + Ord> From<HashSet<A>> for OrdSet<A> {
-    fn from(hash_set: HashSet<A>) -> Self {
+impl<A: Eq + Hash + Ord> From<collections::HashSet<A>> for OrdSet<A> {
+    fn from(hash_set: collections::HashSet<A>) -> Self {
         hash_set.into_iter().collect()
     }
 }
 
-impl<'a, A: Eq + Hash + Ord + Clone> From<&'a HashSet<A>> for OrdSet<A> {
-    fn from(hash_set: &HashSet<A>) -> Self {
+impl<'a, A: Eq + Hash + Ord + Clone> From<&'a collections::HashSet<A>> for OrdSet<A> {
+    fn from(hash_set: &collections::HashSet<A>) -> Self {
         hash_set.into_iter().cloned().collect()
     }
 }
 
-impl<'a, A: Eq + Hash + Ord> From<&'a HashSet<Arc<A>>> for OrdSet<A> {
-    fn from(hash_set: &HashSet<Arc<A>>) -> Self {
+impl<'a, A: Eq + Hash + Ord> From<&'a collections::HashSet<Arc<A>>> for OrdSet<A> {
+    fn from(hash_set: &collections::HashSet<Arc<A>>) -> Self {
         hash_set.into_iter().cloned().collect()
     }
 }
 
-impl<A: Ord> From<BTreeSet<A>> for OrdSet<A> {
-    fn from(btree_set: BTreeSet<A>) -> Self {
+impl<A: Ord> From<collections::BTreeSet<A>> for OrdSet<A> {
+    fn from(btree_set: collections::BTreeSet<A>) -> Self {
         btree_set.into_iter().collect()
     }
 }
 
-impl<'a, A: Ord + Clone> From<&'a BTreeSet<A>> for OrdSet<A> {
-    fn from(btree_set: &BTreeSet<A>) -> Self {
+impl<'a, A: Ord + Clone> From<&'a collections::BTreeSet<A>> for OrdSet<A> {
+    fn from(btree_set: &collections::BTreeSet<A>) -> Self {
         btree_set.into_iter().cloned().collect()
     }
 }
 
-impl<'a, A: Ord> From<&'a BTreeSet<Arc<A>>> for OrdSet<A> {
-    fn from(btree_set: &BTreeSet<Arc<A>>) -> Self {
+impl<'a, A: Ord> From<&'a collections::BTreeSet<Arc<A>>> for OrdSet<A> {
+    fn from(btree_set: &collections::BTreeSet<Arc<A>>) -> Self {
         btree_set.into_iter().cloned().collect()
+    }
+}
+
+impl<A: Ord, S> From<HashSet<A, S>> for OrdSet<A> {
+    fn from(hashset: HashSet<A, S>) -> Self {
+        hashset.into_iter().collect()
+    }
+}
+
+impl<'a, A: Ord, S> From<&'a HashSet<A, S>> for OrdSet<A> {
+    fn from(hashset: &HashSet<A, S>) -> Self {
+        hashset.into_iter().collect()
     }
 }
 

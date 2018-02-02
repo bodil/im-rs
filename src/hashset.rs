@@ -18,6 +18,7 @@ use std::collections::hash_map::RandomState;
 use hashmap::{self, HashMap};
 use shared::Shared;
 use hash::SharedHasher;
+use ordset::OrdSet;
 
 /// Construct a set from a sequence of values.
 ///
@@ -354,7 +355,7 @@ pub struct Iter<A> {
     it: hashmap::Iter<A, ()>,
 }
 
-impl<A: Hash + Eq> Iterator for Iter<A> {
+impl<A> Iterator for Iter<A> {
     type Item = Arc<A>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -375,7 +376,7 @@ where
     }
 }
 
-impl<'a, A: Hash + Eq, S> IntoIterator for &'a HashSet<A, S> {
+impl<'a, A, S> IntoIterator for &'a HashSet<A, S> {
     type Item = Arc<A>;
     type IntoIter = Iter<A>;
 
@@ -384,7 +385,7 @@ impl<'a, A: Hash + Eq, S> IntoIterator for &'a HashSet<A, S> {
     }
 }
 
-impl<A: Hash + Eq, S> IntoIterator for HashSet<A, S> {
+impl<A, S> IntoIterator for HashSet<A, S> {
     type Item = Arc<A>;
     type IntoIter = Iter<A>;
 
@@ -459,6 +460,18 @@ impl<'a, A: Hash + Eq + Clone, S: SharedHasher> From<&'a BTreeSet<A>> for HashSe
 impl<'a, A: Hash + Eq, S: SharedHasher> From<&'a BTreeSet<Arc<A>>> for HashSet<A, S> {
     fn from(btree_set: &BTreeSet<Arc<A>>) -> Self {
         btree_set.into_iter().cloned().collect()
+    }
+}
+
+impl<A: Hash + Eq, S: SharedHasher> From<OrdSet<A>> for HashSet<A, S> {
+    fn from(ordset: OrdSet<A>) -> Self {
+        ordset.into_iter().collect()
+    }
+}
+
+impl<'a, A: Hash + Eq, S: SharedHasher> From<&'a OrdSet<A>> for HashSet<A, S> {
+    fn from(ordset: &OrdSet<A>) -> Self {
+        ordset.into_iter().collect()
     }
 }
 
