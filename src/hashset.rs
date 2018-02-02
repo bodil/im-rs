@@ -372,7 +372,11 @@ where
     where
         T: IntoIterator<Item = RA>,
     {
-        i.into_iter().fold(Default::default(), |s, a| s.insert(a))
+        let mut set: Self = Default::default();
+        for value in i.into_iter() {
+            set.insert_mut(value)
+        }
+        set
     }
 }
 

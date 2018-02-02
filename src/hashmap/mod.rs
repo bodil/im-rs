@@ -1130,8 +1130,11 @@ where
     where
         T: IntoIterator<Item = (RK, RV)>,
     {
-        i.into_iter()
-            .fold(Default::default(), |m, (k, v)| m.insert(k, v))
+        let mut map: Self = Default::default();
+        for (k, v) in i.into_iter() {
+            map.insert_mut(k, v)
+        }
+        map
     }
 }
 
