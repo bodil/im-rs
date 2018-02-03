@@ -503,32 +503,19 @@ where
             &mut Node::ArrayNode(ref mut node) => {
                 let idx = mask(hash, shift) as usize;
                 let mut this = Arc::make_mut(node);
-                let mut update = None;
-                let mut added;
-                let mut inc = 0;
-                {
-                    let mut entry: &mut Vec<Option<Node<K, V>>> = &mut this.content;
-                    match entry.get_mut(idx).unwrap() {
-                        &mut None => {
-                            let (_, new_node) =
-                                Node::empty().insert(hasher, shift + HASH_BITS, hash, key, value);
-                            update = Some(Some(new_node));
-                            added = true;
-                            inc = 1;
-                        }
-                        &mut Some(ref mut child) => {
-                            match child.insert_mut(hasher, shift + HASH_BITS, hash, key, value) {
-                                (added_leaf, Some(new_child)) => {
-                                    update = Some(Some(new_child));
-                                    added = added_leaf;
-                                }
-                                (added_leaf, None) => {
-                                    added = added_leaf;
-                                }
-                            }
+                let (update, added, inc) = match this.content.get_mut(idx).unwrap() {
+                    &mut None => {
+                        let (_, new_node) =
+                            Node::empty().insert(hasher, shift + HASH_BITS, hash, key, value);
+                        (Some(Some(new_node)), true, 1)
+                    }
+                    &mut Some(ref mut child) => {
+                        match child.insert_mut(hasher, shift + HASH_BITS, hash, key, value) {
+                            (added_leaf, Some(new_child)) => (Some(Some(new_child)), added_leaf, 0),
+                            (added_leaf, None) => (None, added_leaf, 0),
                         }
                     }
-                }
+                };
                 if let Some(new_node) = update {
                     this.content[idx] = new_node;
                 }
@@ -540,45 +527,44 @@ where
             &mut Node::BitmapNode(ref mut node) => {
                 let bit = bitpos(hash, shift);
                 let idx = bit_index(node.bitmap, bit);
-                let mut added = false;
-                let mut update = None;
-                let mut insert = None;
-                let mut newmap = None;
                 let mut this = Arc::make_mut(node);
-                if this.bitmap & bit != 0 {
-                    let mut entry: &mut Vec<Entry<K, V>> = &mut this.content;
-                    match entry.get_mut(idx).unwrap() {
+                let (added, update, insert, newmap) = if this.bitmap & bit != 0 {
+                    match this.content.get_mut(idx).unwrap() {
                         &mut Entry::Node(ref mut idx_node) => {
                             match idx_node.insert_mut(hasher, shift + HASH_BITS, hash, key, value) {
                                 (added_leaf, Some(new_child)) => {
-                                    update = Some(Entry::Node(new_child));
-                                    added = added_leaf;
+                                    (added_leaf, Some(Entry::Node(new_child)), None, None)
                                 }
-                                (added_leaf, None) => {
-                                    added = added_leaf;
-                                }
+                                (added_leaf, None) => (added_leaf, None, None, None),
                             }
                         }
                         &mut Entry::Pair(ref k, ref v) if k == key => {
                             if Arc::ptr_eq(value, v) {
-
+                                (false, None, None, None)
                             } else {
-                                update = Some(Entry::Pair(k.clone(), value.clone()));
+                                (
+                                    false,
+                                    Some(Entry::Pair(k.clone(), value.clone())),
+                                    None,
+                                    None,
+                                )
                             }
                         }
                         &mut Entry::Pair(ref k, ref v) => {
                             let new_child =
                                 create_node(hasher, shift + HASH_BITS, k, v, hash, key, value);
-                            update = Some(Entry::Node(new_child));
-                            added = true;
+                            (true, Some(Entry::Node(new_child)), None, None)
                         }
                     }
                 } else {
                     let n = this.bitmap.count_ones() as usize;
                     if n < this.content.len() {
-                        update = Some(Entry::Pair(key.clone(), value.clone()));
-                        newmap = Some(this.bitmap | bit);
-                        added = true;
+                        (
+                            true,
+                            Some(Entry::Pair(key.clone(), value.clone())),
+                            None,
+                            Some(this.bitmap | bit),
+                        )
                     } else if n >= HASH_SIZE / 2 {
                         let jdx = mask(hash, shift) as usize;
                         let mut j = 0;
@@ -624,11 +610,14 @@ where
                             .collect();
                         return (added, Some(ArrayNode::new(n + 1, nodes)));
                     } else {
-                        insert = Some(Entry::Pair(key.clone(), value.clone()));
-                        newmap = Some(this.bitmap | bit);
-                        added = true;
+                        (
+                            true,
+                            None,
+                            Some(Entry::Pair(key.clone(), value.clone())),
+                            Some(this.bitmap | bit),
+                        )
                     }
-                }
+                };
                 if let Some(entry) = update {
                     this.content[idx] = entry;
                 }
@@ -679,19 +668,10 @@ where
             &mut Node::ArrayNode(ref mut node) => {
                 let idx = mask(hash, shift) as usize;
                 let mut this = Arc::make_mut(node);
-                let mut removed;
-                let mut updated;
-                {
-                    let mut entry: &mut Vec<Option<Node<K, V>>> = &mut this.content;
-                    match entry.get_mut(idx).unwrap() {
-                        &mut None => return (None, RemoveResult::Unchanged),
-                        &mut Some(ref mut child) => {
-                            let (r, u) = child.remove_mut(shift + HASH_BITS, hash, key);
-                            removed = r;
-                            updated = u;
-                        }
-                    }
-                }
+                let (removed, updated) = match this.content.get_mut(idx).unwrap() {
+                    &mut None => return (None, RemoveResult::Unchanged),
+                    &mut Some(ref mut child) => child.remove_mut(shift + HASH_BITS, hash, key),
+                };
                 match updated {
                     RemoveResult::NewNode(node) => this.content[idx] = Some(node),
                     RemoveResult::Removed => {
@@ -712,23 +692,15 @@ where
                 }
                 let idx = bit_index(node.bitmap, bit);
                 let mut this = Arc::make_mut(node);
-                let mut removed;
-                let mut updated;
-                {
-                    let mut entry: &mut Vec<Entry<K, V>> = &mut this.content;
-                    match entry.get_mut(idx).unwrap() {
-                        &mut Entry::Node(ref mut child) => {
-                            let (r, u) = child.remove_mut(shift + HASH_BITS, hash, key);
-                            removed = r;
-                            updated = u;
-                        }
-                        &mut Entry::Pair(ref k, ref v) if &**k == key => {
-                            removed = Some((k.clone(), v.clone()));
-                            updated = RemoveResult::Removed;
-                        }
-                        &mut Entry::Pair(_, _) => return (None, RemoveResult::Unchanged),
+                let (removed, updated) = match this.content.get_mut(idx).unwrap() {
+                    &mut Entry::Node(ref mut child) => {
+                        child.remove_mut(shift + HASH_BITS, hash, key)
                     }
-                }
+                    &mut Entry::Pair(ref k, ref v) if &**k == key => {
+                        (Some((k.clone(), v.clone())), RemoveResult::Removed)
+                    }
+                    &mut Entry::Pair(_, _) => return (None, RemoveResult::Unchanged),
+                };
                 match updated {
                     RemoveResult::NewNode(node) => this.content[idx] = Entry::Node(node),
                     RemoveResult::Removed => {
