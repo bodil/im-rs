@@ -142,7 +142,7 @@
 //!
 //! | Type | Constraints | Order | Insert | Remove | Lookup |
 //! | --- | --- | --- | --- | --- | --- |
-//! | [`HashSet<A>`][hashset::HashSet] | [`Hash`][std::hash::Hash] + [`Eq`][std::cmp::Eq] | by hash | O(1)* | O(1)* | O(1)* |
+//! | [`HashSet<A>`][hashset::HashSet] | [`Hash`][std::hash::Hash] + [`Eq`][std::cmp::Eq] | undefined | O(1)* | O(1)* | O(1)* |
 //! | [`OrdSet<A>`][ordset::OrdSet] | [`Ord`][std::cmp::Ord] | sorted | O(log n) | O(log n) | O(log n) |
 //!
 //! ### Queues
