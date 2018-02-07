@@ -5,13 +5,15 @@ use std::sync::Arc;
 /// # Automatic `Arc` wrapping
 ///
 /// The `Shared` trait provides automatic wrapping for things
-/// which take `Arc`s, meaning that anything which takes an argument
+/// which take [`Arc`][std::sync::Arc]s, meaning that anything which takes an argument
 /// of type `Shared<A>` will accept either an `A` or an `Arc<A>`.
 ///
 /// Because everything stored in `im`'s persistent data structures
-/// is wrapped in `Arc`s, `Shared` makes you have to worry less about
+/// is wrapped in [`Arc`][std::sync::Arc]s, `Shared` makes you have to worry less about
 /// whether what you've got is an `A` or an `Arc<A>` - the compiler
 /// will just figure it out for you, which is as it should be.
+///
+/// [std::sync::Arc]: https://doc.rust-lang.org/std/sync/struct.Arc.html
 pub trait Shared<T> {
     fn shared(self) -> Arc<T>;
 }

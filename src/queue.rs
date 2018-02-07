@@ -18,12 +18,14 @@ impl<A> Queue<A> {
         Queue(conslist![], conslist![])
     }
 
-    /// Construct a queue by consuming an `IntoIterator`.
+    /// Construct a queue by consuming an [`IntoIterator`][std::iter::IntoIterator].
     ///
     /// Allows you to construct a queue out of anything that implements
-    /// the `IntoIterator` trait.
+    /// the [`IntoIterator`][std::iter::IntoIterator] trait.
     ///
     /// Time: O(n)
+    ///
+    /// [std::iter::IntoIterator]: https://doc.rust-lang.org/std/iter/trait.IntoIterator.html
     pub fn from<R, I>(it: I) -> Queue<A>
     where
         I: IntoIterator<Item = R>,

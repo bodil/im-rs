@@ -2,16 +2,21 @@
 //!
 //! An immutable hash map using [hash array mapped tries] [1].
 //!
-//! Most operations on this map are theoretically O(log n), but
-//! will in practice be closer to O(1).
+//! Most operations on this map will be O(1), but may sometimes run
+//! as high as O(log n). Because of this, it's a great choice for a
+//! generic map as long as you don't mind that keys will need to
+//! implement [`Hash`][std::hash::Hash] and [`Eq`][std::cmp::Eq].
 //!
 //! Map entries will have a predictable order based on the hasher
 //! being used. Unless otherwise specified, all maps will share an
-//! instance of the default `std::collections::hash_map::RandomState`
+//! instance of the default [`RandomState`][std::collections::hash_map::RandomState]
 //! hasher, which will produce consistent hashes for the duration of
 //! its lifetime, but not between restarts of your program.
 //!
 //! [1]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
+//! [std::cmp::Eq]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
+//! [std::hash::Hash]: https://doc.rust-lang.org/std/hash/trait.Hash.html
+//! [std::collections::hash_map::RandomState]: https://doc.rust-lang.org/std/collections/hash_map/struct.RandomState.html
 
 use std::sync::Arc;
 use std::collections::hash_map::RandomState;
@@ -68,20 +73,25 @@ macro_rules! hashmap {
     }};
 }
 
-/// # Hash Map
+/// A hash map.
 ///
 /// An immutable hash map using [hash array mapped tries] [1].
 ///
-/// Most operations on this map are theoretically O(log n), but
-/// will in practice be closer to O(1).
+/// Most operations on this map will be O(1), but may sometimes run
+/// as high as O(log n). Because of this, it's a great choice for a
+/// generic map as long as you don't mind that keys will need to
+/// implement [`Hash`][std::hash::Hash] and [`Eq`][std::cmp::Eq].
 ///
 /// Map entries will have a predictable order based on the hasher
 /// being used. Unless otherwise specified, all maps will share an
-/// instance of the default `std::collections::hash_map::RandomState`
+/// instance of the default [`RandomState`][std::collections::hash_map::RandomState]
 /// hasher, which will produce consistent hashes for the duration of
 /// its lifetime, but not between restarts of your program.
 ///
 /// [1]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
+/// [std::cmp::Eq]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
+/// [std::hash::Hash]: https://doc.rust-lang.org/std/hash/trait.Hash.html
+/// [std::collections::hash_map::RandomState]: https://doc.rust-lang.org/std/collections/hash_map/struct.RandomState.html
 
 pub struct HashMap<K, V, S = RandomState> {
     size: usize,
@@ -364,8 +374,8 @@ where
     /// If you are the sole owner of the map, it is safe to mutate it without
     /// losing immutability guarantees, gaining us a considerable performance
     /// advantage. If the map is in use elsewhere, this operation will safely
-    /// clone the map before mutating it, acting just like the immutable `insert`
-    /// operation.
+    /// clone the map before mutating it, acting just like the immutable
+    /// [`insert`][insert] operation.
     ///
     /// If the map already has a mapping for the given key, the previous value
     /// is overwritten.
@@ -388,6 +398,8 @@ where
     /// );
     /// # }
     /// ```
+    ///
+    /// [insert]: #method.insert
     #[inline]
     pub fn insert_mut<RK, RV>(&mut self, k: RK, v: RV)
     where
@@ -532,11 +544,14 @@ where
     /// Update the value for a given key by calling a function with the current value
     /// and overwriting it with the function's return value.
     ///
-    /// This is like the `update` method, except with more control: the function gets
-    /// an `Option<V>` and returns the same, so that it can decide to delete a mapping
+    /// This is like the [`update`][update] method, except with more control: the function gets
+    /// an [`Option<V>`][std::option::Option] and returns the same, so that it can decide to delete a mapping
     /// instead of updating the value, and decide what to do if the key isn't in the map.
     ///
     /// Time: O(log n)
+    ///
+    /// [update]: #method.update
+    /// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
     pub fn alter<RK, F>(&self, f: F, k: RK) -> Self
     where
         F: Fn(Option<Arc<V>>) -> Option<Arc<V>>,
@@ -572,8 +587,8 @@ where
     /// If you are the sole owner of the map, it is safe to mutate it without
     /// losing immutability guarantees, gaining us a considerable performance
     /// advantage. If the map is in use elsewhere, this operation will safely
-    /// clone the map before mutating it, acting just like the immutable `insert`
-    /// operation.
+    /// clone the map before mutating it, acting just like the immutable
+    /// [`remove`][remove] operation.
     ///
     /// Time: O(log n)
     ///
@@ -590,6 +605,8 @@ where
     /// assert!(map.is_empty());
     /// # }
     /// ```
+    ///
+    /// [remove]: #method.remove
     #[inline]
     pub fn remove_mut(&mut self, k: &K) {
         self.pop_with_key_mut(k);
@@ -848,7 +865,7 @@ where
         self.len() != other.borrow().len() && self.is_submap_by(other, cmp)
     }
 
-    /// Make a `PartialLens` from the hash map to the value described by the
+    /// Make a [`PartialLens`][PartialLens] from the hash map to the value described by the
     /// given `key`.
     ///
     /// # Examples
@@ -887,6 +904,8 @@ where
     /// assert_eq!(lens.try_get(&map), Some(Arc::new("gazonk")));
     /// # }
     /// ```
+    ///
+    /// [PartialLens]: ../lens/trait.PartialLens.html
     #[inline]
     pub fn lens<RK>(key: RK) -> HashMapLens<K, V, S>
     where

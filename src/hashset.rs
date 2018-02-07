@@ -1,9 +1,11 @@
 //! A hash set.
 //!
-//! An immutable hash set backed by a `HashMap`.
+//! An immutable hash set backed by a [`HashMap`][hashmap::HashMap].
 //!
-//! This is implemented as a `HashMap` with no values, so it shares
-//! the exact performance characteristics of `HashMap`.
+//! This is implemented as a [`HashMap`][hashmap::HashMap] with no values, so it shares
+//! the exact performance characteristics of [`HashMap`][hashmap::HashMap].
+//!
+//! [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 
 use std::sync::Arc;
 use std::iter::{FromIterator, IntoIterator};
@@ -49,10 +51,12 @@ macro_rules! hashset {
 
 /// A hash set.
 ///
-/// An immutable hash set backed by a `HashMap`.
+/// An immutable hash set backed by a [`HashMap`][hashmap::HashMap].
 ///
-/// This is implemented as a `HashMap` with no values, so it shares
-/// the exact performance characteristics of `HashMap`.
+/// This is implemented as a [`HashMap`][hashmap::HashMap] with no values, so it shares
+/// the exact performance characteristics of [`HashMap`][hashmap::HashMap].
+///
+/// [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 pub struct HashSet<A, S = RandomState>(HashMap<A, (), S>);
 
 impl<A> HashSet<A, RandomState>

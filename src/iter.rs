@@ -26,9 +26,9 @@ where
 /// a state value.
 ///
 /// The function is called with the current state as its
-/// argument, and should return an `Option` of a tuple of the
+/// argument, and should return an [`Option`][std::option::Option] of a tuple of the
 /// next value to yield from the iterator and the updated state.
-/// If the function returns `None`, the iterator ends.
+/// If the function returns [`None`][std::option::Option::None], the iterator ends.
 ///
 /// # Examples
 /// ```
@@ -44,6 +44,9 @@ where
 /// assert_eq!(numbers, list![0, 1, 2, 3, 4]);
 /// # }
 /// ```
+///
+/// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
+/// [std::option::Option::None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
 pub fn unfold<F, S, A>(value: S, f: F) -> Unfold<F, S>
 where
     F: Fn(&S) -> Option<(A, S)>,

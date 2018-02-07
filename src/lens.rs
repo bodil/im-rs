@@ -9,11 +9,14 @@
 //! A, and you have a lens from B to another thing C inside B, you can compose
 //! them to make a lens from A directly into C.
 //!
-//! There are two kinds of lenses defined here: `PartialLens`, which is a lens
-//! into something which doesn't necessarily exist (such as a map key), and
-//! `Lens`, which must always be able to succeed (like a lens into a struct,
-/// whose contents are known and guaranteed). All `Lens`es are also
-/// `PartialLens`es, but the opposite is not true.
+//! There are two kinds of lenses defined here: [`PartialLens`][lens::PartialLens],
+//! which is a lens into something which doesn't necessarily exist (such as a map key),
+//! and [`Lens`][lens::Lens], which must always be able to succeed (like a lens into a
+//! struct, whose contents are known and guaranteed). All [`Lens`][lens::Lens]es are also
+//! [`PartialLens`][lens::PartialLens]es, but the opposite is not true.
+//!
+//! [lens::PartialLens]: ./trait.PartialLens.html
+//! [lens::Lens]: ./trait.Lens.html
 
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -21,7 +24,10 @@ use std::sync::Arc;
 use shared::Shared;
 
 /// A lens from `From` to `To` where the focus of the lens isn't guaranteed to
-/// exist inside `From`. Operations on these lenses therefore return `Option`s.
+/// exist inside `From`. Operations on these lenses therefore return
+/// [`Option`][std::option::Option]s.
+///
+/// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
 pub trait PartialLens: Clone {
     type From;
     type To;
@@ -48,8 +54,11 @@ pub trait PartialLens: Clone {
 /// A lens from `From` to `To` where `From` is guaranteed to contain the focus
 /// of the lens (ie. get and put operations cannot fail).
 ///
-/// These must also implement `PartialLens`, so a default implementation is
-/// provided which will just unwrap the results of `try_get` and `try_put`.
+/// These must also implement [`PartialLens`][lens::PartialLens], so a default
+/// implementation is provided which will just unwrap the results of
+/// `try_get` and `try_put`.
+///
+/// [lens::PartialLens]: ./trait.PartialLens.html
 pub trait Lens: PartialLens {
     /// Get the focus of the lens.
     fn get(&self, s: &Self::From) -> Arc<Self::To> {
@@ -216,8 +225,8 @@ impl<A, B> Lens for GeneralLens<A, B> {
 ///
 /// **Please note:** this only works on fields which are wrapped in an
 /// `Arc` (so the type of the `string_field` field in the example in
-/// the previous paragraph must be `Arc<String`>), and the source
-/// struct must implement `Clone`.
+/// the previous paragraph must be [`Arc<String>`][std::sync::Arc]), and the source
+/// struct must implement [`Clone`][std::clone::Clone].
 ///
 /// # Examples
 ///
@@ -252,6 +261,9 @@ impl<A, B> Lens for GeneralLens<A, B> {
 /// );
 /// # }
 /// ```
+///
+/// [std::clone::Clone]: https://doc.rust-lang.org/std/clone/trait.Clone.html
+/// [std::sync::Arc]: https://doc.rust-lang.org/std/sync/struct.Arc.html
 #[macro_export]
 macro_rules! lens {
     ( $from:ident : $headpath:ident : $headto:ident : $($tail:tt):* ) => {

@@ -2,8 +2,10 @@
 //!
 //! An immutable ordered set implemented as a balanced 2-3 tree.
 //!
-//! This is implemented as a `Map` with no values, so it shares
-//! the exact performance characteristics of `Map`.
+//! This is implemented as an [`OrdMap`][ordmap::OrdMap] with no values, so it shares
+//! the exact performance characteristics of [`OrdMap`][ordmap::OrdMap].
+//!
+//! [ordmap::OrdMap]: ../ordmap/struct.OrdMap.html
 
 use std::sync::Arc;
 use std::iter::{FromIterator, IntoIterator};
@@ -49,8 +51,10 @@ macro_rules! ordset {
 ///
 /// An immutable ordered set implemented as a balanced 2-3 tree.
 ///
-/// This is implemented as a `Map` with no values, so it shares
-/// the exact performance characteristics of `Map`.
+/// This is implemented as an [`OrdMap`][ordmap::OrdMap] with no values, so it shares
+/// the exact performance characteristics of [`OrdMap`][ordmap::OrdMap].
+///
+/// [ordmap::OrdMap]: ../ordmap/struct.OrdMap.html
 pub struct OrdSet<A>(OrdMap<A, ()>);
 
 impl<A> OrdSet<A> {

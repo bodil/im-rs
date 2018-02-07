@@ -2,10 +2,16 @@
 //!
 //! An immutable ordered map implemented as a balanced 2-3 tree.
 //!
-//! Most operations on this type of map are O(log n). It's a decent
-//! choice for a generic map datatype, but if you're using it for
-//! large datasets, you should consider whether you need an ordered
-//! map, or whether a hash map would suit you better.
+//! Most operations on this type of map are O(log n).
+//! A [`HashMap`][hashmap::HashMap] is usually a better choice for
+//! performance, but the `OrdMap` has the advantage of only
+//! requiring an [`Ord`][std::cmp::Ord] constraint on the key, and
+//! of being ordered, so that keys always come out from lowest to
+//! highest, where a [`HashMap`][hashmap::HashMap] has no guaranteed
+//! ordering.
+//!
+//! [hashmap::HashMap]: ../hashmap/struct.HashMap.html
+//! [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 
 use std::sync::Arc;
 use std::iter::{FromIterator, Iterator};
@@ -60,10 +66,16 @@ macro_rules! ordmap {
 ///
 /// An immutable ordered map implemented as a balanced 2-3 tree.
 ///
-/// Most operations on this type of map are O(log n). It's a decent
-/// choice for a generic map datatype, but if you're using it for
-/// large datasets, you should consider whether you need an ordered
-/// map, or whether a hash map would suit you better.
+/// Most operations on this type of map are O(log n).
+/// A [`HashMap`][hashmap::HashMap] is usually a better choice for
+/// performance, but the `OrdMap` has the advantage of only
+/// requiring an [`Ord`][std::cmp::Ord] constraint on the key, and
+/// of being ordered, so that keys always come out from lowest to
+/// highest, where a [`HashMap`][hashmap::HashMap] has no guaranteed
+/// ordering.
+///
+/// [hashmap::HashMap]: ../hashmap/struct.HashMap.html
+/// [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 pub struct OrdMap<K, V>(Arc<MapNode<K, V>>);
 
 #[doc(hidden)]
@@ -552,11 +564,14 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// Update the value for a given key by calling a function with the current value
     /// and overwriting it with the function's return value.
     ///
-    /// This is like the `update` method, except with more control: the function gets
-    /// an `Option<V>` and returns the same, so that it can decide to delete a mapping
+    /// This is like the [`update`][update] method, except with more control: the function gets
+    /// an [`Option<V>`][std::option::Option] and returns the same, so that it can decide to delete a mapping
     /// instead of updating the value, and decide what to do if the key isn't in the map.
     ///
     /// Time: O(log n)
+    ///
+    /// [update]: #method.update
+    /// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
     pub fn alter<RK, F>(&self, f: F, k: RK) -> Self
     where
         F: Fn(Option<Arc<V>>) -> Option<Arc<V>>,

@@ -1,16 +1,20 @@
 //! A catenable list.
 //!
-//! A data structure like the simple `ConsList` but with
+//! A data structure like the simple [`ConsList`][conslist::ConsList] but with
 //! efficient (generally O(1) in the worst case) add
-//! and remove operations on both ends, implemented as a `Queue`
-//! of `ConsList`s.
+//! and remove operations on both ends, implemented as a [`Queue`][queue::Queue]
+//! of [`ConsList`][conslist::ConsList]s.
 //!
 //! If you need a list but haven't thought hard about your
 //! performance requirements, this is most likely the list you
 //! want. If you're mostly going to be consing and unconsing, and
 //! you have a lot of data, or a lot of lists, you might want the
-//! `ConsList` instead. If you really just need a queue, you might
-//! be looking for the `Queue`. When in doubt, choose the `List`.
+//! [`ConsList`][conslist::ConsList] instead. If you really just need a queue, you might
+//! be looking for the [`Queue`][queue::Queue]. When in doubt, choose the [`List`][list::List].
+//!
+//! [queue::Queue]: ../queue/struct.Queue.html
+//! [list::List]: ../list/struct.List.html
+//! [conslist::ConsList]: ../conslist/struct.ConsList.html
 
 use std::sync::Arc;
 use std::iter::{FromIterator, Sum};
@@ -113,15 +117,21 @@ where
 
 /// A catenable list of values of type `A`.
 ///
-/// A data structure like the simple `ConsList` but with
+/// A data structure like the simple [`ConsList`][conslist::ConsList] but with
 /// efficient (generally O(1) in the worst case) add
-/// and remove operations on both ends.
+/// and remove operations on both ends, implemented as a [`Queue`][queue::Queue]
+/// of [`ConsList`][conslist::ConsList]s.
 ///
 /// If you need a list but haven't thought hard about your
 /// performance requirements, this is most likely the list you
 /// want. If you're mostly going to be consing and unconsing, and
 /// you have a lot of data, or a lot of lists, you might want the
-/// `ConsList` instead. When in doubt, choose the `List`.
+/// [`ConsList`][conslist::ConsList] instead. If you really just need a queue, you might
+/// be looking for the [`Queue`][queue::Queue]. When in doubt, choose the [`List`][list::List].
+///
+/// [queue::Queue]: ../queue/struct.Queue.html
+/// [list::List]: ../list/struct.List.html
+/// [conslist::ConsList]: ../conslist/struct.ConsList.html
 pub struct List<A>(Arc<ListNode<A>>);
 
 #[doc(hidden)]
@@ -144,10 +154,10 @@ impl<A> List<A> {
         List::new().push_front(a)
     }
 
-    /// Construct a list by consuming an `IntoIterator`.
+    /// Construct a list by consuming an [`IntoIterator`][std::iter::IntoIterator].
     ///
     /// Allows you to construct a list out of anything that implements
-    /// the `IntoIterator` trait.
+    /// the [`IntoIterator`][std::iter::IntoIterator] trait.
     ///
     /// Time: O(n)
     ///
@@ -163,6 +173,8 @@ impl<A> List<A> {
     /// );
     /// # }
     /// ```
+    ///
+    /// [std::iter::IntoIterator]: https://doc.rust-lang.org/std/iter/trait.IntoIterator.html
     pub fn from<R, I>(it: I) -> List<A>
     where
         I: IntoIterator<Item = R>,
@@ -285,10 +297,13 @@ impl<A> List<A> {
     /// Construct a list with a new value appended to the back of the
     /// current list.
     ///
-    /// `snoc`, for the curious, is `cons` spelled backwards, to denote
+    /// `snoc`, for the curious, is [`cons`][cons] spelled backwards, to denote
     /// that it works on the back of the list rather than the front.
     /// If you don't find that as clever as whoever coined the term no
-    /// doubt did, this method is also available as `List::push_back()`.
+    /// doubt did, this method is also available as [`push_back()`][push_back].
+    ///
+    /// [push_back]: #method.push_back
+    /// [cons]: #method.cons
     pub fn snoc<R>(&self, a: R) -> Self
     where
         R: Shared<A>,
@@ -307,9 +322,9 @@ impl<A> List<A> {
 
     /// Get the head and the tail of a list.
     ///
-    /// This function performs both the `head` function and
-    /// the `tail` function in one go, returning a tuple
-    /// of the head and the tail, or `None` if the list is
+    /// This function performs both the [`head`][head] function and
+    /// the [`tail`][tail] function in one go, returning a tuple
+    /// of the head and the tail, or [`None`][None] if the list is
     /// empty.
     ///
     /// # Examples
@@ -333,6 +348,10 @@ impl<A> List<A> {
     /// # fn main() {
     /// # }
     /// ```
+    ///
+    /// [head]: #method.head
+    /// [tail]: #method.tail
+    /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
     pub fn uncons(&self) -> Option<(Arc<A>, List<A>)> {
         self.head().and_then(|h| self.tail().map(|t| (h, t)))
     }

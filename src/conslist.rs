@@ -14,10 +14,12 @@
 //! are generally O(n).
 //!
 //! Unless you know you want a `ConsList`, you might be better
-//! off using a `List`, which has more generically efficient
+//! off using a [`List`][list::List], which has more generically efficient
 //! performance characteristics, but which is outperformed by
 //! the `ConsList` if you're usually only operating on the
 //! front of the list.
+//!
+//! [list::List]: ../list/struct.List.html
 
 use std::sync::Arc;
 use std::iter::{FromIterator, Iterator, Sum};
@@ -112,6 +114,7 @@ macro_rules! conslist {
 /// 'cadder', while `cddr` is 'cududder', and `caddr` (the `car` of the
 /// `cdr` of the `cdr`) is 'cadudder'. It can get a little subtle for the
 /// untrained ear.
+#[inline]
 pub fn cons<A, RA, RD>(car: RA, cdr: RD) -> ConsList<A>
 where
     RA: Shared<A>,
@@ -129,10 +132,13 @@ where
 /// the length of a list is also O(1). Otherwise, operations
 /// are generally O(n).
 ///
-/// Items in the list are stored in `Arc`s, and insertion
-/// operations accept any value for which there's a `From`
+/// Items in the list are stored in [`Arc`][std::sync::Arc]s, and insertion
+/// operations accept any value for which there's a [`Shared`][shared::Shared]
 /// implementation into `Arc<A>`. Iterators and lookup
 /// operations, conversely, produce `Arc<A>`.
+///
+/// [std::sync::Arc]: https://doc.rust-lang.org/std/sync/struct.Arc.html
+/// [shared::Shared]: ./shared/trait.Shared.html
 pub struct ConsList<A>(Arc<ConsListNode<A>>);
 
 #[doc(hidden)]
@@ -155,10 +161,10 @@ impl<A> ConsList<A> {
         ConsList(Arc::new(Cons(1, v.shared(), conslist![])))
     }
 
-    /// Construct a list by consuming an `IntoIterator`.
+    /// Construct a list by consuming an [`IntoIterator`][std::iter::IntoIterator].
     ///
     /// Allows you to construct a list out of anything that implements
-    /// the `IntoIterator` trait.
+    /// the [`IntoIterator`][std::iter::IntoIterator] trait.
     ///
     /// Time: O(n)
     ///
@@ -174,6 +180,8 @@ impl<A> ConsList<A> {
     /// );
     /// # }
     /// ```
+    ///
+    /// [std::iter::IntoIterator]: https://doc.rust-lang.org/std/iter/trait.IntoIterator.html
     pub fn from<R, I>(it: I) -> ConsList<A>
     where
         I: IntoIterator<Item = R>,
@@ -232,9 +240,9 @@ impl<A> ConsList<A> {
 
     /// Get the head and the tail of a list.
     ///
-    /// This function performs both the `head` function and
-    /// the `tail` function in one go, returning a tuple
-    /// of the head and the tail, or `None` if the list is
+    /// This function performs both the [`head`][head] function and
+    /// the [`tail`][tail] function in one go, returning a tuple
+    /// of the head and the tail, or [`None`][None] if the list is
     /// empty.
     ///
     /// # Examples
@@ -260,6 +268,10 @@ impl<A> ConsList<A> {
     /// ```
     ///
     /// Time: O(1)
+    ///
+    /// [head]: #method.head
+    /// [tail]: #method.tail
+    /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
     pub fn uncons(&self) -> Option<(Arc<A>, ConsList<A>)> {
         match *self.0 {
             Nil => None,
