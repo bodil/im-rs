@@ -406,7 +406,7 @@ where
                 }
                 let idx = bit_index(node.bitmap, bit);
                 match node.content[idx] {
-                    Entry::Node(ref child) => match child.remove(shift + 5, hash, key) {
+                    Entry::Node(ref child) => match child.remove(shift + HASH_BITS, hash, key) {
                         (ref p, Some(ref result)) if result.ptr_eq(child) => {
                             (p.clone(), Some(self.clone()))
                         }
