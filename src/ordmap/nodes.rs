@@ -5,7 +5,7 @@ use std::ops::IndexMut;
 use self::Insert::*;
 use self::InsertAction::*;
 
-const NODE_SIZE: usize = 4; // Must be an even number!
+const NODE_SIZE: usize = 16; // Must be an even number!
 const MEDIAN: usize = (NODE_SIZE + 1) >> 1;
 
 pub struct Node<K, V>(Arc<NodeData<K, V>>);
@@ -194,6 +194,9 @@ where
     K: Ord,
 {
     pub fn lookup(&self, key: &K) -> Option<Arc<V>> {
+        if self.0.keys.is_empty() {
+            return None;
+        }
         // Start by checking if the key is greater than the node's max,
         // and search the rightmost child if so.
         if key > &*self.0.keys[self.0.keys.len() - 1].key {
@@ -673,10 +676,12 @@ where
                 None => return Remove::NoChange,
                 // Child at location, but it's at minimum capacity.
                 Some(ref child) if child.too_small() => {
-                    match (
-                        self.0.children.get(index - 1),
-                        self.0.children.get(index + 1),
-                    ) {
+                    let left = if index > 0 {
+                        self.0.children.get(index - 1)
+                    } else {
+                        None
+                    }; // index is usize and can't be negative, best make sure it never is.
+                    match (left, self.0.children.get(index + 1)) {
                         // If it has a left sibling with capacity, steal a key from it.
                         (Some(&Some(ref old_left)), _) if !old_left.too_small() => {
                             RemoveAction::StealFromLeft(index)
@@ -767,7 +772,13 @@ where
                     let mut children = node.children
                         .index_mut(index - 1..index + 1)
                         .iter_mut()
-                        .map(|n| if let &mut Some(ref mut o) = n { o } else { unreachable!() });
+                        .map(|n| {
+                            if let &mut Some(ref mut o) = n {
+                                o
+                            } else {
+                                unreachable!()
+                            }
+                        });
                     let mut left = children.next().unwrap();
                     let mut child = children.next().unwrap();
                     // Prepare the rebalanced node.
@@ -808,10 +819,15 @@ where
                 let mut update = None;
                 let mut out_pair;
                 {
-                    let mut children = node.children
-                        .index_mut(index..index + 2)
-                        .iter_mut()
-                        .map(|n| if let &mut Some(ref mut o) = n { o } else { unreachable!() });
+                    let mut children = node.children.index_mut(index..index + 2).iter_mut().map(
+                        |n| {
+                            if let &mut Some(ref mut o) = n {
+                                o
+                            } else {
+                                unreachable!()
+                            }
+                        },
+                    );
                     let mut child = children.next().unwrap();
                     let mut right = children.next().unwrap();
                     // Prepare the rebalanced node.

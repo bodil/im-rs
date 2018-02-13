@@ -85,6 +85,31 @@ fn map_insert_1000(b: &mut Bencher) {
     map_insert_n(1000, b)
 }
 
+fn map_insert_mut_n(size: usize, b: &mut Bencher) {
+    let keys = random_keys(size);
+    b.iter(|| {
+        let mut m = OrdMap::new();
+        for i in keys.clone() {
+            m.insert_mut(i, i)
+        }
+    })
+}
+
+#[bench]
+fn map_insert_mut_10(b: &mut Bencher) {
+    map_insert_mut_n(10, b)
+}
+
+#[bench]
+fn map_insert_mut_100(b: &mut Bencher) {
+    map_insert_mut_n(100, b)
+}
+
+#[bench]
+fn map_insert_mut_1000(b: &mut Bencher) {
+    map_insert_mut_n(1000, b)
+}
+
 fn map_remove_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size);
     let order = reorder(&keys);
@@ -110,6 +135,33 @@ fn map_remove_100(b: &mut Bencher) {
 #[bench]
 fn map_remove_1000(b: &mut Bencher) {
     map_remove_n(1000, b)
+}
+
+fn map_remove_mut_n(size: usize, b: &mut Bencher) {
+    let keys = random_keys(size);
+    let order = reorder(&keys);
+    let map: OrdMap<i64, i64> = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
+    b.iter(|| {
+        let mut m = map.clone();
+        for i in &order {
+            m.remove_mut(&i)
+        }
+    })
+}
+
+#[bench]
+fn map_remove_mut_10(b: &mut Bencher) {
+    map_remove_mut_n(10, b)
+}
+
+#[bench]
+fn map_remove_mut_100(b: &mut Bencher) {
+    map_remove_mut_n(100, b)
+}
+
+#[bench]
+fn map_remove_mut_1000(b: &mut Bencher) {
+    map_remove_mut_n(1000, b)
 }
 
 #[bench]

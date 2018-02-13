@@ -27,9 +27,9 @@ use shared::Shared;
 use lens::PartialLens;
 use hashmap::HashMap;
 
-use self::MapNode::{Leaf, Three, Two};
-
-mod walk;
+mod nodes;
+use self::nodes::{Insert, Node, Remove};
+pub use self::nodes::Iter;
 
 /// Construct a map from a sequence of key/value pairs.
 ///
@@ -56,7 +56,7 @@ macro_rules! ordmap {
     ( $( $key:expr => $value:expr ),* ) => {{
         let mut map = $crate::ordmap::OrdMap::new();
         $({
-            map = map.insert($key, $value);
+            map.insert_mut($key, $value);
         })*;
         map
     }};
@@ -76,28 +76,12 @@ macro_rules! ordmap {
 ///
 /// [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 /// [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
-pub struct OrdMap<K, V>(Arc<MapNode<K, V>>);
-
-#[doc(hidden)]
-pub enum MapNode<K, V> {
-    Leaf,
-    Two(usize, OrdMap<K, V>, Arc<K>, Arc<V>, OrdMap<K, V>),
-    Three(
-        usize,
-        OrdMap<K, V>,
-        Arc<K>,
-        Arc<V>,
-        OrdMap<K, V>,
-        Arc<K>,
-        Arc<V>,
-        OrdMap<K, V>,
-    ),
-}
+pub struct OrdMap<K, V>(Node<K, V>);
 
 impl<K, V> OrdMap<K, V> {
     /// Construct an empty map.
     pub fn new() -> Self {
-        OrdMap(Arc::new(Leaf))
+        OrdMap(Node::new())
     }
 
     /// Construct a map with a single mapping.
@@ -116,12 +100,12 @@ impl<K, V> OrdMap<K, V> {
     /// );
     /// # }
     /// ```
-    pub fn singleton<RK, RV>(k: RK, v: RV) -> Self
+    pub fn singleton<RK, RV>(key: RK, value: RV) -> Self
     where
         RK: Shared<K>,
         RV: Shared<V>,
     {
-        OrdMap::two(ordmap![], k.shared(), v.shared(), ordmap![])
+        OrdMap(Node::singleton(key.shared(), value.shared()))
     }
 
     /// Test whether a map is empty.
@@ -142,16 +126,14 @@ impl<K, V> OrdMap<K, V> {
     /// );
     /// # }
     /// ```
+    #[inline]
     pub fn is_empty(&self) -> bool {
-        match *self.0 {
-            Leaf => true,
-            _ => false,
-        }
+        self.len() == 0
     }
 
     /// Get an iterator over the key/value pairs of a map.
     pub fn iter(&self) -> Iter<K, V> {
-        Iter::new(self)
+        Iter::new(&self.0)
     }
 
     /// Get an iterator over a map's keys.
@@ -181,12 +163,9 @@ impl<K, V> OrdMap<K, V> {
     /// }.len());
     /// # }
     /// ```
+    #[inline]
     pub fn len(&self) -> usize {
-        match *self.0 {
-            Leaf => 0,
-            Two(l, _, _, _, _) => l,
-            Three(l, _, _, _, _, _, _, _) => l,
-        }
+        self.0.len()
     }
 
     /// Get the largest key in a map, along with its value.
@@ -209,15 +188,7 @@ impl<K, V> OrdMap<K, V> {
     /// # }
     /// ```
     pub fn get_max(&self) -> Option<(Arc<K>, Arc<V>)> {
-        match *self.0 {
-            Leaf => None,
-            Two(_, _, ref k1, ref v1, ref right) => {
-                Some(right.get_max().unwrap_or((k1.clone(), v1.clone())))
-            }
-            Three(_, _, _, _, _, ref k2, ref v2, ref right) => {
-                Some(right.get_max().unwrap_or((k2.clone(), v2.clone())))
-            }
-        }
+        self.0.max().map(|p| (p.key.clone(), p.value.clone()))
     }
 
     /// Get the smallest key in a map, along with its value.
@@ -240,46 +211,7 @@ impl<K, V> OrdMap<K, V> {
     /// # }
     /// ```
     pub fn get_min(&self) -> Option<(Arc<K>, Arc<V>)> {
-        match *self.0 {
-            Leaf => None,
-            Two(_, ref left, ref k1, ref v1, _) => {
-                Some(left.get_min().unwrap_or((k1.clone(), v1.clone())))
-            }
-            Three(_, ref left, ref k1, ref v1, _, _, _, _) => {
-                Some(left.get_min().unwrap_or((k1.clone(), v1.clone())))
-            }
-        }
-    }
-
-    fn two(left: OrdMap<K, V>, k: Arc<K>, v: Arc<V>, right: OrdMap<K, V>) -> Self {
-        OrdMap(Arc::new(Two(
-            left.len() + right.len() + 1,
-            left,
-            k,
-            v,
-            right,
-        )))
-    }
-
-    fn three(
-        left: OrdMap<K, V>,
-        k1: Arc<K>,
-        v1: Arc<V>,
-        mid: OrdMap<K, V>,
-        k2: Arc<K>,
-        v2: Arc<V>,
-        right: OrdMap<K, V>,
-    ) -> OrdMap<K, V> {
-        OrdMap(Arc::new(Three(
-            left.len() + mid.len() + right.len() + 2,
-            left,
-            k1,
-            v1,
-            mid,
-            k2,
-            v2,
-            right,
-        )))
+        self.0.min().map(|p| (p.key.clone(), p.value.clone()))
     }
 }
 
@@ -352,7 +284,7 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// # }
     /// ```
     pub fn get(&self, k: &K) -> Option<Arc<V>> {
-        walk::lookup(self, k)
+        self.0.lookup(k)
     }
 
     /// Get the value for a key from a map, or a default value
@@ -435,11 +367,66 @@ impl<K: Ord, V> OrdMap<K, V> {
         RK: Shared<K>,
         RV: Shared<V>,
     {
-        walk::ins_down(conslist![], k.shared(), v.shared(), self.clone())
+        self.insert_ref(k.shared(), v.shared())
     }
 
     fn insert_ref(&self, k: Arc<K>, v: Arc<V>) -> Self {
-        walk::ins_down(conslist![], k, v, self.clone())
+        match self.0.insert(k, v) {
+            Insert::NoChange => self.clone(),
+            Insert::JustInc => unreachable!(),
+            Insert::Update(root) => OrdMap(root),
+            Insert::Split(left, median, right) => OrdMap(Node::from_split(left, median, right)),
+        }
+    }
+
+    /// Insert a key/value mapping into a map, mutating it in place when it is
+    /// safe to do so.
+    ///
+    /// If you are the sole owner of the map, it is safe to mutate it without
+    /// losing immutability guarantees, gaining us a considerable performance
+    /// advantage. If the map is in use elsewhere, this operation will safely
+    /// clone the map before mutating it, acting just like the immutable
+    /// [`insert`][insert] operation.
+    ///
+    /// If the map already has a mapping for the given key, the previous value
+    /// is overwritten.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// let mut map = ordmap!{};
+    /// map.insert_mut(123, "123");
+    /// map.insert_mut(456, "456");
+    /// assert_eq!(
+    ///   map,
+    ///   ordmap!{123 => "123", 456 => "456"}
+    /// );
+    /// # }
+    /// ```
+    ///
+    /// [insert]: #method.insert
+    #[inline]
+    pub fn insert_mut<RK, RV>(&mut self, k: RK, v: RV)
+    where
+        RK: Shared<K>,
+        RV: Shared<V>,
+    {
+        self.insert_mut_ref(k.shared(), v.shared())
+    }
+
+    fn insert_mut_ref(&mut self, k: Arc<K>, v: Arc<V>) {
+        match self.0.insert_mut(k, v) {
+            Insert::NoChange => {}
+            Insert::JustInc => {}
+            Insert::Update(root) => self.0 = root,
+            Insert::Split(left, median, right) => self.0 = Node::from_split(left, median, right),
+        }
     }
 
     /// Construct a new map by inserting a key/value mapping into a map.
@@ -594,6 +581,37 @@ impl<K: Ord, V> OrdMap<K, V> {
         self.pop(k).map(|(_, m)| m).unwrap_or_else(|| self.clone())
     }
 
+    /// Remove a key/value mapping from a map if it exists, mutating it in place
+    /// when it is safe to do so.
+    ///
+    /// If you are the sole owner of the map, it is safe to mutate it without
+    /// losing immutability guarantees, gaining us a considerable performance
+    /// advantage. If the map is in use elsewhere, this operation will safely
+    /// clone the map before mutating it, acting just like the immutable
+    /// [`remove`][remove] operation.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// let mut map = ordmap!{123 => "123", 456 => "456"};
+    /// map.remove_mut(&123);
+    /// map.remove_mut(&456);
+    /// assert!(map.is_empty());
+    /// # }
+    /// ```
+    ///
+    /// [remove]: #method.remove
+    #[inline]
+    pub fn remove_mut(&mut self, k: &K) {
+        self.pop_with_key_mut(k);
+    }
+
     /// Remove a key/value pair from a map, if it exists, and return the removed value
     /// as well as the updated list.
     ///
@@ -602,12 +620,31 @@ impl<K: Ord, V> OrdMap<K, V> {
         self.pop_with_key(k).map(|(_, v, m)| (v, m))
     }
 
+    pub fn pop_mut(&mut self, k: &K) -> Option<Arc<V>> {
+        self.pop_with_key_mut(k).map(|(_, v)| v)
+    }
+
     /// Remove a key/value pair from a map, if it exists, and return the removed key and value
     /// as well as the updated list.
     ///
     /// Time: O(log n)
     pub fn pop_with_key(&self, k: &K) -> Option<(Arc<K>, Arc<V>, Self)> {
-        walk::pop_down(conslist![], k, self.clone())
+        match self.0.remove(k) {
+            Remove::NoChange => None,
+            Remove::Removed(_) => unreachable!(),
+            Remove::Update(pair, root) => Some((pair.key, pair.value, OrdMap(root))),
+        }
+    }
+
+    pub fn pop_with_key_mut(&mut self, k: &K) -> Option<(Arc<K>, Arc<V>)> {
+        match self.0.remove_mut(k) {
+            Remove::NoChange => None,
+            Remove::Removed(pair) => Some((pair.key, pair.value)),
+            Remove::Update(pair, root) => {
+                self.0 = root;
+                Some((pair.key, pair.value))
+            }
+        }
     }
 
     /// Construct the union of two maps, keeping the values in the current map
@@ -933,8 +970,7 @@ impl<K: PartialEq, V: PartialEq> PartialEq for OrdMap<K, V> {
 #[cfg(has_specialisation)]
 impl<K: Eq, V: Eq> PartialEq for OrdMap<K, V> {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
-            || (self.len() == other.len() && self.iter().eq(other.iter()))
+        self.0.ptr_eq(&other.0) || (self.len() == other.len() && self.iter().eq(other.iter()))
     }
 }
 
@@ -999,77 +1035,6 @@ impl<K: Debug, V: Debug> Debug for OrdMap<K, V> {
 
 // Iterators
 
-enum IterItem<K, V> {
-    Consider(OrdMap<K, V>),
-    Yield(Arc<K>, Arc<V>),
-}
-
-enum IterResult<K, V> {
-    Next(Arc<K>, Arc<V>),
-    Walk,
-    Done,
-}
-
-pub struct Iter<K, V> {
-    stack: Vec<IterItem<K, V>>,
-    remaining: usize,
-}
-
-impl<K, V> Iter<K, V> {
-    fn new(m: &OrdMap<K, V>) -> Iter<K, V> {
-        Iter {
-            stack: vec![IterItem::Consider(m.clone())],
-            remaining: m.len(),
-        }
-    }
-
-    fn step(&mut self) -> IterResult<K, V> {
-        match self.stack.pop() {
-            None => IterResult::Done,
-            Some(IterItem::Consider(m)) => match *m.0 {
-                Leaf => return IterResult::Walk,
-                Two(_, ref left, ref k, ref v, ref right) => {
-                    self.stack.push(IterItem::Consider(right.clone()));
-                    self.stack.push(IterItem::Yield(k.clone(), v.clone()));
-                    self.stack.push(IterItem::Consider(left.clone()));
-                    IterResult::Walk
-                }
-                Three(_, ref left, ref k1, ref v1, ref mid, ref k2, ref v2, ref right) => {
-                    self.stack.push(IterItem::Consider(right.clone()));
-                    self.stack.push(IterItem::Yield(k2.clone(), v2.clone()));
-                    self.stack.push(IterItem::Consider(mid.clone()));
-                    self.stack.push(IterItem::Yield(k1.clone(), v1.clone()));
-                    self.stack.push(IterItem::Consider(left.clone()));
-                    IterResult::Walk
-                }
-            },
-            Some(IterItem::Yield(k, v)) => IterResult::Next(k, v),
-        }
-    }
-}
-
-impl<K, V> Iterator for Iter<K, V> {
-    type Item = (Arc<K>, Arc<V>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut action = IterResult::Walk;
-        loop {
-            match action {
-                IterResult::Walk => action = self.step(),
-                IterResult::Done => return None,
-                IterResult::Next(k, v) => {
-                    self.remaining -= 1;
-                    return Some((k, v));
-                }
-            }
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.remaining, Some(self.remaining))
-    }
-}
-
 pub struct Keys<K, V> {
     it: Iter<K, V>,
 }
@@ -1109,7 +1074,11 @@ where
     where
         T: IntoIterator<Item = (RK, RV)>,
     {
-        i.into_iter().fold(ordmap![], |m, (k, v)| m.insert(k, v))
+        let mut m = OrdMap::default();
+        for (k, v) in i.into_iter() {
+            m.insert_mut(k, v);
+        }
+        m
     }
 }
 
@@ -1270,6 +1239,7 @@ impl<'a, K: Ord, V, S> From<&'a HashMap<K, V, S>> for OrdMap<K, V> {
         m.into_iter().collect()
     }
 }
+
 // QuickCheck
 
 #[cfg(any(test, feature = "quickcheck"))]
@@ -1328,6 +1298,8 @@ mod test {
     use super::proptest::*;
     use test::is_sorted;
     use conslist::ConsList;
+    use proptest::collection;
+    use proptest::num::{usize, i16};
 
     #[test]
     fn iterates_in_order() {
@@ -1425,6 +1397,15 @@ mod test {
         assert_eq!(c1, c2);
     }
 
+    #[test]
+    fn insert_remove_single_mut() {
+        let mut m = OrdMap::new();
+        m.insert_mut(0, 0);
+        assert_eq!(OrdMap::singleton(0, 0), m);
+        m.remove_mut(&0);
+        assert_eq!(OrdMap::new(), m);
+    }
+
     quickcheck! {
         fn length(input: Vec<i32>) -> bool {
             let mut vec = input;
@@ -1437,12 +1418,6 @@ mod test {
         fn order(vec: Vec<(i32, i32)>) -> bool {
             let map = OrdMap::from_iter(vec.into_iter());
             is_sorted(map.keys().map(|k| *k))
-        }
-
-        fn equality(vec: Vec<(i32, i32)>) -> bool {
-            let left = OrdMap::from_iter(vec.clone());
-            let right = OrdMap::from_iter(vec);
-            left == right
         }
 
         fn overwrite_values(vec: Vec<(usize, usize)>, index_rand: usize, new_val: usize) -> bool {
@@ -1472,17 +1447,6 @@ mod test {
             map2.keys().all(|k| *k != index) && map1.len() == map2.len() + 1
         }
 
-        fn delete_and_reinsert_values(vec: Vec<(usize, usize)>, index_rand: usize) -> bool {
-            if vec.len() == 0 {
-                return true
-            }
-            let index = vec[index_rand % vec.len()].0;
-            let map1 = OrdMap::from_iter(vec.clone());
-            let (val, map2) = map1.pop(&index).unwrap();
-            let map3 = map2.insert(index, val);
-            map2.keys().all(|k| *k != index) && map1.len() == map2.len() + 1 && map1 == map3
-        }
-
         fn insert_and_delete_values(
             input_unbounded: Vec<(usize, usize)>, ops: Vec<(bool, usize, usize)>
         ) -> bool {
@@ -1508,6 +1472,97 @@ mod test {
         fn proptest_works(ref m in ord_map(0..9999, ".*", 10..100)) {
             assert!(m.len() < 100);
             assert!(m.len() >= 10);
+        }
+
+        #[test]
+        fn insert_and_length(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+            let mut map: OrdMap<i16, i16> = OrdMap::new();
+            for (k, v) in m.iter() {
+                map = map.insert(*k, *v)
+            }
+            assert_eq!(m.len(), map.len());
+        }
+
+        #[test]
+        fn from_iterator(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+            let map: OrdMap<i16, i16> =
+                FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+            assert_eq!(m.len(), map.len());
+        }
+
+        #[test]
+        fn iterate_over(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+            let map: OrdMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+            assert_eq!(m.len(), map.iter().count());
+        }
+
+        #[test]
+        fn equality(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..128)) {
+            let map1: OrdMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+            let map2: OrdMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+            assert_eq!(map1, map2);
+        }
+
+        #[test]
+        fn lookup(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+            let map: OrdMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+            for (k, v) in m.into_iter() {
+                assert_eq!(Some(*v), map.get(k).map(|v| *v));
+            }
+        }
+
+        #[test]
+        fn remove(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+            let mut map: OrdMap<i16, i16> =
+                FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+            for k in m.keys() {
+                let l = map.len();
+                assert_eq!(m.get(k).map(|v| *v), map.get(k).map(|v| *v));
+                map = map.remove(&k);
+                assert_eq!(None, map.get(k));
+                assert_eq!(l - 1, map.len());
+            }
+        }
+
+        #[test]
+        fn insert_mut(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+            let mut mut_map = OrdMap::new();
+            let mut map = OrdMap::new();
+            for (k, v) in m.iter() {
+                map = map.insert(*k, *v);
+                mut_map.insert_mut(*k, *v);
+            }
+            assert_eq!(map, mut_map);
+        }
+
+        #[test]
+        fn remove_mut(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+            let mut map: OrdMap<i16, i16> =
+                FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+            for k in m.keys() {
+                let l = map.len();
+                assert_eq!(m.get(k).map(|v| *v), map.get(k).map(|v| *v));
+                map.remove_mut(&k);
+                assert_eq!(None, map.get(k));
+                assert_eq!(l - 1, map.len());
+            }
+        }
+
+        // Failing: ([(7, 0), (3, 0), (8, 0), (9, 0), (0, 0), (4, 0), (0, 0), (1, 0),
+        //  (2, 0), (5, 0), (0, 0), (10, 0), (0, 0), (6, 0), (11, 0), (0, 0), (12, 0),
+        //  (13, 0), (14, 0), (15, 0)], 48)
+        #[test]
+        fn delete_and_reinsert(ref input in collection::hash_map(i16::ANY, i16::ANY, 1..100),
+                               index_rand in usize::ANY) {
+            let index = input.keys().skip(index_rand % input.len()).next().unwrap().clone();
+            let map1 = OrdMap::from_iter(input.clone());
+            let (val, map2) = map1.pop(&index).unwrap();
+            let map3 = map2.insert(index, val);
+            for key in map2.keys() {
+                assert!(*key != index);
+            }
+            assert_eq!(map1.len(), map2.len() + 1);
+            assert_eq!(map1, map3);
         }
     }
 }
