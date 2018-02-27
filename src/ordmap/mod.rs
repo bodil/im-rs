@@ -1303,7 +1303,7 @@ pub mod proptest {
     ///     }
     /// }
     /// ```
-    pub fn map<K: Strategy + 'static, V: Strategy + 'static>(
+    pub fn ord_map<K: Strategy + 'static, V: Strategy + 'static>(
         key: K,
         value: V,
         size: Range<usize>,
@@ -1505,7 +1505,7 @@ mod test {
 
     proptest! {
         #[test]
-        fn proptest_works(ref m in map(0..9999, ".*", 10..100)) {
+        fn proptest_works(ref m in ord_map(0..9999, ".*", 10..100)) {
             assert!(m.len() < 100);
             assert!(m.len() >= 10);
         }

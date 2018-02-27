@@ -299,34 +299,49 @@ impl<A: Serialize + Hash + Eq, S: SharedHasher> Serialize for HashSet<A, S> {
 mod test {
     use super::*;
     use serde_json::{from_str, to_string};
+    use list::proptest::list;
+    use proptest::num::i32;
+    use conslist::proptest::conslist;
+    use hashmap::proptest::hash_map;
+    use hashset::proptest::hash_set;
+    use ordmap::proptest::ord_map;
+    use ordset::proptest::ord_set;
+    use queue::proptest::queue;
 
-    quickcheck! {
-        fn list(list: List<i32>) -> bool {
-            from_str::<List<i32>>(&to_string(&list).unwrap()).unwrap() == list
+    proptest! {
+        #[test]
+        fn ser_list(ref v in list(i32::ANY, 0..100)) {
+            assert_eq!(v, &from_str::<List<i32>>(&to_string(&v).unwrap()).unwrap());
         }
 
-        fn conslist(list: ConsList<i32>) -> bool {
-            from_str::<ConsList<i32>>(&to_string(&list).unwrap()).unwrap() == list
+        #[test]
+        fn ser_conslist(ref v in conslist(i32::ANY, 0..100)) {
+            assert_eq!(v, &from_str::<ConsList<i32>>(&to_string(&v).unwrap()).unwrap());
         }
 
-        fn ordset(list: OrdSet<i32>) -> bool {
-            from_str::<OrdSet<i32>>(&to_string(&list).unwrap()).unwrap() == list
+        #[test]
+        fn ser_ordset(ref v in ord_set(i32::ANY, 0..100)) {
+            assert_eq!(v, &from_str::<OrdSet<i32>>(&to_string(&v).unwrap()).unwrap());
         }
 
-        fn queue(list: Queue<i32>) -> bool {
-            from_str::<Queue<i32>>(&to_string(&list).unwrap()).unwrap() == list
+        #[test]
+        fn ser_queue(ref v in queue(i32::ANY, 0..100)) {
+            assert_eq!(v, &from_str::<Queue<i32>>(&to_string(&v).unwrap()).unwrap());
         }
 
-        fn ordmap(list: OrdMap<i32, i32>) -> bool {
-            from_str::<OrdMap<i32, i32>>(&to_string(&list).unwrap()).unwrap() == list
+        #[test]
+        fn ser_ordmap(ref v in ord_map(i32::ANY, i32::ANY, 0..100)) {
+            assert_eq!(v, &from_str::<OrdMap<i32, i32>>(&to_string(&v).unwrap()).unwrap());
         }
 
-        fn hashmap(list: HashMap<i32, i32>) -> bool {
-            from_str::<HashMap<i32, i32>>(&to_string(&list).unwrap()).unwrap() == list
+        #[test]
+        fn ser_hashmap(ref v in hash_map(i32::ANY, i32::ANY, 0..100)) {
+            assert_eq!(v, &from_str::<HashMap<i32, i32>>(&to_string(&v).unwrap()).unwrap());
         }
 
-        fn hashset(list: HashSet<i32>) -> bool {
-            from_str::<HashSet<i32>>(&to_string(&list).unwrap()).unwrap() == list
+        #[test]
+        fn ser_hashset(ref v in hash_set(i32::ANY, 0..100)) {
+            assert_eq!(v, &from_str::<HashSet<i32>>(&to_string(&v).unwrap()).unwrap());
         }
 
     }

@@ -516,7 +516,7 @@ pub mod proptest {
     ///     }
     /// }
     /// ```
-    pub fn hashset<A: Strategy + 'static>(
+    pub fn hash_set<A: Strategy + 'static>(
         element: A,
         size: Range<usize>,
     ) -> BoxedStrategy<HashSet<<A::Value as ValueTree>::Value>>
@@ -538,7 +538,7 @@ mod test {
 
     proptest! {
         #[test]
-        fn proptest_a_set(ref s in hashset(".*", 10..100)) {
+        fn proptest_a_set(ref s in hash_set(".*", 10..100)) {
             assert!(s.len() < 100);
             assert!(s.len() >= 10);
         }

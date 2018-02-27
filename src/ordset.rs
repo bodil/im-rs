@@ -517,7 +517,7 @@ pub mod proptest {
     ///     }
     /// }
     /// ```
-    pub fn ordset<A: Strategy + 'static>(
+    pub fn ord_set<A: Strategy + 'static>(
         element: A,
         size: Range<usize>,
     ) -> BoxedStrategy<OrdSet<<A::Value as ValueTree>::Value>>
@@ -539,7 +539,7 @@ mod test {
 
     proptest! {
         #[test]
-        fn proptest_a_set(ref s in ordset(".*", 10..100)) {
+        fn proptest_a_set(ref s in ord_set(".*", 10..100)) {
             assert!(s.len() < 100);
             assert!(s.len() >= 10);
         }
