@@ -453,6 +453,10 @@ impl<A> ConsList<A> {
 
         merge_all(&sequences(self, &cmp), &cmp)
     }
+
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
 }
 
 impl ConsList<i32> {

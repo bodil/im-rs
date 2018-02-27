@@ -52,11 +52,38 @@ impl<A> Queue<A> {
     /// of the current queue.
     ///
     /// Time: O(1)
-    pub fn push<R>(&self, v: R) -> Self
+    pub fn push_back<R>(&self, v: R) -> Self
     where
         R: Shared<A>,
     {
         Queue(self.0.clone(), self.1.cons(v))
+    }
+
+    /// Construct a new queue by appending an element to the end
+    /// of the current queue.
+    ///
+    /// Time: O(1)
+    //
+    /// This is an alias for [`push_back`][push_back].
+    ///
+    /// [push_back]: #method.push_back
+    #[inline]
+    pub fn push<R>(&self, v: R) -> Self
+    where
+        R: Shared<A>,
+    {
+        self.push_back(v)
+    }
+
+    /// Construct a new queue by appending an element to the front
+    /// of the current queue.
+    ///
+    /// Time: O(1)
+    pub fn push_front<R>(&self, v: R) -> Self
+    where
+        R: Shared<A>,
+    {
+        Queue(self.1.cons(v), self.0.clone())
     }
 
     /// Get the first element out of a queue, as well as the remainder
@@ -64,12 +91,41 @@ impl<A> Queue<A> {
     ///
     /// Returns `None` if the queue is empty. Otherwise, you get a tuple
     /// of the first element and the remainder of the queue.
-    pub fn pop(&self) -> Option<(Arc<A>, Queue<A>)> {
+    pub fn pop_front(&self) -> Option<(Arc<A>, Queue<A>)> {
         match self {
             &Queue(ref l, ref r) if l.is_empty() && r.is_empty() => None,
             &Queue(ref l, ref r) => match l.uncons() {
-                None => Queue(r.reverse(), conslist![]).pop(),
+                None => Queue(r.reverse(), conslist![]).pop_front(),
                 Some((a, d)) => Some((a, Queue(d, r.clone()))),
+            },
+        }
+    }
+
+    /// Get the first element out of a queue, as well as the remainder
+    /// of the queue.
+    ///
+    /// Returns `None` if the queue is empty. Otherwise, you get a tuple
+    /// of the first element and the remainder of the queue.
+    ///
+    /// This is an alias for [`pop_front`][pop_front].
+    ///
+    /// [pop_front]: #method.pop_front
+    #[inline]
+    pub fn pop(&self) -> Option<(Arc<A>, Queue<A>)> {
+        self.pop_front()
+    }
+
+    /// Get the last element out of a queue, as well as the remainder
+    /// of the queue.
+    ///
+    /// Returns `None` if the queue is empty. Otherwise, you get a tuple
+    /// of the last element and the remainder of the queue.
+    pub fn pop_back(&self) -> Option<(Arc<A>, Queue<A>)> {
+        match self {
+            &Queue(ref l, ref r) if l.is_empty() && r.is_empty() => None,
+            &Queue(ref l, ref r) => match r.uncons() {
+                None => Queue(conslist![], l.reverse()).pop_back(),
+                Some((a, d)) => Some((a, Queue(l.clone(), d))),
             },
         }
     }
@@ -79,6 +135,10 @@ impl<A> Queue<A> {
         Iter {
             current: self.clone(),
         }
+    }
+
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        self.0.ptr_eq(&other.0) && self.1.ptr_eq(&other.1)
     }
 }
 
@@ -118,7 +178,24 @@ impl<A> Iterator for Iter<A> {
     type Item = Arc<A>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.current.pop() {
+        match self.current.pop_front() {
+            None => None,
+            Some((a, q)) => {
+                self.current = q;
+                Some(a)
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let l = self.current.len();
+        (l, Some(l))
+    }
+}
+
+impl<A> DoubleEndedIterator for Iter<A> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        match self.current.pop_back() {
             None => None,
             Some((a, q)) => {
                 self.current = q;
@@ -127,6 +204,8 @@ impl<A> Iterator for Iter<A> {
         }
     }
 }
+
+impl<A> ExactSizeIterator for Iter<A> {}
 
 impl<A> IntoIterator for Queue<A> {
     type Item = Arc<A>;
@@ -254,6 +333,11 @@ mod test {
         fn order(v: Vec<i32>) -> bool {
             let q = Queue::from_iter(v.clone());
             v == Vec::from_iter(q.iter().map(|a| *a))
+        }
+
+        fn reverse_order(v: Vec<i32>) -> bool {
+            let q = Queue::from_iter(v.iter().rev().cloned());
+            v == Vec::from_iter(q.iter().rev().map(|a| *a))
         }
     }
 }
