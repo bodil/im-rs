@@ -963,14 +963,25 @@ impl<K, V, S> PartialEq for HashMap<K, V, S>
 where
     K: Hash + Eq,
     V: PartialEq,
+    S: SharedHasher,
 {
     fn eq(&self, other: &Self) -> bool {
-        if Arc::ptr_eq(&self.hasher, &other.hasher) {
-            return self.iter().eq(other.iter());
+        if self.len() != other.len() {
+            return false;
         }
-        let m1: ::std::collections::HashMap<Arc<K>, Arc<V>> = self.iter().collect();
-        let m2: ::std::collections::HashMap<Arc<K>, Arc<V>> = other.iter().collect();
-        m1.eq(&m2)
+        let mut seen = collections::HashSet::new();
+        for key in self.keys() {
+            if self.get(&key) != other.get(&key) {
+                return false;
+            }
+            seen.insert(key);
+        }
+        for key in other.keys() {
+            if !seen.contains(&key) {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -979,14 +990,25 @@ impl<K, V, S> PartialEq for HashMap<K, V, S>
 where
     K: Hash + Eq,
     V: PartialEq,
+    S: SharedHasher,
 {
     default fn eq(&self, other: &Self) -> bool {
-        if Arc::ptr_eq(&self.hasher, &other.hasher) {
-            return self.iter().eq(other.iter());
+        if self.len() != other.len() {
+            return false;
         }
-        let m1: ::std::collections::HashMap<Arc<K>, Arc<V>> = self.iter().collect();
-        let m2: ::std::collections::HashMap<Arc<K>, Arc<V>> = other.iter().collect();
-        m1.eq(&m2)
+        let mut seen = collections::HashSet::new();
+        for key in self.keys() {
+            if self.get(&key) != other.get(&key) {
+                return false;
+            }
+            seen.insert(key);
+        }
+        for key in other.keys() {
+            if !seen.contains(&key) {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -995,26 +1017,38 @@ impl<K, V, S> PartialEq for HashMap<K, V, S>
 where
     K: Hash + Eq,
     V: Eq,
+    S: SharedHasher,
 {
     fn eq(&self, other: &Self) -> bool {
         if self.root.ptr_eq(&other.root) {
             return true;
         }
-        if Arc::ptr_eq(&self.hasher, &other.hasher) {
-            return self.iter().eq(other.iter());
+        if self.len() != other.len() {
+            return false;
         }
-        let m1: ::std::collections::HashMap<Arc<K>, Arc<V>> = self.iter().collect();
-        let m2: ::std::collections::HashMap<Arc<K>, Arc<V>> = other.iter().collect();
-        m1.eq(&m2)
+        let mut seen = collections::HashSet::new();
+        for key in self.keys() {
+            if self.get(&key) != other.get(&key) {
+                return false;
+            }
+            seen.insert(key);
+        }
+        for key in other.keys() {
+            if !seen.contains(&key) {
+                return false;
+            }
+        }
+        true
     }
 }
 
-impl<K: Hash + Eq, V: Eq, S> Eq for HashMap<K, V, S> {}
+impl<K: Hash + Eq, V: Eq, S: SharedHasher> Eq for HashMap<K, V, S> {}
 
 impl<K, V, S> PartialOrd for HashMap<K, V, S>
 where
     K: Hash + Eq + PartialOrd,
     V: PartialOrd,
+    S: SharedHasher,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         if Arc::ptr_eq(&self.hasher, &other.hasher) {
@@ -1030,6 +1064,7 @@ impl<K, V, S> Ord for HashMap<K, V, S>
 where
     K: Hash + Eq + Ord,
     V: Ord,
+    S: SharedHasher,
 {
     fn cmp(&self, other: &Self) -> Ordering {
         if Arc::ptr_eq(&self.hasher, &other.hasher) {
@@ -1392,7 +1427,7 @@ pub mod proptest {
 mod test {
     use super::*;
     use proptest::collection;
-    use proptest::num::i16;
+    use proptest::num::{usize, i16};
 
     proptest! {
         #[test]
@@ -1480,6 +1515,20 @@ mod test {
                 assert_eq!(None, map.get(k));
                 assert_eq!(l - 1, map.len());
             }
+        }
+
+        #[test]
+        fn delete_and_reinsert(ref input in collection::hash_map(i16::ANY, i16::ANY, 1..100),
+                               index_rand in usize::ANY) {
+            let index = input.keys().skip(index_rand % input.len()).next().unwrap().clone();
+            let map1: HashMap<_, _> = HashMap::from_iter(input.clone());
+            let (val, map2) = map1.pop(&index).unwrap();
+            let map3 = map2.insert(index, val);
+            for key in map2.keys() {
+                assert!(*key != index);
+            }
+            assert_eq!(map1.len(), map2.len() + 1);
+            assert_eq!(map1, map3);
         }
 
         #[test]

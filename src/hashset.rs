@@ -280,21 +280,21 @@ impl<A, S> Clone for HashSet<A, S> {
     }
 }
 
-impl<A: Hash + Eq, S> PartialEq for HashSet<A, S> {
+impl<A: Hash + Eq, S: SharedHasher> PartialEq for HashSet<A, S> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl<A: Hash + Eq, S> Eq for HashSet<A, S> {}
+impl<A: Hash + Eq, S: SharedHasher> Eq for HashSet<A, S> {}
 
-impl<A: Hash + Eq + PartialOrd, S> PartialOrd for HashSet<A, S> {
+impl<A: Hash + Eq + PartialOrd, S: SharedHasher> PartialOrd for HashSet<A, S> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.0.partial_cmp(&other.0)
     }
 }
 
-impl<A: Hash + Eq + Ord, S> Ord for HashSet<A, S> {
+impl<A: Hash + Eq + Ord, S: SharedHasher> Ord for HashSet<A, S> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.0.cmp(&other.0)
     }
