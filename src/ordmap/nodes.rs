@@ -1005,7 +1005,10 @@ impl<K, V> Iterator for Iter<K, V> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match self.stack.pop() {
-                None => return None,
+                None => {
+                    self.remaining = 0;
+                    return None;
+                }
                 Some(IterItem::Consider(node)) => self.push(&node),
                 Some(IterItem::Yield(pair)) => {
                     self.remaining -= 1;
@@ -1019,3 +1022,5 @@ impl<K, V> Iterator for Iter<K, V> {
         (self.remaining, Some(self.remaining))
     }
 }
+
+impl<K, V> ExactSizeIterator for Iter<K, V> {}

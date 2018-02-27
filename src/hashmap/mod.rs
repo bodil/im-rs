@@ -190,7 +190,7 @@ impl<K, V, S> HashMap<K, V, S> {
     /// the same map.
     #[inline]
     pub fn iter(&self) -> Iter<K, V> {
-        self.root.iter()
+        self.root.iter(self.len())
     }
 
     /// Get an iterator over a hash map's keys.
@@ -1535,6 +1535,20 @@ mod test {
         fn proptest_works(ref m in proptest::hash_map(0..9999, ".*", 10..100)) {
             assert!(m.len() < 100);
             assert!(m.len() >= 10);
+        }
+
+        #[test]
+        fn exact_size_iterator(ref m in proptest::hash_map(i16::ANY, i16::ANY, 1..100)) {
+            let mut should_be = m.len();
+            let mut it = m.iter();
+            loop {
+                assert_eq!(should_be, it.len());
+                match it.next() {
+                    None => break,
+                    Some(_) => should_be -= 1,
+                }
+            }
+            assert_eq!(0, it.len());
         }
     }
 }

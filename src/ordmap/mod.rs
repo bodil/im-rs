@@ -1564,5 +1564,19 @@ mod test {
             assert_eq!(map1.len(), map2.len() + 1);
             assert_eq!(map1, map3);
         }
+
+        #[test]
+        fn exact_size_iterator(ref m in ord_map(i16::ANY, i16::ANY, 1..100)) {
+            let mut should_be = m.len();
+            let mut it = m.iter();
+            loop {
+                assert_eq!(should_be, it.len());
+                match it.next() {
+                    None => break,
+                    Some(_) => should_be -= 1,
+                }
+            }
+            assert_eq!(0, it.len());
+        }
     }
 }

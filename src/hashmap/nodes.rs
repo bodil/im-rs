@@ -744,11 +744,12 @@ where
 }
 
 impl<K, V> Node<K, V> {
-    pub fn iter(&self) -> Iter<K, V> {
+    pub fn iter(&self, length: usize) -> Iter<K, V> {
         Iter {
             queue: Vec::new(),
             current: self.clone(),
             index: 0,
+            remaining: length,
         }
     }
 
@@ -812,6 +813,7 @@ pub struct Iter<K, V> {
     queue: Vec<(Node<K, V>, usize)>,
     current: Node<K, V>,
     index: usize,
+    remaining: usize,
 }
 
 impl<K, V> Iter<K, V> {
@@ -873,7 +875,10 @@ impl<K, V> Iterator for Iter<K, V> {
                         return None;
                     }
                 }
-                Some(Entry::Pair(ref k, ref v)) => return Some((k.clone(), v.clone())),
+                Some(Entry::Pair(ref k, ref v)) => {
+                    self.remaining -= 1;
+                    return Some((k.clone(), v.clone()));
+                }
                 Some(Entry::Node(ref node)) => {
                     self.push(node);
                     continue;
@@ -881,7 +886,13 @@ impl<K, V> Iterator for Iter<K, V> {
             }
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.remaining, Some(self.remaining))
+    }
 }
+
+impl<K, V> ExactSizeIterator for Iter<K, V> {}
 
 // Debug
 
