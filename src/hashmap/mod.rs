@@ -1353,7 +1353,7 @@ where
     }
 }
 
-impl<K: Hash + Eq, V, S> From<OrdMap<K, V>> for HashMap<K, V, S>
+impl<K: Ord + Hash + Eq, V, S> From<OrdMap<K, V>> for HashMap<K, V, S>
 where
     S: SharedHasher,
 {
@@ -1362,7 +1362,7 @@ where
     }
 }
 
-impl<'a, K: Hash + Eq, V, S> From<&'a OrdMap<K, V>> for HashMap<K, V, S>
+impl<'a, K: Ord + Hash + Eq, V, S> From<&'a OrdMap<K, V>> for HashMap<K, V, S>
 where
     S: SharedHasher,
 {

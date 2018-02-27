@@ -183,7 +183,7 @@ impl<'de, A: Deserialize<'de> + Ord> Deserialize<'de> for OrdSet<A> {
     }
 }
 
-impl<A: Serialize> Serialize for OrdSet<A> {
+impl<A: Ord + Serialize> Serialize for OrdSet<A> {
     fn serialize<S>(&self, ser: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

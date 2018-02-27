@@ -954,29 +954,38 @@ impl<K, V> Clone for OrdMap<K, V> {
 }
 
 #[cfg(not(has_specialisation))]
-impl<K: PartialEq, V: PartialEq> PartialEq for OrdMap<K, V> {
+impl<K: Ord + PartialEq, V: PartialEq> PartialEq for OrdMap<K, V> {
     fn eq(&self, other: &Self) -> bool {
         self.len() == other.len() && self.iter().eq(other.iter())
     }
 }
 
 #[cfg(has_specialisation)]
-impl<K: PartialEq, V: PartialEq> PartialEq for OrdMap<K, V> {
+impl<K: PartialEq, V: PartialEq> PartialEq for OrdMap<K, V>
+where
+    K: Ord,
+{
     default fn eq(&self, other: &Self) -> bool {
         self.len() == other.len() && self.iter().eq(other.iter())
     }
 }
 
 #[cfg(has_specialisation)]
-impl<K: Eq, V: Eq> PartialEq for OrdMap<K, V> {
+impl<K: Ord + Eq, V: Eq> PartialEq for OrdMap<K, V>
+where
+    K: Ord,
+{
     fn eq(&self, other: &Self) -> bool {
         self.0.ptr_eq(&other.0) || (self.len() == other.len() && self.iter().eq(other.iter()))
     }
 }
 
-impl<K: Eq, V: Eq> Eq for OrdMap<K, V> {}
+impl<K: Ord + Eq, V: Eq> Eq for OrdMap<K, V> {}
 
-impl<K: PartialOrd, V: PartialOrd> PartialOrd for OrdMap<K, V> {
+impl<K: PartialOrd, V: PartialOrd> PartialOrd for OrdMap<K, V>
+where
+    K: Ord,
+{
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.iter().partial_cmp(other.iter())
     }
@@ -1013,7 +1022,10 @@ impl<'a, K: Ord, V> Add for &'a OrdMap<K, V> {
     }
 }
 
-impl<K: Debug, V: Debug> Debug for OrdMap<K, V> {
+impl<K: Debug, V: Debug> Debug for OrdMap<K, V>
+where
+    K: Ord,
+{
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "{{ ")?;
         let mut it = self.iter().peekable();
@@ -1039,31 +1051,73 @@ pub struct Keys<K, V> {
     it: Iter<K, V>,
 }
 
-impl<K, V> Iterator for Keys<K, V> {
+impl<K, V> Iterator for Keys<K, V>
+where
+    K: Ord,
+{
     type Item = Arc<K>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.it.next() {
             None => None,
-            Some((k, _)) => Some(k.clone()),
+            Some((k, _)) => Some(k),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
+    }
+}
+
+impl<K, V> DoubleEndedIterator for Keys<K, V>
+where
+    K: Ord,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        match self.it.next_back() {
+            None => None,
+            Some((k, _)) => Some(k),
         }
     }
 }
+
+impl<K: Ord, V> ExactSizeIterator for Keys<K, V> {}
 
 pub struct Values<K, V> {
     it: Iter<K, V>,
 }
 
-impl<K, V> Iterator for Values<K, V> {
+impl<K, V> Iterator for Values<K, V>
+where
+    K: Ord,
+{
     type Item = Arc<V>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.it.next() {
             None => None,
-            Some((_, v)) => Some(v.clone()),
+            Some((_, v)) => Some(v),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
+    }
+}
+
+impl<K, V> DoubleEndedIterator for Values<K, V>
+where
+    K: Ord,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        match self.it.next_back() {
+            None => None,
+            Some((_, v)) => Some(v),
         }
     }
 }
+
+impl<K: Ord, V> ExactSizeIterator for Values<K, V> {}
 
 impl<K: Ord, V, RK, RV> FromIterator<(RK, RV)> for OrdMap<K, V>
 where
@@ -1082,7 +1136,10 @@ where
     }
 }
 
-impl<'a, K, V> IntoIterator for &'a OrdMap<K, V> {
+impl<'a, K, V> IntoIterator for &'a OrdMap<K, V>
+where
+    K: Ord,
+{
     type Item = (Arc<K>, Arc<V>);
     type IntoIter = Iter<K, V>;
 
@@ -1091,7 +1148,10 @@ impl<'a, K, V> IntoIterator for &'a OrdMap<K, V> {
     }
 }
 
-impl<K, V> IntoIterator for OrdMap<K, V> {
+impl<K, V> IntoIterator for OrdMap<K, V>
+where
+    K: Ord,
+{
     type Item = (Arc<K>, Arc<V>);
     type IntoIter = Iter<K, V>;
 
@@ -1404,6 +1464,28 @@ mod test {
         assert_eq!(OrdMap::singleton(0, 0), m);
         m.remove_mut(&0);
         assert_eq!(OrdMap::new(), m);
+    }
+
+    #[test]
+    fn double_ended_iterator_1() {
+        let m = ordmap![1 => 1, 2 => 2, 3 => 3, 4 => 4];
+        let mut it = m.iter();
+        assert_eq!(Some((Arc::new(1), Arc::new(1))), it.next());
+        assert_eq!(Some((Arc::new(4), Arc::new(4))), it.next_back());
+        assert_eq!(Some((Arc::new(2), Arc::new(2))), it.next());
+        assert_eq!(Some((Arc::new(3), Arc::new(3))), it.next_back());
+        assert_eq!(None, it.next());
+    }
+
+    #[test]
+    fn double_ended_iterator_2() {
+        let m = ordmap![1 => 1, 2 => 2, 3 => 3, 4 => 4];
+        let mut it = m.iter();
+        assert_eq!(Some((Arc::new(1), Arc::new(1))), it.next());
+        assert_eq!(Some((Arc::new(4), Arc::new(4))), it.next_back());
+        assert_eq!(Some((Arc::new(2), Arc::new(2))), it.next());
+        assert_eq!(Some((Arc::new(3), Arc::new(3))), it.next_back());
+        assert_eq!(None, it.next_back());
     }
 
     quickcheck! {
