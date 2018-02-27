@@ -566,11 +566,7 @@ where
     F: Fn(List<A>, List<A>) -> List<A>,
 {
     let mut out = seed;
-    let mut q = Vec::new();
-    for v in queue {
-        q.push(v)
-    }
-    for a in q.iter().rev() {
+    for a in queue.iter().rev() {
         out = f(a.as_ref().clone(), out)
     }
     out
