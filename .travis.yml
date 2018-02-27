@@ -3,3 +3,6 @@ rust:
   - stable
   - beta
   - nightly
+cache:
+  directories:
+    - /home/travis/.cargo
