@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::fmt::{self, Debug};
 use std::ops::IndexMut;
+use std::cmp::Ordering;
 
 use self::Insert::*;
 use self::InsertAction::*;
@@ -741,7 +742,7 @@ where
                 let mut node = Arc::make_mut(&mut self.0);
                 let pair = node.keys.remove(index);
                 let new_child = match merged_child.remove_mut(key) {
-                    Remove::NoChange | Remove::Removed(_)=> merged_child,
+                    Remove::NoChange | Remove::Removed(_) => merged_child,
                     Remove::Update(_, updated_child) => updated_child,
                 };
                 if node.keys.is_empty() {
@@ -961,44 +962,81 @@ enum IterItem<K, V> {
 }
 
 pub struct Iter<K, V> {
-    stack: Vec<IterItem<K, V>>,
+    fwd_last: Option<Arc<K>>,
+    fwd_stack: Vec<IterItem<K, V>>,
+    back_last: Option<Arc<K>>,
+    back_stack: Vec<IterItem<K, V>>,
     remaining: usize,
 }
 
 impl<K, V> Iter<K, V> {
     pub fn new(root: &Node<K, V>) -> Self {
         Iter {
-            stack: vec![IterItem::Consider(root.clone())],
+            fwd_last: None,
+            fwd_stack: vec![IterItem::Consider(root.clone())],
+            back_last: None,
+            back_stack: vec![IterItem::Consider(root.clone())],
             remaining: root.len(),
         }
     }
 
-    fn push_node(&mut self, maybe_node: &Option<Node<K, V>>) {
+    fn push_node_fwd(&mut self, maybe_node: &Option<Node<K, V>>) {
         if let Some(ref node) = *maybe_node {
-            self.stack.push(IterItem::Consider(node.clone()))
+            self.fwd_stack.push(IterItem::Consider(node.clone()))
         }
     }
 
-    fn push(&mut self, node: &Node<K, V>) {
+    fn push_fwd(&mut self, node: &Node<K, V>) {
         for n in 0..node.0.keys.len() {
             let i = node.0.keys.len() - n;
-            self.push_node(&node.0.children[i]);
-            self.stack.push(IterItem::Yield(node.0.keys[i - 1].clone()));
+            self.push_node_fwd(&node.0.children[i]);
+            self.fwd_stack
+                .push(IterItem::Yield(node.0.keys[i - 1].clone()));
         }
-        self.push_node(&node.0.children[0]);
+        self.push_node_fwd(&node.0.children[0]);
+    }
+
+    fn push_node_back(&mut self, maybe_node: &Option<Node<K, V>>) {
+        if let Some(ref node) = *maybe_node {
+            self.back_stack.push(IterItem::Consider(node.clone()))
+        }
+    }
+
+    fn push_back(&mut self, node: &Node<K, V>) {
+        for i in 0..node.0.keys.len() {
+            self.push_node_back(&node.0.children[i]);
+            self.back_stack
+                .push(IterItem::Yield(node.0.keys[i].clone()));
+        }
+        self.push_node_back(&node.0.children[node.0.keys.len()]);
     }
 }
 
-impl<K, V> Iterator for Iter<K, V> {
+impl<K, V> Iterator for Iter<K, V>
+where
+    K: Ord,
+{
     type Item = (Arc<K>, Arc<V>);
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.stack.pop() {
-                None => return None,
-                Some(IterItem::Consider(node)) => self.push(&node),
+            match self.fwd_stack.pop() {
+                None => {
+                    self.remaining = 0;
+                    return None;
+                }
+                Some(IterItem::Consider(node)) => self.push_fwd(&node),
                 Some(IterItem::Yield(pair)) => {
+                    if self.back_last.is_some()
+                        && Some(pair.key.clone()).cmp(&self.back_last) != Ordering::Less
+                    {
+                        self.fwd_stack.clear();
+                        self.back_stack.clear();
+                        self.remaining = 0;
+                        return None;
+                    }
                     self.remaining -= 1;
+                    self.fwd_last = Some(pair.key.clone());
                     return Some((pair.key, pair.value));
                 }
             }
@@ -1009,3 +1047,32 @@ impl<K, V> Iterator for Iter<K, V> {
         (self.remaining, Some(self.remaining))
     }
 }
+
+impl<K: Ord, V> DoubleEndedIterator for Iter<K, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.back_stack.pop() {
+                None => {
+                    self.remaining = 0;
+                    return None;
+                }
+                Some(IterItem::Consider(node)) => self.push_back(&node),
+                Some(IterItem::Yield(pair)) => {
+                    if self.fwd_last.is_some()
+                        && Some(pair.key.clone()).cmp(&self.fwd_last) != Ordering::Greater
+                    {
+                        self.fwd_stack.clear();
+                        self.back_stack.clear();
+                        self.remaining = 0;
+                        return None;
+                    }
+                    self.remaining -= 1;
+                    self.back_last = Some(pair.key.clone());
+                    return Some((pair.key, pair.value));
+                }
+            }
+        }
+    }
+}
+
+impl<K: Ord, V> ExactSizeIterator for Iter<K, V> {}

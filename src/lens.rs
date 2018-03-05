@@ -18,7 +18,6 @@
 //! [lens::PartialLens]: ./trait.PartialLens.html
 //! [lens::Lens]: ./trait.Lens.html
 
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use shared::Shared;
@@ -41,11 +40,11 @@ pub trait PartialLens: Clone {
     where
         Convert: Shared<Self::To>;
 
-    /// Compose this lens with a lens from `To` to a new type `Next`, yielding
-    /// a lens from `From` to `Next`.
-    fn try_chain<L, Next>(&self, next: &L) -> Compose<Self::From, Self::To, Next, Self, L>
+    /// Compose this lens with a lens `L` from `Self::To` to a new type, yielding
+    /// a lens from `Self::From` to `L::To`.
+    fn try_chain<L>(&self, next: &L) -> Compose<Self, L>
     where
-        L: PartialLens<From = Self::To, To = Next>,
+        L: PartialLens<From = Self::To>,
     {
         compose(self, next)
     }
@@ -73,62 +72,56 @@ pub trait Lens: PartialLens {
         self.try_put(Some(v), s).unwrap()
     }
 
-    /// Compose this lens with a lens from `To` to a new type `Next`, yielding
-    /// a lens from `From` to `Next`.
-    fn chain<L, Next>(&self, next: &L) -> Compose<Self::From, Self::To, Next, Self, L>
+    /// Compose this lens with a lens `L` from `Self::To` to a new type, yielding
+    /// a lens from `Self::From` to `L::To`.
+    fn chain<L>(&self, next: &L) -> Compose<Self, L>
     where
-        L: Lens<From = Self::To, To = Next>,
+        L: Lens<From = Self::To>,
     {
         compose(self, next)
     }
 }
 
-pub struct Compose<A, B, C, L, R>
+pub struct Compose<L, R>
 where
-    L: PartialLens<From = A, To = B>,
-    R: PartialLens<From = B, To = C>,
+    L: PartialLens,
+    R: PartialLens<From = L::To>,
 {
     left: Arc<L>,
     right: Arc<R>,
-    phantom_a: PhantomData<A>,
-    phantom_b: PhantomData<B>,
-    phantom_c: PhantomData<C>,
 }
 
-impl<A, B, C, L, R> Clone for Compose<A, B, C, L, R>
+impl<L, R> Clone for Compose<L, R>
 where
-    L: PartialLens<From = A, To = B>,
-    R: PartialLens<From = B, To = C>,
+    L: PartialLens,
+    R: PartialLens<From = L::To>,
 {
     fn clone(&self) -> Self {
         Compose {
             left: self.left.clone(),
             right: self.right.clone(),
-            phantom_a: PhantomData,
-            phantom_b: PhantomData,
-            phantom_c: PhantomData,
         }
     }
 }
 
-impl<A, B, C, L, R> PartialLens for Compose<A, B, C, L, R>
+impl<L, R> PartialLens for Compose<L, R>
 where
-    L: PartialLens<From = A, To = B>,
-    R: PartialLens<From = B, To = C>,
+    L: PartialLens,
+    R: PartialLens<From = L::To>,
 {
-    type From = A;
-    type To = C;
+    type From = L::From;
+    type To = R::To;
 
-    fn try_get(&self, s: &A) -> Option<Arc<C>> {
+    fn try_get(&self, s: &Self::From) -> Option<Arc<Self::To>> {
         match self.left.try_get(s) {
             None => None,
             Some(s2) => self.right.try_get(&s2),
         }
     }
 
-    fn try_put<FromC>(&self, v: Option<FromC>, s: &A) -> Option<A>
+    fn try_put<SharedTo>(&self, v: Option<SharedTo>, s: &Self::From) -> Option<Self::From>
     where
-        FromC: Shared<C>,
+        SharedTo: Shared<Self::To>,
     {
         self.left
             .try_get(s)
@@ -137,26 +130,23 @@ where
     }
 }
 
-impl<A, B, C, L, R> Lens for Compose<A, B, C, L, R>
+impl<L, R> Lens for Compose<L, R>
 where
-    L: Lens<From = A, To = B>,
-    R: Lens<From = B, To = C>,
+    L: Lens,
+    R: Lens<From = L::To>,
 {
 }
 
 /// Compose a lens from `A` to `B` with a lens from `B` to `C`, yielding
 /// a lens from `A` to `C`.
-pub fn compose<A, B, C, L, R>(left: &L, right: &R) -> Compose<A, B, C, L, R>
+pub fn compose<L, R>(left: &L, right: &R) -> Compose<L, R>
 where
-    L: PartialLens<From = A, To = B>,
-    R: PartialLens<From = B, To = C>,
+    L: PartialLens,
+    R: PartialLens<From = L::To>,
 {
     Compose {
         left: Arc::new(left.clone()),
         right: Arc::new(right.clone()),
-        phantom_a: PhantomData,
-        phantom_b: PhantomData,
-        phantom_c: PhantomData,
     }
 }
 

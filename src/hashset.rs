@@ -471,13 +471,13 @@ impl<'a, A: Hash + Eq, S: SharedHasher> From<&'a BTreeSet<Arc<A>>> for HashSet<A
     }
 }
 
-impl<A: Hash + Eq, S: SharedHasher> From<OrdSet<A>> for HashSet<A, S> {
+impl<A: Ord + Hash + Eq, S: SharedHasher> From<OrdSet<A>> for HashSet<A, S> {
     fn from(ordset: OrdSet<A>) -> Self {
         ordset.into_iter().collect()
     }
 }
 
-impl<'a, A: Hash + Eq, S: SharedHasher> From<&'a OrdSet<A>> for HashSet<A, S> {
+impl<'a, A: Ord + Hash + Eq, S: SharedHasher> From<&'a OrdSet<A>> for HashSet<A, S> {
     fn from(ordset: &OrdSet<A>) -> Self {
         ordset.into_iter().collect()
     }

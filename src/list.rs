@@ -107,6 +107,7 @@ macro_rules! list {
 /// 'cadder', while `cddr` is 'cududder', and `caddr` (the `car` of the
 /// `cdr` of the `cdr`) is 'cadudder'. It can get a little subtle for the
 /// untrained ear.
+#[inline]
 pub fn cons<A, RA, RD>(car: RA, cdr: RD) -> List<A>
 where
     RA: Shared<A>,
@@ -223,6 +224,44 @@ impl<A> List<A> {
         }
     }
 
+    /// Get the last element of a list, as well as the list with the last
+    /// element removed.
+    ///
+    /// If the list is empty, [`None`][None] is returned.
+    ///
+    /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
+    pub fn pop_back(&self) -> Option<(Arc<A>, List<A>)> {
+        match *self.0 {
+            Nil => None,
+            Cons(_, ref a, ref d) if d.is_empty() => Some((a.clone(), List::new())),
+            Cons(l, ref a, ref d) => match d.pop_back() {
+                None => None,
+                Some((last_list, queue_without_last_list)) => match last_list.pop_back() {
+                    None => None,
+                    Some((last_item, list_without_last_item)) => Some((
+                        last_item,
+                        List(Arc::new(Cons(l - 1, a.clone(), queue_without_last_list)))
+                            .append(list_without_last_item),
+                    )),
+                },
+            },
+        }
+    }
+
+    /// Get the last element of a list.
+    ///
+    /// If the list is empty, `None` is returned.
+    pub fn last(&self) -> Option<Arc<A>> {
+        self.pop_back().map(|(a, _)| a)
+    }
+
+    /// Get the list without the last element.
+    ///
+    /// If the list is empty, `None` is returned.
+    pub fn init(&self) -> Option<List<A>> {
+        self.pop_back().map(|(_, d)| d)
+    }
+
     /// Get the tail of a list.
     ///
     /// The tail means all elements in the list after the
@@ -262,7 +301,7 @@ impl<A> List<A> {
         }
     }
 
-    pub fn link<R>(&self, other: R) -> Self
+    fn link<R>(&self, other: R) -> Self
     where
         R: Borrow<Self>,
     {
@@ -287,6 +326,7 @@ impl<A> List<A> {
 
     /// Construct a list with a new value prepended to the front of the
     /// current list.
+    #[inline]
     pub fn push_front<R>(&self, a: R) -> Self
     where
         R: Shared<A>,
@@ -313,6 +353,7 @@ impl<A> List<A> {
 
     /// Construct a list with a new value appended to the back of the
     /// current list.
+    #[inline]
     pub fn push_back<R>(&self, a: R) -> Self
     where
         R: Shared<A>,
@@ -337,7 +378,7 @@ impl<A> List<A> {
     /// # use im::list::{List, cons};
     /// # use std::fmt::Debug;
     /// fn walk_through_list<A>(list: &List<A>) where A: Debug {
-    ///     match list.uncons() {
+    ///     match list.pop_front() {
     ///         None => (),
     ///         Some((ref head, ref tail)) => {
     ///             print!("{:?}", head);
@@ -352,8 +393,18 @@ impl<A> List<A> {
     /// [head]: #method.head
     /// [tail]: #method.tail
     /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
-    pub fn uncons(&self) -> Option<(Arc<A>, List<A>)> {
+    pub fn pop_front(&self) -> Option<(Arc<A>, List<A>)> {
         self.head().and_then(|h| self.tail().map(|t| (h, t)))
+    }
+
+    /// Get the head and the tail of a list.
+    ///
+    /// This is an alias for [`pop_front`][pop_front].
+    ///
+    /// [pop_front]: #method.pop_front
+    #[inline]
+    pub fn uncons(&self) -> Option<(Arc<A>, List<A>)> {
+        self.pop_front()
     }
 
     pub fn uncons2(&self) -> Option<(Arc<A>, Arc<A>, List<A>)> {
@@ -362,6 +413,7 @@ impl<A> List<A> {
     }
 
     /// Get an iterator over a list.
+    #[inline]
     pub fn iter(&self) -> Iter<A> {
         Iter {
             current: self.clone(),
@@ -566,11 +618,7 @@ where
     F: Fn(List<A>, List<A>) -> List<A>,
 {
     let mut out = seed;
-    let mut q = Vec::new();
-    for v in queue {
-        q.push(v)
-    }
-    for a in q.iter().rev() {
+    for a in queue.iter().rev() {
         out = f(a.as_ref().clone(), out)
     }
     out
@@ -672,7 +720,7 @@ impl<A> Iterator for Iter<A> {
     type Item = Arc<A>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.current.uncons() {
+        match self.current.pop_front() {
             None => None,
             Some((a, d)) => {
                 self.current = d;
@@ -684,6 +732,18 @@ impl<A> Iterator for Iter<A> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         let l = self.current.len();
         (l, Some(l))
+    }
+}
+
+impl<A> DoubleEndedIterator for Iter<A> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        match self.current.pop_back() {
+            None => None,
+            Some((a, q)) => {
+                self.current = q;
+                Some(a)
+            }
+        }
     }
 }
 
@@ -831,6 +891,8 @@ mod test {
     use super::*;
     use super::proptest::*;
     use test::is_sorted;
+    use proptest::num::i32;
+    use proptest::collection;
 
     quickcheck! {
         fn length(vec: Vec<i32>) -> bool {
@@ -841,6 +903,11 @@ mod test {
         fn order(vec: Vec<i32>) -> bool {
             let list = List::from_iter(vec.clone());
             list.iter().map(|a| *a).eq(vec.into_iter())
+        }
+
+        fn reverse_order(v: Vec<i32>) -> bool {
+            let list = List::from_iter(v.iter().rev().cloned());
+            v == Vec::from_iter(list.iter().rev().map(|a| *a))
         }
 
         fn equality(vec: Vec<i32>) -> bool {
@@ -873,14 +940,22 @@ mod test {
 
     proptest! {
         #[test]
-        fn proptest_a_list(ref l in list(".*", 10..100)) {
+        fn proptest_a_list(ref l in list(i32::ANY, 10..100)) {
             assert!(l.len() < 100);
             assert!(l.len() >= 10);
         }
 
         #[test]
-        fn proptest_ordered_list(ref l in ordered_list(".*", 10..100)) {
+        fn proptest_ordered_list(ref l in ordered_list(i32::ANY, 10..100)) {
             assert_eq!(l, &l.sort());
+        }
+
+        #[test]
+        fn pop_back(ref v in collection::vec(i32::ANY, 10..100)) {
+            let list = List::from_iter(v.clone());
+            assert_eq!(Some((Arc::new(v.last().unwrap().to_owned()),
+                             List::from_iter(v.clone().into_iter().take(v.len()-1)))),
+                       list.pop_back());
         }
     }
 }

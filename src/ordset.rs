@@ -287,15 +287,15 @@ impl<A> Clone for OrdSet<A> {
     }
 }
 
-impl<A: PartialEq> PartialEq for OrdSet<A> {
+impl<A: Ord + PartialEq> PartialEq for OrdSet<A> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl<A: Eq> Eq for OrdSet<A> {}
+impl<A: Ord + Eq> Eq for OrdSet<A> {}
 
-impl<A: PartialOrd> PartialOrd for OrdSet<A> {
+impl<A: Ord> PartialOrd for OrdSet<A> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.0.partial_cmp(&other.0)
     }
@@ -307,7 +307,7 @@ impl<A: Ord> Ord for OrdSet<A> {
     }
 }
 
-impl<A: Hash> Hash for OrdSet<A> {
+impl<A: Ord + Hash> Hash for OrdSet<A> {
     fn hash<H>(&self, state: &mut H)
     where
         H: Hasher,
@@ -340,7 +340,7 @@ impl<'a, A: Ord> Mul for &'a OrdSet<A> {
     }
 }
 
-impl<A: Debug> Debug for OrdSet<A> {
+impl<A: Ord + Debug> Debug for OrdSet<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "{{ ")?;
         let mut it = self.iter().peekable();
@@ -366,7 +366,10 @@ pub struct Iter<A> {
     it: ordmap::Iter<A, ()>,
 }
 
-impl<A> Iterator for Iter<A> {
+impl<A> Iterator for Iter<A>
+where
+    A: Ord,
+{
     type Item = Arc<A>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -386,7 +389,10 @@ where
     }
 }
 
-impl<'a, A> IntoIterator for &'a OrdSet<A> {
+impl<'a, A> IntoIterator for &'a OrdSet<A>
+where
+    A: Ord,
+{
     type Item = Arc<A>;
     type IntoIter = Iter<A>;
 
@@ -395,7 +401,10 @@ impl<'a, A> IntoIterator for &'a OrdSet<A> {
     }
 }
 
-impl<A> IntoIterator for OrdSet<A> {
+impl<A> IntoIterator for OrdSet<A>
+where
+    A: Ord,
+{
     type Item = Arc<A>;
     type IntoIter = Iter<A>;
 
