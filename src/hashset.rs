@@ -377,7 +377,7 @@ where
         T: IntoIterator<Item = RA>,
     {
         let mut set: Self = Default::default();
-        for value in i.into_iter() {
+        for value in i {
             set.insert_mut(value)
         }
         set

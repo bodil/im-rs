@@ -51,5 +51,5 @@ pub fn unfold<F, S, A>(value: S, f: F) -> Unfold<F, S>
 where
     F: Fn(&S) -> Option<(A, S)>,
 {
-    Unfold { f: f, value: value }
+    Unfold { f, value }
 }

@@ -65,9 +65,9 @@ impl<A> Queue<A> {
     /// Returns `None` if the queue is empty. Otherwise, you get a tuple
     /// of the first element and the remainder of the queue.
     pub fn pop(&self) -> Option<(Arc<A>, Queue<A>)> {
-        match self {
-            &Queue(ref l, ref r) if l.is_empty() && r.is_empty() => None,
-            &Queue(ref l, ref r) => match l.uncons() {
+        match *self {
+            Queue(ref l, ref r) if l.is_empty() && r.is_empty() => None,
+            Queue(ref l, ref r) => match l.uncons() {
                 None => Queue(r.reverse(), conslist![]).pop(),
                 Some((a, d)) => Some((a, Queue(d, r.clone()))),
             },

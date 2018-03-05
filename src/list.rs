@@ -404,7 +404,7 @@ impl<A> List<A> {
                 (Some((ref a, _)), Some((ref b, ref lb1)))
                     if cmp(a.clone(), b.clone()) == Ordering::Greater =>
                 {
-                    cons(b.clone(), &merge(la, &lb1, cmp))
+                    cons(b.clone(), &merge(la, lb1, cmp))
                 }
                 (Some((a, la1)), Some((_, _))) => cons(a.clone(), &merge(&la1, lb, cmp)),
                 (None, _) => lb.clone(),
@@ -431,40 +431,40 @@ impl<A> List<A> {
         }
 
         fn ascending<A>(
-            a: Arc<A>,
+            a: &Arc<A>,
             f: &Fn(List<A>) -> List<A>,
             l: &List<A>,
             cmp: &Fn(Arc<A>, Arc<A>) -> Ordering,
         ) -> List<List<A>> {
             match l.uncons() {
                 Some((ref b, ref lb)) if cmp(a.clone(), b.clone()) != Ordering::Greater => {
-                    ascending(b.clone(), &|ys| f(cons(a.clone(), &ys)), &lb, cmp)
+                    ascending(&b.clone(), &|ys| f(cons(a.clone(), &ys)), lb, cmp)
                 }
                 _ => cons(f(List::singleton(a.clone())), &sequences(l, cmp)),
             }
         }
 
         fn descending<A>(
-            a: Arc<A>,
+            a: &Arc<A>,
             la: &List<A>,
             lb: &List<A>,
             cmp: &Fn(Arc<A>, Arc<A>) -> Ordering,
         ) -> List<List<A>> {
             match lb.uncons() {
                 Some((ref b, ref bs)) if cmp(a.clone(), b.clone()) == Ordering::Greater => {
-                    descending(b.clone(), &cons(a.clone(), la), bs, cmp)
+                    descending(&b.clone(), &cons(a.clone(), la), bs, cmp)
                 }
-                _ => cons(cons(a.clone(), la), &sequences(&lb, cmp)),
+                _ => cons(cons(a.clone(), la), &sequences(lb, cmp)),
             }
         }
 
         fn sequences<A>(l: &List<A>, cmp: &Fn(Arc<A>, Arc<A>) -> Ordering) -> List<List<A>> {
             match l.uncons2() {
                 Some((ref a, ref b, ref xs)) if cmp(a.clone(), b.clone()) == Ordering::Greater => {
-                    descending(b.clone(), &List::singleton(a.clone()), xs, cmp)
+                    descending(&b.clone(), &List::singleton(a.clone()), xs, cmp)
                 }
                 Some((ref a, ref b, ref xs)) => {
-                    ascending(b.clone(), &|l| cons(a.clone(), l), &xs, cmp)
+                    ascending(&b.clone(), &|l| cons(a.clone(), l), xs, cmp)
                 }
                 None => list![l.clone()],
             }
