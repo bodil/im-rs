@@ -14,10 +14,10 @@ pub enum Node<K, V> {
 
 impl<K, V> Clone for Node<K, V> {
     fn clone(&self) -> Self {
-        match self {
-            &Node::ArrayNode(ref node) => Node::ArrayNode(node.clone()),
-            &Node::BitmapNode(ref node) => Node::BitmapNode(node.clone()),
-            &Node::CollisionNode(ref node) => Node::CollisionNode(node.clone()),
+        match *self {
+            Node::ArrayNode(ref node) => Node::ArrayNode(node.clone()),
+            Node::BitmapNode(ref node) => Node::BitmapNode(node.clone()),
+            Node::CollisionNode(ref node) => Node::CollisionNode(node.clone()),
         }
     }
 }
@@ -85,9 +85,9 @@ enum Entry<K, V> {
 
 impl<K, V> Clone for Entry<K, V> {
     fn clone(&self) -> Self {
-        match self {
-            &Entry::Pair(ref k, ref v) => Entry::Pair(k.clone(), v.clone()),
-            &Entry::Node(ref node) => Entry::Node(node.clone()),
+        match *self {
+            Entry::Pair(ref k, ref v) => Entry::Pair(k.clone(), v.clone()),
+            Entry::Node(ref node) => Entry::Node(node.clone()),
         }
     }
 }
@@ -167,9 +167,9 @@ where
     where
         S: BuildHasher,
     {
-        match self {
+        match *self {
             // Insert for ArrayNode
-            &Node::ArrayNode(ref node) => {
+            Node::ArrayNode(ref node) => {
                 let idx = mask(hash, shift) as usize;
                 match node.content[idx] {
                     None => {
@@ -203,7 +203,7 @@ where
             }
 
             // Insert for BitmapNode
-            &Node::BitmapNode(ref node) => {
+            Node::BitmapNode(ref node) => {
                 let bit = bitpos(hash, shift);
                 let idx = bit_index(node.bitmap, bit);
 
@@ -324,7 +324,7 @@ where
             }
 
             // Insert for CollisionNode
-            &Node::CollisionNode(ref node) => {
+            Node::CollisionNode(ref node) => {
                 if hash == node.hash {
                     match node.find_index(key) {
                         Some(idx) => {
@@ -364,9 +364,9 @@ where
         hash: Bitmap,
         key: &K,
     ) -> (Option<(Arc<K>, Arc<V>)>, Option<Self>) {
-        match self {
+        match *self {
             // Remove for ArrayNode
-            &Node::ArrayNode(ref node) => {
+            Node::ArrayNode(ref node) => {
                 let idx = mask(hash, shift) as usize;
                 match node.content[idx] {
                     None => (None, Some(self.clone())),
@@ -399,7 +399,7 @@ where
             }
 
             // Remove for BitmapNode
-            &Node::BitmapNode(ref node) => {
+            Node::BitmapNode(ref node) => {
                 let bit = bitpos(hash, shift);
                 if node.bitmap & bit == 0 {
                     return (None, Some(self.clone()));
@@ -438,7 +438,7 @@ where
             }
 
             // Remove for CollisionNode
-            &Node::CollisionNode(ref node) => match node.content
+            Node::CollisionNode(ref node) => match node.content
                 .iter()
                 .enumerate()
                 .find(|&(_, &(ref k, _))| &**k == key)
@@ -461,15 +461,15 @@ where
     }
 
     pub fn lookup(&self, shift: usize, hash: Bitmap, key: &K) -> Option<Arc<V>> {
-        match self {
-            &Node::ArrayNode(ref node) => {
+        match *self {
+            Node::ArrayNode(ref node) => {
                 let idx = mask(hash, shift) as usize;
                 match node.content[idx] {
                     None => None,
                     Some(ref idx_node) => idx_node.lookup(shift + HASH_BITS, hash, key),
                 }
             }
-            &Node::BitmapNode(ref node) => {
+            Node::BitmapNode(ref node) => {
                 let bit = bitpos(hash, shift);
                 if node.bitmap & bit == 0 {
                     None
@@ -481,7 +481,7 @@ where
                     }
                 }
             }
-            &Node::CollisionNode(ref node) => node.content
+            Node::CollisionNode(ref node) => node.content
                 .iter()
                 .find(|&&(ref k, _)| &**k == key)
                 .map(|&(_, ref v)| v.clone()),
@@ -499,17 +499,17 @@ where
     where
         S: BuildHasher,
     {
-        match self {
-            &mut Node::ArrayNode(ref mut node) => {
+        match *self {
+            Node::ArrayNode(ref mut node) => {
                 let idx = mask(hash, shift) as usize;
                 let mut this = Arc::make_mut(node);
-                let (update, added, inc) = match this.content.get_mut(idx).unwrap() {
-                    &mut None => {
+                let (update, added, inc) = match this.content[idx] {
+                    None => {
                         let (_, new_node) =
                             Node::empty().insert(hasher, shift + HASH_BITS, hash, key, value);
                         (Some(Some(new_node)), true, 1)
                     }
-                    &mut Some(ref mut child) => {
+                    Some(ref mut child) => {
                         match child.insert_mut(hasher, shift + HASH_BITS, hash, key, value) {
                             (added_leaf, Some(new_child)) => (Some(Some(new_child)), added_leaf, 0),
                             (added_leaf, None) => (None, added_leaf, 0),
@@ -524,13 +524,13 @@ where
                 }
                 (added, None)
             }
-            &mut Node::BitmapNode(ref mut node) => {
+            Node::BitmapNode(ref mut node) => {
                 let bit = bitpos(hash, shift);
                 let idx = bit_index(node.bitmap, bit);
                 let mut this = Arc::make_mut(node);
                 let (added, update, insert, newmap) = if this.bitmap & bit != 0 {
-                    match this.content.get_mut(idx).unwrap() {
-                        &mut Entry::Node(ref mut idx_node) => {
+                    match this.content[idx] {
+                        Entry::Node(ref mut idx_node) => {
                             match idx_node.insert_mut(hasher, shift + HASH_BITS, hash, key, value) {
                                 (added_leaf, Some(new_child)) => {
                                     (added_leaf, Some(Entry::Node(new_child)), None, None)
@@ -538,7 +538,7 @@ where
                                 (added_leaf, None) => (added_leaf, None, None, None),
                             }
                         }
-                        &mut Entry::Pair(ref k, ref v) if k == key => {
+                        Entry::Pair(ref k, ref v) if k == key => {
                             if Arc::ptr_eq(value, v) {
                                 (false, None, None, None)
                             } else {
@@ -550,7 +550,7 @@ where
                                 )
                             }
                         }
-                        &mut Entry::Pair(ref k, ref v) => {
+                        Entry::Pair(ref k, ref v) => {
                             let new_child =
                                 create_node(hasher, shift + HASH_BITS, k, v, hash, key, value);
                             (true, Some(Entry::Node(new_child)), None, None)
@@ -629,7 +629,7 @@ where
                 }
                 (added, None)
             }
-            &mut Node::CollisionNode(ref mut node) => {
+            Node::CollisionNode(ref mut node) => {
                 if hash == node.hash {
                     match node.find_index(key) {
                         Some(idx) => {
@@ -664,13 +664,13 @@ where
         hash: Bitmap,
         key: &K,
     ) -> (Option<(Arc<K>, Arc<V>)>, RemoveResult<Self>) {
-        match self {
-            &mut Node::ArrayNode(ref mut node) => {
+        match *self {
+            Node::ArrayNode(ref mut node) => {
                 let idx = mask(hash, shift) as usize;
                 let mut this = Arc::make_mut(node);
-                let (removed, updated) = match this.content.get_mut(idx).unwrap() {
-                    &mut None => return (None, RemoveResult::Unchanged),
-                    &mut Some(ref mut child) => child.remove_mut(shift + HASH_BITS, hash, key),
+                let (removed, updated) = match this.content[idx] {
+                    None => return (None, RemoveResult::Unchanged),
+                    Some(ref mut child) => child.remove_mut(shift + HASH_BITS, hash, key),
                 };
                 match updated {
                     RemoveResult::NewNode(node) => this.content[idx] = Some(node),
@@ -685,21 +685,21 @@ where
                 }
                 (removed, RemoveResult::Unchanged)
             }
-            &mut Node::BitmapNode(ref mut node) => {
+            Node::BitmapNode(ref mut node) => {
                 let mut bit = bitpos(hash, shift);
                 if node.bitmap & bit == 0 {
                     return (None, RemoveResult::Unchanged);
                 }
                 let idx = bit_index(node.bitmap, bit);
                 let mut this = Arc::make_mut(node);
-                let (removed, updated) = match this.content.get_mut(idx).unwrap() {
-                    &mut Entry::Node(ref mut child) => {
+                let (removed, updated) = match this.content[idx] {
+                    Entry::Node(ref mut child) => {
                         child.remove_mut(shift + HASH_BITS, hash, key)
                     }
-                    &mut Entry::Pair(ref k, ref v) if &**k == key => {
+                    Entry::Pair(ref k, ref v) if &**k == key => {
                         (Some((k.clone(), v.clone())), RemoveResult::Removed)
                     }
-                    &mut Entry::Pair(_, _) => return (None, RemoveResult::Unchanged),
+                    Entry::Pair(_, _) => return (None, RemoveResult::Unchanged),
                 };
                 match updated {
                     RemoveResult::NewNode(node) => this.content[idx] = Entry::Node(node),
@@ -718,7 +718,7 @@ where
                     },
                 )
             }
-            &mut Node::CollisionNode(ref mut node) => {
+            Node::CollisionNode(ref mut node) => {
                 if node.hash != hash {
                     return (None, RemoveResult::Unchanged);
                 }
@@ -727,16 +727,16 @@ where
                         let mut this = Arc::make_mut(node);
                         this.size -= 1;
                         let (k, v) = this.content.remove(idx);
-                        return (
+                        (
                             Some((k, v)),
                             if this.size == 0 {
                                 RemoveResult::Removed
                             } else {
                                 RemoveResult::Unchanged
                             },
-                        );
+                        )
                     }
-                    None => return (None, RemoveResult::Unchanged),
+                    None => (None, RemoveResult::Unchanged),
                 }
             }
         }
@@ -792,13 +792,13 @@ fn create_node<K: Hash + Eq, V, S: BuildHasher>(
     }
 }
 
-fn update<A: Clone>(input: &Vec<A>, index: usize, value: A) -> Vec<A> {
-    let mut output = input.clone();
+fn update<A: Clone>(input: &[A], index: usize, value: A) -> Vec<A> {
+    let mut output = input.to_owned();
     output[index] = value;
     output
 }
 
-fn remove<A: Clone>(input: &Vec<A>, index: usize) -> Vec<A> {
+fn remove<A: Clone>(input: &[A], index: usize) -> Vec<A> {
     input
         .iter()
         .take(index)
@@ -841,13 +841,13 @@ impl<K, V> Iter<K, V> {
                 }
                 let item = &node.content[self.index];
                 self.index += 1;
-                match item {
-                    &Some(ref node) => return Some(Entry::Node(node.clone())),
-                    &None => continue,
+                match *item {
+                    Some(ref node) => return Some(Entry::Node(node.clone())),
+                    None => continue,
                 }
             },
             Node::BitmapNode(ref node) => {
-                let item = node.content.get(self.index).map(Clone::clone);
+                let item = node.content.get(self.index).cloned();
                 self.index += 1;
                 item
             }
@@ -902,10 +902,10 @@ where
     V: Debug,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        match self {
-            &Node::ArrayNode(ref node) => node.fmt_in(f, 0),
-            &Node::BitmapNode(ref node) => node.fmt_in(f, 0),
-            &Node::CollisionNode(ref node) => node.fmt_in(f, 0),
+        match *self {
+            Node::ArrayNode(ref node) => node.fmt_in(f, 0),
+            Node::BitmapNode(ref node) => node.fmt_in(f, 0),
+            Node::CollisionNode(ref node) => node.fmt_in(f, 0),
         }
     }
 }
@@ -916,10 +916,10 @@ where
     V: Debug,
 {
     fn fmt_in(&self, f: &mut Formatter, indent: usize) -> Result<(), Error> {
-        match self {
-            &Node::ArrayNode(ref node) => node.fmt_in(f, indent),
-            &Node::BitmapNode(ref node) => node.fmt_in(f, indent),
-            &Node::CollisionNode(ref node) => node.fmt_in(f, indent),
+        match *self {
+            Node::ArrayNode(ref node) => node.fmt_in(f, indent),
+            Node::BitmapNode(ref node) => node.fmt_in(f, indent),
+            Node::CollisionNode(ref node) => node.fmt_in(f, indent),
         }
     }
 }
@@ -935,10 +935,10 @@ where
             "{0:1$}ArrayNode size: {2} content: [\n",
             "", indent, self.size
         )?;
-        for node in self.content.iter() {
-            match node {
-                &None => write!(f, "{0:1$}empty\n", "", indent + 2)?,
-                &Some(ref node) => node.fmt_in(f, indent + 2)?,
+        for node in &self.content {
+            match *node {
+                None => write!(f, "{0:1$}empty\n", "", indent + 2)?,
+                Some(ref node) => node.fmt_in(f, indent + 2)?,
             }
         }
         write!(f, "{0:1$}]\n", "", indent)
@@ -956,10 +956,10 @@ where
             "{0:1$}BitmapNode bitmap: {2:b} content: [\n",
             "", indent, self.bitmap
         )?;
-        for entry in self.content.iter() {
-            match entry {
-                &Entry::Node(ref node) => node.fmt_in(f, indent + 2)?,
-                &Entry::Pair(ref k, ref v) => {
+        for entry in &self.content {
+            match *entry {
+                Entry::Node(ref node) => node.fmt_in(f, indent + 2)?,
+                Entry::Pair(ref k, ref v) => {
                     write!(f, "{0:1$}{{ {2:?} => {3:?} }}\n", "", indent + 2, k, v)?
                 }
             }
@@ -979,7 +979,7 @@ where
             "{0:1$}CollisionNode size: {2} hash: {3} content: [\n",
             "", indent, self.size, self.hash
         )?;
-        for &(ref k, ref v) in self.content.iter() {
+        for &(ref k, ref v) in &self.content {
             write!(f, "{0:1$}{{ {2:?} => {3:?} }}\n", "", indent + 2, k, v)?
         }
         write!(f, "{0:1$}]\n", "", indent)
