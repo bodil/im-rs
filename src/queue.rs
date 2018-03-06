@@ -92,9 +92,9 @@ impl<A> Queue<A> {
     /// Returns `None` if the queue is empty. Otherwise, you get a tuple
     /// of the first element and the remainder of the queue.
     pub fn pop_front(&self) -> Option<(Arc<A>, Queue<A>)> {
-        match self {
-            &Queue(ref l, ref r) if l.is_empty() && r.is_empty() => None,
-            &Queue(ref l, ref r) => match l.uncons() {
+        match *self {
+            Queue(ref l, ref r) if l.is_empty() && r.is_empty() => None,
+            Queue(ref l, ref r) => match l.uncons() {
                 None => Queue(r.reverse(), conslist![]).pop_front(),
                 Some((a, d)) => Some((a, Queue(d, r.clone()))),
             },
@@ -121,9 +121,9 @@ impl<A> Queue<A> {
     /// Returns `None` if the queue is empty. Otherwise, you get a tuple
     /// of the last element and the remainder of the queue.
     pub fn pop_back(&self) -> Option<(Arc<A>, Queue<A>)> {
-        match self {
-            &Queue(ref l, ref r) if l.is_empty() && r.is_empty() => None,
-            &Queue(ref l, ref r) => match r.uncons() {
+        match *self {
+            Queue(ref l, ref r) if l.is_empty() && r.is_empty() => None,
+            Queue(ref l, ref r) => match r.uncons() {
                 None => Queue(conslist![], l.reverse()).pop_back(),
                 Some((a, d)) => Some((a, Queue(l.clone(), d))),
             },

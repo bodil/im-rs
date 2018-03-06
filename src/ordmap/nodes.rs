@@ -91,10 +91,10 @@ impl<K, V> NodeData<K, V> {
 
     fn sum_up_children(&self) -> usize {
         let mut c = self.count;
-        for n in self.children.iter() {
-            match n {
-                &None => continue,
-                &Some(ref node) => c += node.len(),
+        for n in &self.children {
+            match *n {
+                None => continue,
+                Some(ref node) => c += node.len(),
             }
         }
         c
@@ -109,9 +109,9 @@ impl<K, V> Node<K, V> {
 
     #[inline]
     fn maybe_len(node_or: &Option<Node<K, V>>) -> usize {
-        match node_or {
-            &None => 0,
-            &Some(ref node) => node.len(),
+        match *node_or {
+            None => 0,
+            Some(ref node) => node.len(),
         }
     }
 
@@ -176,16 +176,16 @@ impl<K, V> Node<K, V> {
     }
 
     pub fn min(&self) -> Option<&Pair<K, V>> {
-        match self.0.children.first().unwrap() {
-            &None => self.0.keys.first(),
-            &Some(ref child) => child.min(),
+        match *self.0.children.first().unwrap() {
+            None => self.0.keys.first(),
+            Some(ref child) => child.min(),
         }
     }
 
     pub fn max(&self) -> Option<&Pair<K, V>> {
-        match self.0.children.last().unwrap() {
-            &None => self.0.keys.last(),
-            &Some(ref child) => child.max(),
+        match *self.0.children.last().unwrap() {
+            None => self.0.keys.last(),
+            Some(ref child) => child.max(),
         }
     }
 }
@@ -212,8 +212,8 @@ where
         match self.0.keys.binary_search_by_key(&key, |pair| &*pair.key) {
             Ok(index) => Some(self.0.keys[index].value.clone()),
             Err(index) => match self.0.children[index] {
-                None => return None,
-                Some(ref node) => return node.lookup(key),
+                None => None,
+                Some(ref node) => node.lookup(key),
             },
         }
     }
@@ -250,7 +250,7 @@ where
     }
 
     pub fn insert(&self, key: Arc<K>, value: Arc<V>) -> Insert<K, V> {
-        if self.0.keys.len() == 0 {
+        if self.0.keys.is_empty() {
             return Insert::Update(Node::singleton(key, value));
         }
         match self.0.keys.binary_search_by_key(&&*key, |pair| &*pair.key) {
@@ -400,7 +400,7 @@ where
                 let pair = new_data.keys.swap_remove(pull_to);
                 new_data.children[child_index] = Some(new_child);
                 new_data.count -= 1;
-                return Remove::Update(pair, Node::wrap(new_data));
+                Remove::Update(pair, Node::wrap(new_data))
             }
         }
     }
@@ -416,15 +416,15 @@ where
                         let pair = new_data.keys.remove(index);
                         new_data.children.remove(index);
                         new_data.count -= 1;
-                        return Remove::Update(pair, Node::wrap(new_data));
+                        Remove::Update(pair, Node::wrap(new_data))
                     }
                     // If the left hand child has capacity, pull the predecessor up.
                     (&Some(ref left), _) if !left.too_small() => {
-                        return self.pull_up(&left.max().unwrap().key, left, index, index);
+                        self.pull_up(&left.max().unwrap().key, left, index, index)
                     }
                     // If the right hand child has capacity, pull the successor up.
                     (_, &Some(ref right)) if !right.too_small() => {
-                        return self.pull_up(&right.min().unwrap().key, right, index, index + 1);
+                        self.pull_up(&right.min().unwrap().key, right, index, index + 1)
                     }
                     // If neither child has capacity, we'll have to merge them.
                     (&Some(ref left), &Some(ref right)) => {
@@ -438,12 +438,12 @@ where
                         };
                         if new_data.keys.is_empty() {
                             // If we've depleted the root node, the merged child becomes the root.
-                            return Remove::Update(pair, new_child);
+                            Remove::Update(pair, new_child)
                         } else {
                             new_data.count -= 1;
                             new_data.children.remove(index + 1);
                             new_data.children[index] = Some(new_child);
-                            return Remove::Update(pair, Node::wrap(new_data));
+                            Remove::Update(pair, Node::wrap(new_data))
                         }
                     }
                     // If one child exists and the other doesn't, we're in a bad state.
@@ -453,7 +453,7 @@ where
             // Key is adjacent to some key in node
             Err(index) => match self.0.children[index] {
                 // No child at location means key isn't in map.
-                None => return Remove::NoChange,
+                None => Remove::NoChange,
                 // Child at location, but it's at minimum capacity.
                 Some(ref child) if child.too_small() => {
                     let has_left = index > 0;
@@ -515,51 +515,44 @@ where
                     // If it has neither, we'll have to merge it with a sibling.
                     // If we have a right sibling, we'll merge with that.
                     if has_right {
-                        match self.0.children[index + 1] {
-                            Some(ref right) => {
-                                let merged = Node::merge(self.0.keys[index].clone(), child, &right);
-                                match merged.remove(key) {
-                                    Remove::NoChange => return Remove::NoChange,
-                                    Remove::Removed(_) => unreachable!(),
-                                    Remove::Update(pair, new_child) => {
-                                        if self.0.keys.len() == 1 {
-                                            return Remove::Update(pair, new_child);
-                                        }
-                                        let mut new_data = (&*self.0).clone();
-                                        new_data.count -= 1;
-                                        new_data.keys.remove(index);
-                                        new_data.children.remove(index);
-                                        new_data.children[index] = Some(new_child);
-                                        return Remove::Update(pair, Node::wrap(new_data));
+                        if let Some(ref right) = self.0.children[index + 1] {
+                            let merged = Node::merge(self.0.keys[index].clone(), child, right);
+                            match merged.remove(key) {
+                                Remove::NoChange => return Remove::NoChange,
+                                Remove::Removed(_) => unreachable!(),
+                                Remove::Update(pair, new_child) => {
+                                    if self.0.keys.len() == 1 {
+                                        return Remove::Update(pair, new_child);
                                     }
+                                    let mut new_data = (&*self.0).clone();
+                                    new_data.count -= 1;
+                                    new_data.keys.remove(index);
+                                    new_data.children.remove(index);
+                                    new_data.children[index] = Some(new_child);
+                                    return Remove::Update(pair, Node::wrap(new_data));
                                 }
                             }
-                            None => {}
                         }
                     }
                     // If we have a left sibling, we'll merge with that.
                     if has_left {
-                        match self.0.children[index - 1] {
-                            Some(ref left) => {
-                                let merged =
-                                    Node::merge(self.0.keys[index - 1].clone(), &left, child);
-                                match merged.remove(key) {
-                                    Remove::NoChange => return Remove::NoChange,
-                                    Remove::Removed(_) => unreachable!(),
-                                    Remove::Update(pair, new_child) => {
-                                        if self.0.keys.len() == 1 {
-                                            return Remove::Update(pair, new_child);
-                                        }
-                                        let mut new_data = (&*self.0).clone();
-                                        new_data.count -= 1;
-                                        new_data.keys.remove(index - 1);
-                                        new_data.children.remove(index - 1);
-                                        new_data.children[index - 1] = Some(new_child);
-                                        return Remove::Update(pair, Node::wrap(new_data));
+                        if let Some(ref left) = self.0.children[index - 1] {
+                            let merged = Node::merge(self.0.keys[index - 1].clone(), left, child);
+                            match merged.remove(key) {
+                                Remove::NoChange => return Remove::NoChange,
+                                Remove::Removed(_) => unreachable!(),
+                                Remove::Update(pair, new_child) => {
+                                    if self.0.keys.len() == 1 {
+                                        return Remove::Update(pair, new_child);
                                     }
+                                    let mut new_data = (&*self.0).clone();
+                                    new_data.count -= 1;
+                                    new_data.keys.remove(index - 1);
+                                    new_data.children.remove(index - 1);
+                                    new_data.children[index - 1] = Some(new_child);
+                                    return Remove::Update(pair, Node::wrap(new_data));
                                 }
                             }
-                            None => {}
                         }
                     }
                     // If none of the above, we're in a bad state.
@@ -567,13 +560,13 @@ where
                 }
                 // Child at location, and it's big enough, we can recurse down.
                 Some(ref child) => match child.remove(key) {
-                    Remove::NoChange => return Remove::NoChange,
+                    Remove::NoChange => Remove::NoChange,
                     Remove::Removed(_) => unreachable!(),
                     Remove::Update(pair, new_child) => {
                         let mut new_data = (&*self.0).clone();
                         new_data.children[index] = Some(new_child);
                         new_data.count -= 1;
-                        return Remove::Update(pair, Node::wrap(new_data));
+                        Remove::Update(pair, Node::wrap(new_data))
                     }
                 },
             },
@@ -581,7 +574,7 @@ where
     }
 
     pub fn insert_mut(&mut self, key: Arc<K>, value: Arc<V>) -> Insert<K, V> {
-        if self.0.keys.len() == 0 {
+        if self.0.keys.is_empty() {
             let node = Arc::make_mut(&mut self.0);
             node.keys.push(Pair { key, value });
             node.children.push(None);
@@ -604,13 +597,11 @@ where
                 Err(index) => {
                     let mut has_room = self.has_room();
                     let mut node = Arc::make_mut(&mut self.0);
-                    let action = match node.children.get_mut(index).unwrap() {
+                    let action = match node.children[index] {
                         // No child at location, this is the target node.
-                        &mut None => InsertAt,
+                        None => InsertAt,
                         // Child at location, pass it on.
-                        &mut Some(ref mut child) => match child
-                            .insert_mut(key.clone(), value.clone())
-                        {
+                        Some(ref mut child) => match child.insert_mut(key.clone(), value.clone()) {
                             Insert::NoChange => NoAction,
                             Insert::JustInc => IncAction,
                             Insert::Update(_) => unreachable!(),
@@ -751,8 +742,7 @@ where
                 let mut node = Arc::make_mut(&mut self.0);
                 let pair = node.keys.remove(index);
                 let new_child = match merged_child.remove_mut(key) {
-                    Remove::NoChange => merged_child,
-                    Remove::Removed(_) => merged_child,
+                    Remove::NoChange | Remove::Removed(_) => merged_child,
                     Remove::Update(_, updated_child) => updated_child,
                 };
                 if node.keys.is_empty() {
@@ -774,7 +764,7 @@ where
                         .index_mut(index - 1..index + 1)
                         .iter_mut()
                         .map(|n| {
-                            if let &mut Some(ref mut o) = n {
+                            if let Some(ref mut o) = *n {
                                 o
                             } else {
                                 unreachable!()
@@ -822,7 +812,7 @@ where
                 {
                     let mut children = node.children.index_mut(index..index + 2).iter_mut().map(
                         |n| {
-                            if let &mut Some(ref mut o) = n {
+                            if let Some(ref mut o) = *n {
                                 o
                             } else {
                                 unreachable!()
@@ -991,7 +981,7 @@ impl<K, V> Iter<K, V> {
     }
 
     fn push_node_fwd(&mut self, maybe_node: &Option<Node<K, V>>) {
-        if let &Some(ref node) = maybe_node {
+        if let Some(ref node) = *maybe_node {
             self.fwd_stack.push(IterItem::Consider(node.clone()))
         }
     }
@@ -1007,7 +997,7 @@ impl<K, V> Iter<K, V> {
     }
 
     fn push_node_back(&mut self, maybe_node: &Option<Node<K, V>>) {
-        if let &Some(ref node) = maybe_node {
+        if let Some(ref node) = *maybe_node {
             self.back_stack.push(IterItem::Consider(node.clone()))
         }
     }

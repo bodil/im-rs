@@ -379,7 +379,7 @@ impl<A> ConsList<A> {
                 (Some((ref a, _)), Some((ref b, ref lb1)))
                     if cmp(a.clone(), b.clone()) == Ordering::Greater =>
                 {
-                    cons(b.clone(), &merge(la, &lb1, cmp))
+                    cons(b.clone(), &merge(la, lb1, cmp))
                 }
                 (Some((a, la1)), Some((_, _))) => cons(a.clone(), &merge(&la1, lb, cmp)),
                 (None, _) => lb.clone(),
@@ -409,30 +409,30 @@ impl<A> ConsList<A> {
         }
 
         fn ascending<A>(
-            a: Arc<A>,
+            a: &Arc<A>,
             f: &Fn(ConsList<A>) -> ConsList<A>,
             l: &ConsList<A>,
             cmp: &Fn(Arc<A>, Arc<A>) -> Ordering,
         ) -> ConsList<ConsList<A>> {
             match l.uncons() {
                 Some((ref b, ref lb)) if cmp(a.clone(), b.clone()) != Ordering::Greater => {
-                    ascending(b.clone(), &|ys| f(cons(a.clone(), &ys)), &lb, cmp)
+                    ascending(&b.clone(), &|ys| f(cons(a.clone(), &ys)), lb, cmp)
                 }
                 _ => cons(f(ConsList::singleton(a.clone())), &sequences(l, cmp)),
             }
         }
 
         fn descending<A>(
-            a: Arc<A>,
+            a: &Arc<A>,
             la: &ConsList<A>,
             lb: &ConsList<A>,
             cmp: &Fn(Arc<A>, Arc<A>) -> Ordering,
         ) -> ConsList<ConsList<A>> {
             match lb.uncons() {
                 Some((ref b, ref bs)) if cmp(a.clone(), b.clone()) == Ordering::Greater => {
-                    descending(b.clone(), &cons(a.clone(), la), bs, cmp)
+                    descending(&b.clone(), &cons(a.clone(), la), bs, cmp)
                 }
-                _ => cons(cons(a.clone(), la), &sequences(&lb, cmp)),
+                _ => cons(cons(a.clone(), la), &sequences(lb, cmp)),
             }
         }
 
@@ -442,10 +442,10 @@ impl<A> ConsList<A> {
         ) -> ConsList<ConsList<A>> {
             match l.uncons2() {
                 Some((ref a, ref b, ref xs)) if cmp(a.clone(), b.clone()) == Ordering::Greater => {
-                    descending(b.clone(), &ConsList::singleton(a.clone()), xs, cmp)
+                    descending(&b.clone(), &ConsList::singleton(a.clone()), xs, cmp)
                 }
                 Some((ref a, ref b, ref xs)) => {
-                    ascending(b.clone(), &|l| cons(a.clone(), l), &xs, cmp)
+                    ascending(&b.clone(), &|l| cons(a.clone(), l), xs, cmp)
                 }
                 None => conslist![l.clone()],
             }
@@ -559,8 +559,8 @@ impl<A> Clone for ConsList<A> {
     ///
     /// Time: O(1)
     fn clone(&self) -> Self {
-        match self {
-            &ConsList(ref node) => ConsList(node.clone()),
+        match *self {
+            ConsList(ref node) => ConsList(node.clone()),
         }
     }
 }

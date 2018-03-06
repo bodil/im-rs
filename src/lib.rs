@@ -189,6 +189,10 @@
 //! [queue::Queue]: ./queue/struct.Queue.html
 //! [list::List::snoc]: ./list/struct.List.html#method.snoc
 
+// Get some clippy feedback: `cargo +nightly build --features "clippy"`
+#![cfg_attr(feature="clippy", feature(plugin))]
+#![cfg_attr(feature="clippy", plugin(clippy))]
+
 #![cfg_attr(has_specialisation, feature(specialization))]
 
 #[cfg(any(test, feature = "quickcheck"))]

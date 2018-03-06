@@ -295,7 +295,7 @@ where
     where
         RV: Shared<V>,
     {
-        self.get(k).unwrap_or(default.shared())
+        self.get(k).unwrap_or_else(|| default.shared())
     }
 
     /// Test for the presence of a key in a hash map.
@@ -350,13 +350,13 @@ where
         RK: Shared<K>,
         RV: Shared<V>,
     {
-        self.insert_ref(k.shared(), v.shared())
+        self.insert_ref(&k.shared(), &v.shared())
     }
 
-    fn insert_ref(&self, k: Arc<K>, v: Arc<V>) -> Self {
+    fn insert_ref(&self, k: &Arc<K>, v: &Arc<V>) -> Self {
         let (added, new_node) =
             self.root
-                .insert(&*self.hasher, 0, hash_key(&*self.hasher, &k), &k, &v);
+                .insert(&*self.hasher, 0, hash_key(&*self.hasher, &k), k, v);
         HashMap {
             root: new_node,
             size: if added {
@@ -406,13 +406,13 @@ where
         RK: Shared<K>,
         RV: Shared<V>,
     {
-        self.insert_mut_ref(k.shared(), v.shared())
+        self.insert_mut_ref(&k.shared(), &v.shared())
     }
 
-    fn insert_mut_ref(&mut self, k: Arc<K>, v: Arc<V>) {
+    fn insert_mut_ref(&mut self, k: &Arc<K>, v: &Arc<V>) {
         let (added, new_node) =
             self.root
-                .insert_mut(&*self.hasher, 0, hash_key(&*self.hasher, &k), &k, &v);
+                .insert_mut(&*self.hasher, 0, hash_key(&*self.hasher, &k), k, v);
         match new_node {
             None => (),
             Some(new_root) => self.root = new_root,
@@ -438,8 +438,8 @@ where
         let ak = k.shared();
         let av = v.shared();
         match self.pop_with_key(&ak) {
-            None => self.insert_ref(ak, av),
-            Some((_, v2, m)) => m.insert_ref(ak, f(v2, av)),
+            None => self.insert_ref(&ak, &av),
+            Some((_, v2, m)) => m.insert_ref(&ak, &f(v2, av)),
         }
     }
 
@@ -459,8 +459,8 @@ where
         let ak = k.shared();
         let av = v.shared();
         match self.pop_with_key(&ak) {
-            None => self.insert_ref(ak, av),
-            Some((_, v2, m)) => m.insert_ref(ak.clone(), f(ak, v2, av)),
+            None => self.insert_ref(&ak, &av),
+            Some((_, v2, m)) => m.insert_ref(&ak.clone(), &f(ak, v2, av)),
         }
     }
 
@@ -481,8 +481,8 @@ where
         let ak = k.shared();
         let av = v.shared();
         match self.pop_with_key(&ak) {
-            None => (None, self.insert_ref(ak, av)),
-            Some((_, v2, m)) => (Some(v2.clone()), m.insert_ref(ak.clone(), f(ak, v2, av))),
+            None => (None, self.insert_ref(&ak, &av)),
+            Some((_, v2, m)) => (Some(v2.clone()), m.insert_ref(&ak.clone(), &f(ak, v2, av))),
         }
     }
 
@@ -561,9 +561,9 @@ where
         let pop = self.pop_with_key(&*ak);
         match (f(pop.as_ref().map(|&(_, ref v, _)| v.clone())), pop) {
             (None, None) => self.clone(),
-            (Some(v), None) => self.insert_ref(ak, v),
+            (Some(v), None) => self.insert_ref(&ak, &v),
             (None, Some((_, _, m))) => m,
-            (Some(v), Some((_, _, m))) => m.insert_ref(ak, v),
+            (Some(v), Some((_, _, m))) => m.insert_ref(&ak, &v),
         }
     }
 
@@ -1185,7 +1185,7 @@ where
         T: IntoIterator<Item = (RK, RV)>,
     {
         let mut map: Self = Default::default();
-        for (k, v) in i.into_iter() {
+        for (k, v) in i {
             map.insert_mut(k, v)
         }
         map

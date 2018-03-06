@@ -124,9 +124,9 @@ where
         SharedTo: Shared<Self::To>,
     {
         self.left
-            .try_get(&s)
+            .try_get(s)
             .and_then(|s2| self.right.try_put(v, &s2))
-            .and_then(|s3| self.left.try_put(Some(s3), &s))
+            .and_then(|s3| self.left.try_put(Some(s3), s))
     }
 }
 

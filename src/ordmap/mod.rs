@@ -314,7 +314,7 @@ impl<K: Ord, V> OrdMap<K, V> {
     where
         RV: Shared<V>,
     {
-        self.get(k).unwrap_or(default.shared())
+        self.get(k).unwrap_or_else(|| default.shared())
     }
 
     /// Test for the presence of a key in a map.
@@ -422,8 +422,7 @@ impl<K: Ord, V> OrdMap<K, V> {
 
     fn insert_mut_ref(&mut self, k: Arc<K>, v: Arc<V>) {
         match self.0.insert_mut(k, v) {
-            Insert::NoChange => {}
-            Insert::JustInc => {}
+            Insert::NoChange | Insert::JustInc => {}
             Insert::Update(root) => self.0 = root,
             Insert::Split(left, median, right) => self.0 = Node::from_split(left, median, right),
         }
@@ -1129,7 +1128,7 @@ where
         T: IntoIterator<Item = (RK, RV)>,
     {
         let mut m = OrdMap::default();
-        for (k, v) in i.into_iter() {
+        for (k, v) in i {
             m.insert_mut(k, v);
         }
         m
