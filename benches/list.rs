@@ -66,8 +66,8 @@ fn conslist_uncons(b: &mut Bencher) {
 fn list_append(b: &mut Bencher) {
     let size = Vec::from_iter((0..1000).into_iter().map(|i| List::from(0..i)));
     b.iter(|| {
-        for i in 0..1000 {
-            size[i].append(&size[i]);
+        for item in &size {
+            item.append(item);
         }
     })
 }
@@ -76,8 +76,8 @@ fn list_append(b: &mut Bencher) {
 fn conslist_append(b: &mut Bencher) {
     let size = Vec::from_iter((0..1000).into_iter().map(|i| ConsList::from(0..i)));
     b.iter(|| {
-        for i in 0..1000 {
-            size[i].append(&size[i]);
+        for item in &size {
+            item.append(item);
         }
     })
 }

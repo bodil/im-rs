@@ -687,7 +687,8 @@ where
 // Iterators
 
 pub struct Iter<A> {
-    #[doc(hidden)] current: ConsList<A>,
+    #[doc(hidden)]
+    current: ConsList<A>,
 }
 
 impl<A> Iterator for Iter<A> {
@@ -811,7 +812,7 @@ pub mod proptest {
         size: Range<usize>,
     ) -> BoxedStrategy<ConsList<<A::Value as ValueTree>::Value>> {
         ::proptest::collection::vec(element, size.clone())
-            .prop_map(|v| ConsList::from(v))
+            .prop_map(ConsList::from)
             .boxed()
     }
 }

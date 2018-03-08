@@ -855,7 +855,7 @@ pub mod proptest {
         size: Range<usize>,
     ) -> BoxedStrategy<List<<T::Value as ValueTree>::Value>> {
         ::proptest::collection::vec(element, size)
-            .prop_map(|v| List::from(v))
+            .prop_map(List::from)
             .boxed()
     }
 

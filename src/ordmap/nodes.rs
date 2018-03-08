@@ -101,6 +101,18 @@ impl<K, V> NodeData<K, V> {
     }
 }
 
+impl<K, V> Default for Node<K, V> {
+    fn default() -> Self {
+        let mut children = Vec::with_capacity(NODE_SIZE + 1);
+        children.push(None);
+        Node(Arc::new(NodeData {
+            count: 0,
+            keys: Vec::with_capacity(NODE_SIZE),
+            children,
+        }))
+    }
+}
+
 impl<K, V> Node<K, V> {
     #[inline]
     pub fn len(&self) -> usize {
@@ -127,13 +139,7 @@ impl<K, V> Node<K, V> {
 
     #[inline]
     pub fn new() -> Self {
-        let mut children = Vec::with_capacity(NODE_SIZE + 1);
-        children.push(None);
-        Node(Arc::new(NodeData {
-            count: 0,
-            keys: Vec::with_capacity(NODE_SIZE),
-            children,
-        }))
+        Default::default()
     }
 
     #[inline]
@@ -742,7 +748,7 @@ where
                 let mut node = Arc::make_mut(&mut self.0);
                 let pair = node.keys.remove(index);
                 let new_child = match merged_child.remove_mut(key) {
-                    Remove::NoChange | Remove::Removed(_)=> merged_child,
+                    Remove::NoChange | Remove::Removed(_) => merged_child,
                     Remove::Update(_, updated_child) => updated_child,
                 };
                 if node.keys.is_empty() {
@@ -997,7 +1003,7 @@ impl<K, V> Iter<K, V> {
     }
 
     fn push_node_back(&mut self, maybe_node: &Option<Node<K, V>>) {
-        if let &Some(ref node) = maybe_node {
+        if let Some(ref node) = *maybe_node {
             self.back_stack.push(IterItem::Consider(node.clone()))
         }
     }

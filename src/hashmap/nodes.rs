@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "clippy", allow(new_ret_no_self))]
+
 use std::sync::Arc;
 use std::hash::{BuildHasher, Hash};
 use std::fmt::{Debug, Error, Formatter};
@@ -693,9 +695,7 @@ where
                 let idx = bit_index(node.bitmap, bit);
                 let mut this = Arc::make_mut(node);
                 let (removed, updated) = match this.content[idx] {
-                    Entry::Node(ref mut child) => {
-                        child.remove_mut(shift + HASH_BITS, hash, key)
-                    }
+                    Entry::Node(ref mut child) => child.remove_mut(shift + HASH_BITS, hash, key),
                     Entry::Pair(ref k, ref v) if &**k == key => {
                         (Some((k.clone(), v.clone())), RemoveResult::Removed)
                     }

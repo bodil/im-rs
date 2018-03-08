@@ -56,11 +56,8 @@ where
             None => Vec::new(),
             Some(l) => Vec::with_capacity(l),
         };
-        loop {
-            match access.next_element()? {
-                Some(i) => v.push(i),
-                None => break,
-            }
+        while let Some(i) = access.next_element()? {
+            v.push(i)
         }
         Ok(From::from(v))
     }
@@ -114,11 +111,8 @@ where
             None => Vec::new(),
             Some(l) => Vec::with_capacity(l),
         };
-        loop {
-            match access.next_entry()? {
-                Some(i) => v.push(i),
-                None => break,
-            }
+        while let Some(i) = access.next_entry()? {
+            v.push(i)
         }
         Ok(From::from(v))
     }
@@ -247,7 +241,8 @@ impl<K: Serialize + Ord, V: Serialize> Serialize for OrdMap<K, V> {
 // HashMap
 
 impl<'de, K: Deserialize<'de> + Hash + Eq, V: Deserialize<'de>, S: SharedHasher> Deserialize<'de>
-    for HashMap<K, V, S> {
+    for HashMap<K, V, S>
+{
     fn deserialize<D>(des: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,

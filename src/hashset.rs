@@ -7,6 +7,8 @@
 //!
 //! [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 
+#![cfg_attr(feature = "clippy", allow(implicit_hasher))]
+
 use std::sync::Arc;
 use std::iter::{FromIterator, IntoIterator};
 use std::fmt::{Debug, Error, Formatter};
@@ -441,7 +443,8 @@ impl<A: Eq + Hash, S: SharedHasher> From<collections::HashSet<A>> for HashSet<A,
 }
 
 impl<'a, A: Eq + Hash + Clone, S: SharedHasher> From<&'a collections::HashSet<A>>
-    for HashSet<A, S> {
+    for HashSet<A, S>
+{
     fn from(hash_set: &collections::HashSet<A>) -> Self {
         hash_set.into_iter().cloned().collect()
     }
@@ -524,7 +527,7 @@ pub mod proptest {
         <A::Value as ValueTree>::Value: Hash + Eq,
     {
         ::proptest::collection::vec(element, size.clone())
-            .prop_map(|v| HashSet::from(v))
+            .prop_map(HashSet::from)
             .prop_filter("HashSet minimum size".to_owned(), move |s| {
                 s.len() >= size.start
             })

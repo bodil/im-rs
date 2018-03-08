@@ -6,3 +6,6 @@ rust:
 cache:
   directories:
     - /home/travis/.cargo
+script:
+  - cargo +nightly rustc --features clippy -- -D warnings
+  - cargo test

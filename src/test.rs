@@ -7,7 +7,7 @@ where
     loop {
         match (it.next(), it.peek()) {
             (_, None) => return true,
-            (Some(ref a), Some(ref b)) if a > b => return false,
+            (Some(ref a), Some(b)) if a > b => return false,
             _ => (),
         }
     }

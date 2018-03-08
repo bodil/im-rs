@@ -534,7 +534,7 @@ pub mod proptest {
         <A::Value as ValueTree>::Value: Ord,
     {
         ::proptest::collection::vec(element, size.clone())
-            .prop_map(|v| OrdSet::from(v))
+            .prop_map(OrdSet::from)
             .prop_filter("OrdSet minimum size".to_owned(), move |s| {
                 s.len() >= size.start
             })

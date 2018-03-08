@@ -18,6 +18,8 @@
 //! [lens::PartialLens]: ./trait.PartialLens.html
 //! [lens::Lens]: ./trait.Lens.html
 
+#![cfg_attr(feature = "clippy", allow(needless_update))]
+
 use std::sync::Arc;
 
 use shared::Shared;

@@ -1,4 +1,5 @@
 #![feature(test)]
+#![cfg_attr(feature="cargo-clippy", allow(unreadable_literal))]
 
 extern crate im;
 extern crate rand;
@@ -22,11 +23,11 @@ fn random_keys(size: usize) -> Vec<i64> {
     set
 }
 
-fn reorder<A: Copy>(vec: &Vec<A>) -> Vec<A> {
+fn reorder<A: Copy>(vec: &[A]) -> Vec<A> {
     let mut gen = weak_rng();
-    let mut set = vec.clone();
+    let mut set = vec.to_owned();
     let mut out = Vec::new();
-    while set.len() > 0 {
+    while !set.is_empty() {
         let i = gen.gen::<usize>() % set.len();
         let v = set.remove(i);
         out.push(v)
@@ -40,7 +41,7 @@ fn map_lookup_n(size: usize, b: &mut Bencher) {
     let m = OrdMap::from_iter(keys.into_iter().map(|i| (i, 1)));
     b.iter(|| {
         for i in &order {
-            m.get(&i);
+            m.get(i);
         }
     })
 }
@@ -117,7 +118,7 @@ fn map_remove_n(size: usize, b: &mut Bencher) {
     b.iter(|| {
         let mut m = map.clone();
         for i in &order {
-            m = m.remove(&i)
+            m = m.remove(i)
         }
     })
 }
@@ -144,7 +145,7 @@ fn map_remove_mut_n(size: usize, b: &mut Bencher) {
     b.iter(|| {
         let mut m = map.clone();
         for i in &order {
-            m.remove_mut(&i)
+            m.remove_mut(i)
         }
     })
 }

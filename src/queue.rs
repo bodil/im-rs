@@ -14,8 +14,9 @@ pub struct Queue<A>(ConsList<A>, ConsList<A>);
 
 impl<A> Queue<A> {
     /// Construct an empty queue.
+    #[inline]
     pub fn new() -> Self {
-        Queue(conslist![], conslist![])
+        Default::default()
     }
 
     /// Construct a queue by consuming an [`IntoIterator`][std::iter::IntoIterator].
@@ -121,9 +122,9 @@ impl<A> Queue<A> {
     /// Returns `None` if the queue is empty. Otherwise, you get a tuple
     /// of the last element and the remainder of the queue.
     pub fn pop_back(&self) -> Option<(Arc<A>, Queue<A>)> {
-        match self {
-            &Queue(ref l, ref r) if l.is_empty() && r.is_empty() => None,
-            &Queue(ref l, ref r) => match r.uncons() {
+        match *self {
+            Queue(ref l, ref r) if l.is_empty() && r.is_empty() => None,
+            Queue(ref l, ref r) => match r.uncons() {
                 None => Queue(conslist![], l.reverse()).pop_back(),
                 Some((a, d)) => Some((a, Queue(l.clone(), d))),
             },
@@ -143,6 +144,12 @@ impl<A> Queue<A> {
 }
 
 // Core traits
+
+impl<A> Default for Queue<A> {
+    fn default() -> Self {
+        Queue(conslist![], conslist![])
+    }
+}
 
 impl<A> Clone for Queue<A> {
     fn clone(&self) -> Self {
@@ -304,7 +311,7 @@ pub mod proptest {
         size: Range<usize>,
     ) -> BoxedStrategy<Queue<<T::Value as ValueTree>::Value>> {
         ::proptest::collection::vec(element, size)
-            .prop_map(|v| Queue::from(v))
+            .prop_map(Queue::from)
             .boxed()
     }
 }

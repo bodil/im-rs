@@ -1341,7 +1341,7 @@ pub mod proptest {
         <K::Value as ValueTree>::Value: Ord,
     {
         ::proptest::collection::vec((key, value), size.clone())
-            .prop_map(|v| OrdMap::from(v))
+            .prop_map(OrdMap::from)
             .prop_filter("OrdMap minimum size".to_owned(), move |m| {
                 m.len() >= size.start
             })
@@ -1502,7 +1502,7 @@ mod test {
         }
 
         fn overwrite_values(vec: Vec<(usize, usize)>, index_rand: usize, new_val: usize) -> bool {
-            if vec.len() == 0 {
+            if vec.is_empty() {
                 return true
             }
             let index = vec[index_rand % vec.len()].0;
@@ -1519,7 +1519,7 @@ mod test {
         }
 
         fn delete_values(vec: Vec<(usize, usize)>, index_rand: usize) -> bool {
-            if vec.len() == 0 {
+            if vec.is_empty() {
                 return true
             }
             let index = vec[index_rand % vec.len()].0;
@@ -1587,7 +1587,7 @@ mod test {
         #[test]
         fn lookup(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
             let map: OrdMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
-            for (k, v) in m.into_iter() {
+            for (k, v) in m {
                 assert_eq!(Some(*v), map.get(k).map(|v| *v));
             }
         }
@@ -1598,8 +1598,8 @@ mod test {
                 FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             for k in m.keys() {
                 let l = map.len();
-                assert_eq!(m.get(k).map(|v| *v), map.get(k).map(|v| *v));
-                map = map.remove(&k);
+                assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
+                map = map.remove(k);
                 assert_eq!(None, map.get(k));
                 assert_eq!(l - 1, map.len());
             }
@@ -1622,8 +1622,8 @@ mod test {
                 FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             for k in m.keys() {
                 let l = map.len();
-                assert_eq!(m.get(k).map(|v| *v), map.get(k).map(|v| *v));
-                map.remove_mut(&k);
+                assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
+                map.remove_mut(k);
                 assert_eq!(None, map.get(k));
                 assert_eq!(l - 1, map.len());
             }
@@ -1635,7 +1635,7 @@ mod test {
         #[test]
         fn delete_and_reinsert(ref input in collection::hash_map(i16::ANY, i16::ANY, 1..100),
                                index_rand in usize::ANY) {
-            let index = input.keys().skip(index_rand % input.len()).next().unwrap().clone();
+            let index = *input.keys().nth(index_rand % input.len()).unwrap();
             let map1 = OrdMap::from_iter(input.clone());
             let (val, map2) = map1.pop(&index).unwrap();
             let map3 = map2.insert(index, val);
