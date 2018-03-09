@@ -6,6 +6,8 @@ rust:
 cache:
   directories:
     - /home/travis/.cargo
+install:
+  - rustup toolchain add nightly
 script:
   - cargo +nightly rustc --features clippy -- -D warnings
   - cargo test
