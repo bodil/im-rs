@@ -5,8 +5,8 @@ use std::hash::{BuildHasher, Hash};
 use std::fmt::{Debug, Error, Formatter};
 use std::ptr;
 
-use super::bits::{bit_index, bitpos, mask, Bitmap, HASH_BITS, HASH_SIZE};
-use super::hash::hash_key;
+use bits::{bit_index, bitpos, mask, Bitmap, HASH_BITS, HASH_SIZE};
+use hash::hash_key;
 
 pub enum Node<K, V> {
     ArrayNode(Arc<ArrayNode<K, V>>),

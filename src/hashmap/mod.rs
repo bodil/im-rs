@@ -32,13 +32,8 @@ use std::collections;
 
 use shared::Shared;
 use lens::PartialLens;
-use hash::SharedHasher;
+use hash::{SharedHasher, hash_key};
 use ordmap::OrdMap;
-
-mod bits;
-
-mod hash;
-use self::hash::hash_key;
 
 mod nodes;
 use self::nodes::Node;

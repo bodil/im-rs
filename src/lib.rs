@@ -253,3 +253,5 @@ pub use iter::unfold;
 
 pub type Set<A> = HashSet<A>;
 pub type Map<K, V> = HashMap<K, V>;
+
+mod bits;

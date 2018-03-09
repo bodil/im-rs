@@ -2,7 +2,9 @@
 
 use std::sync::Arc;
 use std::collections::hash_map::RandomState;
-use std::hash::BuildHasher;
+use std::hash::{BuildHasher, Hash, Hasher};
+
+use bits::{Bitmap, HASH_COERCE};
 
 lazy_static! {
     static ref DEFAULT_HASHER: Arc<RandomState> = Arc::new(RandomState::new());
@@ -30,4 +32,10 @@ impl SharedHasher for RandomState {
     fn shared_hasher() -> Arc<Self> {
         DEFAULT_HASHER.clone()
     }
+}
+
+pub fn hash_key<K: Hash, S: BuildHasher>(bh: &S, key: &K) -> Bitmap {
+    let mut hasher = bh.build_hasher();
+    key.hash(&mut hasher);
+    (hasher.finish() & HASH_COERCE) as Bitmap
 }
