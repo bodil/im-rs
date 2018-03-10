@@ -194,9 +194,6 @@ impl<A> List<A> {
 
     /// Get the length of a list.
     ///
-    /// This operation is instant, because cons cells store the
-    /// length of the list they're the head of.
-    ///
     /// Time: O(1)
     ///
     /// # Examples
@@ -276,7 +273,9 @@ impl<A> List<A> {
         }
     }
 
-    /// Append the list `right` to the end of the current list.
+    /// Append the list `other` to the end of the current list.
+    ///
+    /// Time: O(n)
     ///
     /// # Examples
     ///
@@ -422,6 +421,10 @@ impl<A> List<A> {
 
     /// Construct a list which is the reverse of the current list.
     ///
+    /// Please note that if all you want is to iterate over the list from back to front,
+    /// it is much more efficient to use a [reversed iterator][rev] rather than doing
+    /// the work of reversing the list first.
+    ///
     /// Time: O(n)
     ///
     /// # Examples
@@ -436,6 +439,8 @@ impl<A> List<A> {
     /// );
     /// # }
     /// ```
+    ///
+    /// [rev]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.rev
     pub fn reverse(&self) -> Self {
         let mut out = List::new();
         for i in self.iter() {

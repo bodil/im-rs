@@ -12,6 +12,7 @@ use queue::Queue;
 use ordmap::OrdMap;
 use hashmap::HashMap;
 use hashset::HashSet;
+use vector::Vector;
 
 struct SeqVisitor<'de, S, A>
 where
@@ -288,6 +289,30 @@ impl<A: Serialize + Hash + Eq, S: SharedHasher> Serialize for HashSet<A, S> {
     }
 }
 
+// Vector
+
+impl<'de, A: Deserialize<'de>> Deserialize<'de> for Vector<A> {
+    fn deserialize<D>(des: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        des.deserialize_seq(SeqVisitor::<'de, Vector<A>, A>::new())
+    }
+}
+
+impl<A: Serialize> Serialize for Vector<A> {
+    fn serialize<S>(&self, ser: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut s = ser.serialize_seq(Some(self.len()))?;
+        for i in self.iter() {
+            s.serialize_element(i.deref())?;
+        }
+        s.end()
+    }
+}
+
 // Tests
 
 #[cfg(test)]
@@ -302,6 +327,7 @@ mod test {
     use ordmap::proptest::ord_map;
     use ordset::proptest::ord_set;
     use queue::proptest::queue;
+    use vector::proptest::vector;
 
     proptest! {
         #[test]
@@ -339,5 +365,9 @@ mod test {
             assert_eq!(v, &from_str::<HashSet<i32>>(&to_string(&v).unwrap()).unwrap());
         }
 
+        #[test]
+        fn ser_vector(ref v in vector(i32::ANY, 0..100)) {
+            assert_eq!(v, &from_str::<Vector<i32>>(&to_string(&v).unwrap()).unwrap());
+        }
     }
 }
