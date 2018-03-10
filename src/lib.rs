@@ -231,6 +231,8 @@ pub mod ordset;
 pub mod hashset;
 #[macro_use]
 pub mod list;
+#[macro_use]
+pub mod vector;
 pub mod queue;
 pub mod iter;
 pub mod lens;
@@ -249,6 +251,7 @@ pub use hashset::HashSet;
 pub use queue::Queue;
 pub use list::List;
 pub use conslist::ConsList;
+pub use vector::Vector;
 pub use iter::unfold;
 
 pub type Set<A> = HashSet<A>;
