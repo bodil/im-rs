@@ -211,7 +211,12 @@ impl<A> Vector<A> {
     where
         RA: Shared<A>,
     {
-        assert!(index < self.count);
+        assert!(
+            index < self.count,
+            "index out of bounds: index {} < {}",
+            index,
+            self.count
+        );
         if index >= self.tailoff() {
             let mut tail = (*self.tail).clone();
             tail[index & HASH_MASK as usize] = Entry::Value(value.shared());
@@ -234,7 +239,12 @@ impl<A> Vector<A> {
     where
         RA: Shared<A>,
     {
-        assert!(index < self.count);
+        assert!(
+            index < self.count,
+            "index out of bounds: index {} < {}",
+            index,
+            self.count
+        );
         if index >= self.tailoff() {
             let tail = Arc::make_mut(&mut self.tail);
             tail[index & HASH_MASK as usize] = Entry::Value(value.shared());
