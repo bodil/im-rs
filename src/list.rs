@@ -454,13 +454,11 @@ impl<A> List<A> {
     /// Time: O(n log n)
     pub fn sort_by<F>(&self, cmp: F) -> Self
     where
-        F: Fn(Arc<A>, Arc<A>) -> Ordering,
+        F: Fn(&A, &A) -> Ordering,
     {
-        fn merge<A>(la: &List<A>, lb: &List<A>, cmp: &Fn(Arc<A>, Arc<A>) -> Ordering) -> List<A> {
+        fn merge<A>(la: &List<A>, lb: &List<A>, cmp: &Fn(&A, &A) -> Ordering) -> List<A> {
             match (la.uncons(), lb.uncons()) {
-                (Some((ref a, _)), Some((ref b, ref lb1)))
-                    if cmp(a.clone(), b.clone()) == Ordering::Greater =>
-                {
+                (Some((ref a, _)), Some((ref b, ref lb1))) if cmp(a, b) == Ordering::Greater => {
                     cons(b.clone(), &merge(la, lb1, cmp))
                 }
                 (Some((a, la1)), Some((_, _))) => cons(a.clone(), &merge(&la1, lb, cmp)),
@@ -469,17 +467,14 @@ impl<A> List<A> {
             }
         }
 
-        fn merge_pairs<A>(
-            l: &List<List<A>>,
-            cmp: &Fn(Arc<A>, Arc<A>) -> Ordering,
-        ) -> List<List<A>> {
+        fn merge_pairs<A>(l: &List<List<A>>, cmp: &Fn(&A, &A) -> Ordering) -> List<List<A>> {
             match l.uncons2() {
                 Some((a, b, rest)) => cons(merge(&a, &b, cmp), &merge_pairs(&rest, cmp)),
                 _ => l.clone(),
             }
         }
 
-        fn merge_all<A>(l: &List<List<A>>, cmp: &Fn(Arc<A>, Arc<A>) -> Ordering) -> List<A> {
+        fn merge_all<A>(l: &List<List<A>>, cmp: &Fn(&A, &A) -> Ordering) -> List<A> {
             match l.uncons() {
                 None => list![],
                 Some((ref a, ref d)) if d.is_empty() => a.deref().clone(),
@@ -491,10 +486,10 @@ impl<A> List<A> {
             a: &Arc<A>,
             f: &Fn(List<A>) -> List<A>,
             l: &List<A>,
-            cmp: &Fn(Arc<A>, Arc<A>) -> Ordering,
+            cmp: &Fn(&A, &A) -> Ordering,
         ) -> List<List<A>> {
             match l.uncons() {
-                Some((ref b, ref lb)) if cmp(a.clone(), b.clone()) != Ordering::Greater => {
+                Some((ref b, ref lb)) if cmp(a, b) != Ordering::Greater => {
                     ascending(&b.clone(), &|ys| f(cons(a.clone(), &ys)), lb, cmp)
                 }
                 _ => cons(f(List::singleton(a.clone())), &sequences(l, cmp)),
@@ -505,19 +500,19 @@ impl<A> List<A> {
             a: &Arc<A>,
             la: &List<A>,
             lb: &List<A>,
-            cmp: &Fn(Arc<A>, Arc<A>) -> Ordering,
+            cmp: &Fn(&A, &A) -> Ordering,
         ) -> List<List<A>> {
             match lb.uncons() {
-                Some((ref b, ref bs)) if cmp(a.clone(), b.clone()) == Ordering::Greater => {
+                Some((ref b, ref bs)) if cmp(a, b) == Ordering::Greater => {
                     descending(&b.clone(), &cons(a.clone(), la), bs, cmp)
                 }
                 _ => cons(cons(a.clone(), la), &sequences(lb, cmp)),
             }
         }
 
-        fn sequences<A>(l: &List<A>, cmp: &Fn(Arc<A>, Arc<A>) -> Ordering) -> List<List<A>> {
+        fn sequences<A>(l: &List<A>, cmp: &Fn(&A, &A) -> Ordering) -> List<List<A>> {
             match l.uncons2() {
-                Some((ref a, ref b, ref xs)) if cmp(a.clone(), b.clone()) == Ordering::Greater => {
+                Some((ref a, ref b, ref xs)) if cmp(a, b) == Ordering::Greater => {
                     descending(&b.clone(), &List::singleton(a.clone()), xs, cmp)
                 }
                 Some((ref a, ref b, ref xs)) => {
@@ -528,6 +523,72 @@ impl<A> List<A> {
         }
 
         merge_all(&sequences(self, &cmp), &cmp)
+    }
+
+    /// Sort a list of ordered elements.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::list::List;
+    /// # fn main() {
+    /// assert_eq!(
+    ///   list![2, 8, 1, 6, 3, 7, 5, 4].sort(),
+    ///   List::range(1, 8)
+    /// );
+    /// # }
+    /// ```
+    pub fn sort(&self) -> Self
+    where
+        A: Ord,
+    {
+        self.sort_by(|a, b| a.cmp(b))
+    }
+
+    /// Insert an item into a sorted list.
+    ///
+    /// Constructs a new list with the new item inserted before the
+    /// first item in the list which is larger than the new item,
+    /// as determined by the `Ord` trait.
+    ///
+    /// Time: O(n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # fn main() {
+    /// assert_eq!(
+    ///   list![2, 4, 6].insert(5).insert(1).insert(3),
+    ///   list![1, 2, 3, 4, 5, 6]
+    /// );
+    /// # }
+    /// ```
+    pub fn insert<T>(&self, item: T) -> Self
+    where
+        A: Ord,
+        T: Shared<A>,
+    {
+        self.insert_ref(item.shared())
+    }
+
+    fn insert_ref(&self, item: Arc<A>) -> Self
+    where
+        A: Ord,
+    {
+        match self.uncons() {
+            None => List::singleton(item),
+            Some((a, d)) => {
+                if a.deref() > item.deref() {
+                    self.cons(item)
+                } else {
+                    d.insert_ref(item).cons(a.clone())
+                }
+            }
+        }
     }
 }
 
@@ -554,67 +615,6 @@ impl List<i32> {
             c -= 1;
         }
         list
-    }
-}
-
-impl<A: Ord> List<A> {
-    /// Sort a list of ordered elements.
-    ///
-    /// Time: O(n log n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::list::List;
-    /// # fn main() {
-    /// assert_eq!(
-    ///   list![2, 8, 1, 6, 3, 7, 5, 4].sort(),
-    ///   List::range(1, 8)
-    /// );
-    /// # }
-    /// ```
-    pub fn sort(&self) -> Self {
-        self.sort_by(|a, b| a.as_ref().cmp(b.as_ref()))
-    }
-
-    /// Insert an item into a sorted list.
-    ///
-    /// Constructs a new list with the new item inserted before the
-    /// first item in the list which is larger than the new item,
-    /// as determined by the `Ord` trait.
-    ///
-    /// Time: O(n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # fn main() {
-    /// assert_eq!(
-    ///   list![2, 4, 6].insert(5).insert(1).insert(3),
-    ///   list![1, 2, 3, 4, 5, 6]
-    /// );
-    /// # }
-    /// ```
-    pub fn insert<T>(&self, item: T) -> Self
-    where
-        T: Shared<A>,
-    {
-        self.insert_ref(item.shared())
-    }
-
-    fn insert_ref(&self, item: Arc<A>) -> Self {
-        match self.uncons() {
-            None => List::singleton(item),
-            Some((a, d)) => {
-                if a.deref() > item.deref() {
-                    self.cons(item)
-                } else {
-                    d.insert_ref(item).cons(a.clone())
-                }
-            }
-        }
     }
 }
 
@@ -688,7 +688,7 @@ impl<A: Ord> Ord for List<A> {
 
 impl<A: Hash> Hash for List<A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        for i in self.iter() {
+        for i in self {
             i.hash(state)
         }
     }
@@ -789,7 +789,7 @@ where
     where
         I: IntoIterator<Item = T>,
     {
-        source.into_iter().map(List::singleton).sum()
+        source.into_iter().fold(Self::new(), |l, i| l.push_back(i))
     }
 }
 
