@@ -23,10 +23,9 @@ use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::fmt::{Debug, Error, Formatter};
 use std::borrow::Borrow;
-use queue::Queue;
+use vector::Vector;
 use shared::Shared;
-
-use self::ListNode::{Cons, Nil};
+use bits::HASH_SIZE;
 
 /// Construct a list from a sequence of elements.
 ///
@@ -120,31 +119,50 @@ where
 ///
 /// A data structure like the simple [`ConsList`][conslist::ConsList] but with
 /// efficient (generally O(1) in the worst case) add
-/// and remove operations on both ends, implemented as a [`Queue`][queue::Queue]
-/// of [`ConsList`][conslist::ConsList]s.
+/// and remove operations on both ends.
 ///
 /// If you need a list but haven't thought hard about your
 /// performance requirements, this is most likely the list you
 /// want. If you're mostly going to be consing and unconsing, and
 /// you have a lot of data, or a lot of lists, you might want the
-/// [`ConsList`][conslist::ConsList] instead. If you really just need a queue, you might
-/// be looking for the [`Queue`][queue::Queue]. When in doubt, choose the [`List`][list::List].
+/// [`ConsList`][conslist::ConsList] instead.
+/// When in doubt, choose the [`List`][list::List].
 ///
-/// [queue::Queue]: ../queue/struct.Queue.html
 /// [list::List]: ../list/struct.List.html
 /// [conslist::ConsList]: ../conslist/struct.ConsList.html
 pub struct List<A>(Arc<ListNode<A>>);
 
 #[doc(hidden)]
-pub enum ListNode<A> {
-    Nil,
-    Cons(usize, Arc<A>, Queue<List<A>>),
+pub struct ListNode<A> {
+    size: usize,
+    head: Arc<Vec<Arc<A>>>,
+    tail: Vector<List<A>>,
+}
+
+impl<A> ListNode<A> {
+    fn new() -> Self {
+        ListNode {
+            size: 0,
+            head: Arc::new(Vec::new()),
+            tail: Vector::new(),
+        }
+    }
+}
+
+impl<A> Clone for ListNode<A> {
+    fn clone(&self) -> Self {
+        ListNode {
+            size: self.size,
+            head: self.head.clone(),
+            tail: self.tail.clone(),
+        }
+    }
 }
 
 impl<A> List<A> {
     /// Construct an empty list.
     pub fn new() -> Self {
-        List(Arc::new(Nil))
+        List(Arc::new(ListNode::new()))
     }
 
     /// Construct a list with a single value.
@@ -152,7 +170,23 @@ impl<A> List<A> {
     where
         R: Shared<A>,
     {
-        List::new().push_front(a)
+        List::from_head(vec![a.shared()])
+    }
+
+    fn from_head(head: Vec<Arc<A>>) -> Self {
+        List(Arc::new(ListNode {
+            size: head.len(),
+            head: Arc::new(head),
+            tail: Vector::new(),
+        }))
+    }
+
+    fn make<VA: Shared<Vec<Arc<A>>>>(size: usize, head: VA, tail: Vector<List<A>>) -> Self {
+        List(Arc::new(ListNode {
+            size,
+            head: head.shared(),
+            tail,
+        }))
     }
 
     /// Construct a list by consuming an [`IntoIterator`][std::iter::IntoIterator].
@@ -181,15 +215,12 @@ impl<A> List<A> {
         I: IntoIterator<Item = R>,
         R: Shared<A>,
     {
-        it.into_iter().map(|a| a.shared()).collect()
+        it.into_iter().collect()
     }
 
     /// Test whether a list is empty.
     pub fn is_empty(&self) -> bool {
-        match *self.0 {
-            Nil => true,
-            _ => false,
-        }
+        self.len() == 0
     }
 
     /// Get the length of a list.
@@ -205,19 +236,17 @@ impl<A> List<A> {
     /// # }
     /// ```
     pub fn len(&self) -> usize {
-        match *self.0 {
-            Nil => 0,
-            Cons(l, _, _) => l,
-        }
+        self.0.size
     }
 
     /// Get the first element of a list.
     ///
     /// If the list is empty, `None` is returned.
     pub fn head(&self) -> Option<Arc<A>> {
-        match *self.0 {
-            Nil => None,
-            Cons(_, ref a, _) => Some(a.clone()),
+        if self.is_empty() {
+            None
+        } else {
+            self.0.head.last().cloned()
         }
     }
 
@@ -228,20 +257,31 @@ impl<A> List<A> {
     ///
     /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
     pub fn pop_back(&self) -> Option<(Arc<A>, List<A>)> {
-        match *self.0 {
-            Nil => None,
-            Cons(_, ref a, ref d) if d.is_empty() => Some((a.clone(), List::new())),
-            Cons(l, ref a, ref d) => match d.pop_back() {
-                None => None,
+        if self.is_empty() {
+            None
+        } else if self.0.tail.is_empty() {
+            Some((
+                self.0.head.first().unwrap().clone(),
+                List::from_head(self.0.head.iter().skip(1).cloned().collect()),
+            ))
+        } else {
+            match self.0.tail.pop() {
+                None => unreachable!(),
                 Some((last_list, queue_without_last_list)) => match last_list.pop_back() {
-                    None => None,
-                    Some((last_item, list_without_last_item)) => Some((
-                        last_item,
-                        List(Arc::new(Cons(l - 1, a.clone(), queue_without_last_list)))
-                            .append(list_without_last_item),
-                    )),
+                    None => unreachable!(),
+                    Some((last_item, list_without_last_item)) => {
+                        let new_node = ListNode {
+                            size: self.0.size - last_list.len(),
+                            head: self.0.head.clone(),
+                            tail: queue_without_last_list,
+                        };
+                        Some((
+                            last_item,
+                            List(Arc::new(new_node)).append(list_without_last_item),
+                        ))
+                    }
                 },
-            },
+            }
         }
     }
 
@@ -249,14 +289,20 @@ impl<A> List<A> {
     ///
     /// If the list is empty, `None` is returned.
     pub fn last(&self) -> Option<Arc<A>> {
-        self.pop_back().map(|(a, _)| a)
+        if self.is_empty() {
+            None
+        } else if self.0.tail.is_empty() {
+            self.0.head.first().cloned()
+        } else {
+            self.0.tail.last().unwrap().last()
+        }
     }
 
     /// Get the list without the last element.
     ///
     /// If the list is empty, `None` is returned.
     pub fn init(&self) -> Option<List<A>> {
-        self.pop_back().map(|(_, d)| d)
+        self.pop_back().map(|a| a.1)
     }
 
     /// Get the tail of a list.
@@ -266,10 +312,34 @@ impl<A> List<A> {
     /// element, the result is an empty list. If the list is
     /// empty, the result is `None`.
     pub fn tail(&self) -> Option<Self> {
-        match *self.0 {
-            Nil => None,
-            Cons(_, _, ref q) if q.is_empty() => Some(List::new()),
-            Cons(_, _, ref q) => Some(fold_queue(|a, b| a.link(&b), List::new(), q)),
+        if self.is_empty() {
+            None
+        } else if self.len() == 1 {
+            Some(List::new())
+        } else if self.0.tail.is_empty() {
+            Some(List::from_head(
+                self.0
+                    .head
+                    .iter()
+                    .take(self.0.head.len() - 1)
+                    .cloned()
+                    .collect(),
+            ))
+        } else if self.0.head.len() > 1 {
+            Some(List::make(
+                self.len() - 1,
+                Arc::new(
+                    self.0
+                        .head
+                        .iter()
+                        .take(self.0.head.len() - 1)
+                        .cloned()
+                        .collect(),
+                ),
+                self.0.tail.clone(),
+            ))
+        } else {
+            Some(self.0.tail.iter().fold(List::new(), |a, b| a.append(b)))
         }
     }
 
@@ -296,21 +366,32 @@ impl<A> List<A> {
         match (self, other.borrow()) {
             (l, r) if l.is_empty() => r.clone(),
             (l, r) if r.is_empty() => l.clone(),
-            (l, r) => l.link(r),
-        }
-    }
-
-    fn link<R>(&self, other: R) -> Self
-    where
-        R: Borrow<Self>,
-    {
-        match *self.0 {
-            Nil => other.borrow().clone(),
-            Cons(l, ref a, ref q) => List(Arc::new(Cons(
-                l + other.borrow().len(),
-                a.clone(),
-                q.push(other.borrow().clone()),
-            ))),
+            (l, r) => {
+                if l.0.tail.is_empty() && l.0.head.len() + r.0.head.len() <= HASH_SIZE {
+                    let mut new_head = (*r.0.head).clone();
+                    new_head.extend(l.0.head.iter().cloned());
+                    List::make(l.len() + r.len(), new_head, r.0.tail.clone())
+                } else if !l.0.tail.is_empty() && l.0.tail.last().unwrap().0.tail.is_empty()
+                    && l.0.tail.last().unwrap().0.head.len() + r.0.head.len() <= HASH_SIZE
+                {
+                    let (last, tail_but_last) = l.0.tail.pop().unwrap();
+                    let mut new_head = (*r.0.head).clone();
+                    new_head.extend(last.0.head.iter().cloned());
+                    let last_plus_right =
+                        List::make(last.len() + r.len(), new_head, r.0.tail.clone());
+                    List::make(
+                        l.len() + r.len(),
+                        l.0.head.clone(),
+                        tail_but_last.push(last_plus_right),
+                    )
+                } else {
+                    List::make(
+                        l.len() + r.len(),
+                        self.0.head.clone(),
+                        self.0.tail.push(r.clone()),
+                    )
+                }
+            }
         }
     }
 
@@ -320,7 +401,7 @@ impl<A> List<A> {
     where
         R: Shared<A>,
     {
-        List(Arc::new(Cons(1, a.shared(), Queue::new()))).append(self)
+        List::singleton(a).append(self)
     }
 
     /// Construct a list with a new value prepended to the front of the
@@ -347,7 +428,7 @@ impl<A> List<A> {
     where
         R: Shared<A>,
     {
-        self.append(&List(Arc::new(Cons(1, a.shared(), Queue::new()))))
+        self.append(List::singleton(a))
     }
 
     /// Construct a list with a new value appended to the back of the
@@ -618,17 +699,6 @@ impl List<i32> {
     }
 }
 
-fn fold_queue<A, F>(f: F, seed: List<A>, queue: &Queue<List<A>>) -> List<A>
-where
-    F: Fn(List<A>, List<A>) -> List<A>,
-{
-    let mut out = seed;
-    for a in queue.iter().rev() {
-        out = f(a.as_ref().clone(), out)
-    }
-    out
-}
-
 // Core traits
 
 impl<A> Clone for List<A> {
@@ -696,6 +766,14 @@ impl<A: Hash> Hash for List<A> {
 
 impl<A: Debug> Debug for List<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        // write!(
+        //     f,
+        //     "[ Len {} Head {}:{:?} Tail {:?} ]",
+        //     self.0.size,
+        //     self.0.head.len(),
+        //     self.0.head,
+        //     self.0.tail
+        // )
         write!(f, "[")?;
         let mut it = self.iter().peekable();
         loop {
@@ -725,6 +803,8 @@ impl<A> Iterator for Iter<A> {
     type Item = Arc<A>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        // FIXME immutable ops are slower than necessary here,
+        // how about a good old fashioned incrementing pointer?
         match self.current.pop_front() {
             None => None,
             Some((a, d)) => {
@@ -799,17 +879,8 @@ impl<'a, A, T> From<&'a [T]> for List<A>
 where
     &'a T: Shared<A>,
 {
-    fn from(slice: &'a [T]) -> List<A> {
+    fn from(slice: &'a [T]) -> Self {
         slice.into_iter().collect()
-    }
-}
-
-impl<A, T> From<Vec<T>> for List<A>
-where
-    T: Shared<A>,
-{
-    fn from(vec: Vec<T>) -> List<A> {
-        vec.into_iter().collect()
     }
 }
 
@@ -817,8 +888,24 @@ impl<'a, A, T> From<&'a Vec<T>> for List<A>
 where
     &'a T: Shared<A>,
 {
-    fn from(vec: &'a Vec<T>) -> List<A> {
+    fn from(vec: &'a Vec<T>) -> Self {
         vec.into_iter().collect()
+    }
+}
+
+impl<A> From<Vec<A>> for List<A> {
+    fn from(vec: Vec<A>) -> Self {
+        vec.into_iter().collect()
+    }
+}
+
+impl<A> From<Vec<Arc<A>>> for List<A> {
+    fn from(vec: Vec<Arc<A>>) -> Self {
+        if vec.len() <= HASH_SIZE {
+            Self::from_head(vec)
+        } else {
+            vec.into_iter().collect()
+        }
     }
 }
 
@@ -899,51 +986,64 @@ mod test {
     use proptest::num::i32;
     use proptest::collection;
 
-    quickcheck! {
-        fn length(vec: Vec<i32>) -> bool {
-            let list = List::from_iter(vec.clone());
-            vec.len() == list.len()
-        }
-
-        fn order(vec: Vec<i32>) -> bool {
-            let list = List::from_iter(vec.clone());
-            list.iter().map(|a| *a).eq(vec.into_iter())
-        }
-
-        fn reverse_order(v: Vec<i32>) -> bool {
-            let list = List::from_iter(v.iter().rev().cloned());
-            v == Vec::from_iter(list.iter().rev().map(|a| *a))
-        }
-
-        fn equality(vec: Vec<i32>) -> bool {
-            let left = List::from_iter(vec.clone());
-            let right = List::from_iter(vec);
-            left == right
-        }
-
-        fn reverse_a_list(l: List<i32>) -> bool {
-            let vec: Vec<i32> = l.iter().map(|v| *v).collect();
-            let rev = List::from_iter(vec.into_iter().rev());
-            l.reverse() == rev
-        }
-
-        fn append_two_lists(xs: List<i32>, ys: List<i32>) -> bool {
-            let extended = List::from_iter(xs.iter().map(|v| *v).chain(ys.iter().map(|v| *v)));
-            xs.append(&ys) == extended
-        }
-
-        fn length_of_append(xs: List<i32>, ys: List<i32>) -> bool {
-            let extended = List::from_iter(xs.iter().map(|v| *v).chain(ys.iter().map(|v| *v)));
-            xs.append(&ys).len() == extended.len()
-        }
-
-        fn sort_a_list(l: List<i32>) -> bool {
-            let sorted = l.sort();
-            l.len() == sorted.len() && is_sorted(&sorted)
+    #[test]
+    fn basic_consistency() {
+        let vec: Vec<i32> = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, -1,
+        ];
+        let mut list = List::from_iter(vec.clone());
+        assert_eq!(Some(Arc::new(-1)), list.last());
+        let mut index = 0;
+        loop {
+            assert_eq!(vec.len() - index, list.len());
+            assert_eq!(
+                list.0.size,
+                list.0
+                    .tail
+                    .iter()
+                    .fold(list.0.head.len(), |a, n| a + n.len())
+            );
+            match list.pop_front() {
+                None => {
+                    assert_eq!(vec.len(), index);
+                    break;
+                }
+                Some((head, tail)) => {
+                    assert_eq!(vec[index], *head);
+                    index += 1;
+                    list = tail;
+                }
+            }
         }
     }
 
     proptest! {
+        #[test]
+        fn length(ref v in collection::vec(i32::ANY, 0..100)) {
+            let list = List::from_iter(v.clone());
+            v.len() == list.len()
+        }
+
+        #[test]
+        fn order(ref vec in collection::vec(i32::ANY, 0..100)) {
+            let list = List::from_iter(vec.clone());
+            assert_eq!(vec, &Vec::from_iter(list.iter().map(|a| *a)));
+        }
+
+        #[test]
+        fn reverse_order(ref vec in collection::vec(i32::ANY, 0..100)) {
+            let list = List::from_iter(vec.iter().rev().cloned());
+            assert_eq!(vec, &Vec::from_iter(list.iter().rev().map(|a| *a)));
+        }
+
+        #[test]
+        fn equality(ref vec in collection::vec(i32::ANY, 0..100)) {
+            let left = List::from_iter(vec.clone());
+            let right = List::from_iter(vec.clone());
+            assert_eq!(left, right);
+        }
+
         #[test]
         fn proptest_a_list(ref l in list(i32::ANY, 10..100)) {
             assert!(l.len() < 100);
@@ -961,6 +1061,35 @@ mod test {
             assert_eq!(Some((Arc::new(v.last().unwrap().to_owned()),
                              List::from_iter(v.clone().into_iter().take(v.len()-1)))),
                        list.pop_back());
+        }
+
+        #[test]
+        fn pop_front(ref v in collection::vec(i32::ANY, 10..100)) {
+            let list = List::from_iter(v.clone());
+            assert_eq!(Some((Arc::new(v.first().unwrap().to_owned()),
+                             List::from_iter(v.clone().into_iter().skip(1)))),
+                       list.pop_front());
+        }
+
+        #[test]
+        fn reverse_a_list(ref l in list(i32::ANY, 0..100)) {
+            let vec: Vec<i32> = l.iter().map(|v| *v).collect();
+            let rev = List::from_iter(vec.into_iter().rev());
+            assert_eq!(l.reverse(), rev);
+        }
+
+        #[test]
+        fn append_two_lists(ref xs in list(i32::ANY, 0..100), ref ys in list(i32::ANY, 0..100)) {
+            let extended = List::from_iter(xs.iter().map(|v| *v).chain(ys.iter().map(|v| *v)));
+            assert_eq!(xs.append(ys), extended);
+            assert_eq!(xs.append(ys).len(), extended.len());
+        }
+
+        #[test]
+        fn sort_a_list(ref l in list(i32::ANY, 0..100)) {
+            let sorted = l.sort();
+            assert_eq!(l.len(), sorted.len());
+            assert!(is_sorted(&sorted));
         }
     }
 }
