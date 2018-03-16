@@ -200,13 +200,14 @@ impl<K, V> Node<K, V>
 where
     K: Ord,
 {
+    #[cfg_attr(feature = "clippy", allow(op_ref))]
     pub fn lookup(&self, key: &K) -> Option<Arc<V>> {
         if self.0.keys.is_empty() {
             return None;
         }
         // Start by checking if the key is greater than the node's max,
         // and search the rightmost child if so.
-        if key > &*self.0.keys[self.0.keys.len() - 1].key {
+        if key > &self.0.keys[self.0.keys.len() - 1].key {
             match self.0.children[self.0.keys.len()] {
                 None => return None,
                 Some(ref node) => return node.lookup(key),
