@@ -414,6 +414,114 @@ impl<A> List<A> {
         self.cons(a)
     }
 
+    pub fn append_mut<R>(&mut self, other_ref: R)
+    where
+        R: Borrow<Self>,
+    {
+        let other = other_ref.borrow();
+        if other.is_empty() {
+            return;
+        } else if self.is_empty() {
+            self.0 = other.0.clone();
+        } else if self.0.tail.is_empty() && self.0.head.len() + other.0.head.len() <= HASH_SIZE {
+            let node = Arc::make_mut(&mut self.0);
+            node.head = Arc::new(
+                other
+                    .0
+                    .head
+                    .iter()
+                    .chain(node.head.iter())
+                    .cloned()
+                    .collect(),
+            );
+            node.tail = Vector::singleton(other.clone());
+            node.size += other.len();
+        } else {
+            let node = Arc::make_mut(&mut self.0);
+            node.tail.push_mut(other.borrow().clone());
+            node.size += other.len();
+        }
+    }
+
+    pub fn push_front_mut<R>(&mut self, a: R)
+    where
+        R: Shared<A>,
+    {
+        if self.0.head.len() >= HASH_SIZE {
+            let next = List(self.0.clone());
+            self.0 = Arc::new(ListNode {
+                size: 1,
+                head: Arc::new(vec![a.shared()]),
+                tail: Vector::new(),
+            });
+            self.append_mut(next);
+        } else {
+            let node = Arc::make_mut(&mut self.0);
+            let head = Arc::make_mut(&mut node.head);
+            head.push(a.shared());
+            node.size += 1;
+        }
+    }
+
+    pub fn push_back_mut<R>(&mut self, a: R)
+    where
+        R: Shared<A>,
+    {
+        if self.0.tail.is_empty() && self.0.head.len() < HASH_SIZE {
+            let node = Arc::make_mut(&mut self.0);
+            let head = Arc::make_mut(&mut node.head);
+            head.insert(0, a.shared());
+            node.size += 1;
+        } else {
+            self.append_mut(List::singleton(a))
+        }
+    }
+
+    pub fn pop_front_mut(&mut self) -> Option<Arc<A>> {
+        if self.is_empty() {
+            None
+        } else if self.0.head.len() > 1 {
+            let node = Arc::make_mut(&mut self.0);
+            let head = Arc::make_mut(&mut node.head);
+            let item = head.pop();
+            node.size -= 1;
+            item
+        } else {
+            let item = self.0.head.last().cloned();
+            let tail = self.0.tail.clone();
+            self.0 = Arc::new(ListNode {
+                size: 0,
+                head: Arc::new(Vec::new()),
+                tail: Vector::new(),
+            });
+            for list in tail {
+                self.append_mut(list);
+            }
+            item
+        }
+    }
+
+    pub fn pop_back_mut(&mut self) -> Option<Arc<A>> {
+        if self.is_empty() {
+            None
+        } else if self.0.tail.is_empty() {
+            let node = Arc::make_mut(&mut self.0);
+            node.size -= 1;
+            let head = Arc::make_mut(&mut node.head);
+            Some(head.remove(0))
+        } else {
+            let node = Arc::make_mut(&mut self.0);
+            node.size -= 1;
+            let mut last = node.tail.pop_mut().unwrap();
+            let last_node = Arc::make_mut(&mut last);
+            let item = last_node.pop_back_mut();
+            if !last_node.is_empty() {
+                node.tail.push_mut(last_node.clone());
+            }
+            item
+        }
+    }
+
     /// Construct a list with a new value appended to the back of the
     /// current list.
     ///
@@ -1056,19 +1164,93 @@ mod test {
         }
 
         #[test]
-        fn pop_back(ref v in collection::vec(i32::ANY, 10..100)) {
-            let list = List::from_iter(v.clone());
-            assert_eq!(Some((Arc::new(v.last().unwrap().to_owned()),
-                             List::from_iter(v.clone().into_iter().take(v.len()-1)))),
-                       list.pop_back());
+        fn push_back(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut list = List::new();
+            for (count, value) in input.iter().cloned().enumerate() {
+                assert_eq!(count, list.len());
+                list = list.push_back(value);
+                assert_eq!(count + 1, list.len());
+            }
+            assert_eq!(input, &Vec::from_iter(list.iter().map(|a| *a)));
         }
 
         #[test]
-        fn pop_front(ref v in collection::vec(i32::ANY, 10..100)) {
-            let list = List::from_iter(v.clone());
-            assert_eq!(Some((Arc::new(v.first().unwrap().to_owned()),
-                             List::from_iter(v.clone().into_iter().skip(1)))),
-                       list.pop_front());
+        fn push_back_mut(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut list = List::new();
+            for (count, value) in input.iter().cloned().enumerate() {
+                assert_eq!(count, list.len());
+                list.push_back_mut(value);
+                assert_eq!(count + 1, list.len());
+            }
+            assert_eq!(input, &Vec::from_iter(list.iter().map(|a| *a)));
+        }
+
+        #[test]
+        fn push_front(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut list = List::new();
+            for (count, value) in input.iter().cloned().enumerate() {
+                assert_eq!(count, list.len());
+                list = list.push_front(value);
+                assert_eq!(count + 1, list.len());
+            }
+            assert_eq!(input, &Vec::from_iter(list.iter().rev().map(|a| *a)));
+        }
+
+        #[test]
+        fn push_front_mut(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut list = List::new();
+            for (count, value) in input.iter().cloned().enumerate() {
+                assert_eq!(count, list.len());
+                list.push_front_mut(value);
+                assert_eq!(count + 1, list.len());
+            }
+            assert_eq!(input, &Vec::from_iter(list.iter().rev().map(|a| *a)));
+        }
+
+        #[test]
+        fn pop_back(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut list = List::from_iter(input.iter().cloned());
+            for value in input.iter().rev().cloned() {
+                if let Some((popped, new_list)) = list.pop_back() {
+                    assert_eq!(Arc::new(value), popped);
+                    list = new_list;
+                } else {
+                    panic!("pop_back ended prematurely");
+                }
+            }
+            assert_eq!(None, list.pop_back());
+        }
+
+        #[test]
+        fn pop_back_mut(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut list = List::from_iter(input.iter().cloned());
+            for value in input.iter().rev().cloned() {
+                assert_eq!(Some(Arc::new(value)), list.pop_back_mut());
+            }
+            assert_eq!(None, list.pop_back_mut());
+        }
+
+        #[test]
+        fn pop_front(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut list = List::from_iter(input.iter().cloned());
+            for value in input.iter().cloned() {
+                if let Some((popped, new_list)) = list.pop_front() {
+                    assert_eq!(Arc::new(value), popped);
+                    list = new_list;
+                } else {
+                    panic!("pop_front ended prematurely");
+                }
+            }
+            assert_eq!(None, list.pop_front());
+        }
+
+        #[test]
+        fn pop_front_mut(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut list = List::from_iter(input.iter().cloned());
+            for value in input.iter().cloned() {
+                assert_eq!(Some(Arc::new(value)), list.pop_front_mut());
+            }
+            assert_eq!(None, list.pop_front_mut());
         }
 
         #[test]
