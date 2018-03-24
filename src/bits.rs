@@ -1,5 +1,5 @@
-pub type Bitmap = u32; // a uint of HASH_SIZE bits
-pub const HASH_BITS: usize = 5;
+pub type Bitmap = u16; // a uint of HASH_SIZE bits
+pub const HASH_BITS: usize = 4;
 pub const HASH_SIZE: usize = 1 << HASH_BITS;
 pub const HASH_MASK: Bitmap = (HASH_SIZE - 1) as Bitmap;
 pub const HASH_COERCE: u64 = ((2 ^ HASH_SIZE) - 1) as u64;

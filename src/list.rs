@@ -265,7 +265,7 @@ impl<A> List<A> {
                 List::from_head(self.0.head.iter().skip(1).cloned().collect()),
             ))
         } else {
-            match self.0.tail.pop() {
+            match self.0.tail.pop_back() {
                 None => unreachable!(),
                 Some((last_list, queue_without_last_list)) => match last_list.pop_back() {
                     None => unreachable!(),
@@ -374,7 +374,7 @@ impl<A> List<A> {
                 } else if !l.0.tail.is_empty() && l.0.tail.last().unwrap().0.tail.is_empty()
                     && l.0.tail.last().unwrap().0.head.len() + r.0.head.len() <= HASH_SIZE
                 {
-                    let (last, tail_but_last) = l.0.tail.pop().unwrap();
+                    let (last, tail_but_last) = l.0.tail.pop_back().unwrap();
                     let mut new_head = (*r.0.head).clone();
                     new_head.extend(last.0.head.iter().cloned());
                     let last_plus_right =
@@ -382,13 +382,13 @@ impl<A> List<A> {
                     List::make(
                         l.len() + r.len(),
                         l.0.head.clone(),
-                        tail_but_last.push(last_plus_right),
+                        tail_but_last.push_back(last_plus_right),
                     )
                 } else {
                     List::make(
                         l.len() + r.len(),
                         self.0.head.clone(),
-                        self.0.tail.push(r.clone()),
+                        self.0.tail.push_back(r.clone()),
                     )
                 }
             }
@@ -438,7 +438,7 @@ impl<A> List<A> {
             node.size += other.len();
         } else {
             let node = Arc::make_mut(&mut self.0);
-            node.tail.push_mut(other.borrow().clone());
+            node.tail.push_back_mut(other.borrow().clone());
             node.size += other.len();
         }
     }
@@ -512,11 +512,11 @@ impl<A> List<A> {
         } else {
             let node = Arc::make_mut(&mut self.0);
             node.size -= 1;
-            let mut last = node.tail.pop_mut().unwrap();
+            let mut last = node.tail.pop_back_mut().unwrap();
             let last_node = Arc::make_mut(&mut last);
             let item = last_node.pop_back_mut();
             if !last_node.is_empty() {
-                node.tail.push_mut(last_node.clone());
+                node.tail.push_back_mut(last_node.clone());
             }
             item
         }

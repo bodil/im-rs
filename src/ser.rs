@@ -8,7 +8,6 @@ use hash::SharedHasher;
 use list::List;
 use conslist::ConsList;
 use ordset::OrdSet;
-use queue::Queue;
 use ordmap::OrdMap;
 use hashmap::HashMap;
 use hashset::HashSet;
@@ -191,30 +190,6 @@ impl<A: Ord + Serialize> Serialize for OrdSet<A> {
     }
 }
 
-// Queue
-
-impl<'de, A: Deserialize<'de> + Ord> Deserialize<'de> for Queue<A> {
-    fn deserialize<D>(des: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        des.deserialize_seq(SeqVisitor::<'de, Queue<A>, A>::new())
-    }
-}
-
-impl<A: Serialize> Serialize for Queue<A> {
-    fn serialize<S>(&self, ser: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut s = ser.serialize_seq(Some(self.len()))?;
-        for i in self.iter() {
-            s.serialize_element(i.deref())?;
-        }
-        s.end()
-    }
-}
-
 // Map
 
 impl<'de, K: Deserialize<'de> + Ord, V: Deserialize<'de>> Deserialize<'de> for OrdMap<K, V> {
@@ -326,7 +301,6 @@ mod test {
     use hashset::proptest::hash_set;
     use ordmap::proptest::ord_map;
     use ordset::proptest::ord_set;
-    use queue::proptest::queue;
     use vector::proptest::vector;
 
     proptest! {
@@ -343,11 +317,6 @@ mod test {
         #[test]
         fn ser_ordset(ref v in ord_set(i32::ANY, 0..100)) {
             assert_eq!(v, &from_str::<OrdSet<i32>>(&to_string(&v).unwrap()).unwrap());
-        }
-
-        #[test]
-        fn ser_queue(ref v in queue(i32::ANY, 0..100)) {
-            assert_eq!(v, &from_str::<Queue<i32>>(&to_string(&v).unwrap()).unwrap());
         }
 
         #[test]

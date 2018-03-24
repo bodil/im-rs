@@ -233,7 +233,6 @@ pub mod hashset;
 pub mod list;
 #[macro_use]
 pub mod vector;
-pub mod queue;
 
 pub mod iter;
 pub mod lens;
@@ -249,7 +248,6 @@ pub use ordmap::OrdMap;
 pub use hashmap::HashMap;
 pub use ordset::OrdSet;
 pub use hashset::HashSet;
-pub use queue::Queue;
 pub use list::List;
 pub use conslist::ConsList;
 pub use vector::Vector;

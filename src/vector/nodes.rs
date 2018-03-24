@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::iter;
+use std::fmt::{Debug, Error, Formatter};
 
 use bits::{HASH_BITS, HASH_MASK, HASH_SIZE};
 
@@ -10,13 +10,6 @@ pub enum Entry<A> {
 }
 
 impl<A> Entry<A> {
-    pub fn into_val(self) -> Arc<A> {
-        match self {
-            Entry::Value(v) => v,
-            _ => panic!("Entry::into_val: tried to into_val a non-value"),
-        }
-    }
-
     pub fn unwrap_val(&self) -> Arc<A> {
         match *self {
             Entry::Value(ref v) => v.clone(),
@@ -28,13 +21,6 @@ impl<A> Entry<A> {
         match *self {
             Entry::Node(ref n) => n.clone(),
             _ => panic!("Entry::unwrap_node: tried to unwrap_node a non-node"),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        match *self {
-            Entry::Empty => true,
-            _ => false,
         }
     }
 }
@@ -49,35 +35,212 @@ impl<A> Clone for Entry<A> {
     }
 }
 
-pub struct Node<A> {
-    pub children: Vec<Entry<A>>,
+impl<A: Debug> Debug for Entry<A> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match *self {
+            Entry::Node(ref node) => write!(f, "Node{:?}", node),
+            Entry::Value(ref value) => write!(f, "Value[ {:?} ]", value),
+            Entry::Empty => write!(f, "Empty"),
+        }
+    }
 }
 
-fn make_empty<A>() -> Vec<Entry<A>> {
-    iter::repeat(())
-        .map(|_| Entry::Empty)
-        .take(HASH_SIZE)
-        .collect()
+pub struct Node<A> {
+    first: Option<usize>,
+    pub children: Vec<Entry<A>>,
 }
 
 impl<A> Node<A> {
     pub fn new() -> Self {
         Node {
-            children: make_empty(),
+            first: None,
+            children: Vec::with_capacity(HASH_SIZE),
         }
     }
 
-    pub fn from_vec(mut children: Vec<Entry<A>>) -> Self {
-        while children.len() < HASH_SIZE {
-            children.push(Entry::Empty);
+    pub fn from_vec(first: Option<usize>, mut children: Vec<Entry<A>>) -> Self {
+        let len = children.len();
+        if len < HASH_SIZE {
+            children.reserve_exact(HASH_SIZE - len);
         }
-        Node { children }
+        Node { children, first }
+    }
+
+    pub fn clear(&mut self) {
+        self.children.clear();
+        self.first = None;
+    }
+
+    pub fn len(&self) -> usize {
+        self.children.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.children.is_empty()
+    }
+
+    pub fn push(&mut self, value: Entry<A>) {
+        self.children.push(value)
+    }
+
+    pub fn get(&self, index: usize) -> Option<&Entry<A>> {
+        self.children.get(index)
+    }
+
+    pub fn set(&mut self, index: usize, value: Entry<A>) {
+        while self.len() < index {
+            self.push(Entry::Empty);
+        }
+        if self.first.is_none() || Some(index) < self.first {
+            self.first = Some(index);
+        }
+        if self.len() == index {
+            self.push(value)
+        } else {
+            self.children[index] = value
+        }
+    }
+
+    pub fn remove_before(&mut self, level: usize, index: usize) {
+        let shifted = match level {
+            0 => 0,
+            l => 1 << l,
+        };
+        if index == shifted || self.is_empty() {
+            return;
+        }
+        let origin_index = (index >> level) & HASH_MASK as usize;
+        if origin_index >= self.len() {
+            self.clear();
+            return;
+        }
+        let removing_first = origin_index == 0;
+        if level > 0 {
+            if let Entry::Node(ref mut child) = self.children[origin_index] {
+                let node = Arc::make_mut(child);
+                node.remove_before(level - HASH_BITS, index);
+            }
+        }
+        if !removing_first {
+            for i in self.first.unwrap_or(0)..origin_index {
+                self.children[i] = Entry::Empty;
+            }
+            self.first = Some(origin_index);
+        }
+    }
+
+    pub fn remove_after(&mut self, level: usize, index: usize) {
+        let shifted = match level {
+            0 => 0,
+            l => 1 << l,
+        };
+        if index == shifted || self.is_empty() {
+            return;
+        }
+        let size_index = ((index - 1) >> level) & HASH_MASK as usize;
+        if size_index >= self.len() {
+            return;
+        }
+        self.children.truncate(size_index + 1);
+        if let Entry::Node(ref mut n) = self.children[size_index] {
+            let node = Arc::make_mut(n);
+            node.remove_after(level - HASH_BITS, index);
+        }
+    }
+
+    pub fn set_in(&self, level: usize, index: usize, value: Entry<A>) -> Node<A> {
+        let mut out: Node<A> = self.clone();
+        if level == 0 {
+            out.set(index & HASH_MASK as usize, value);
+        } else {
+            let sub_index = (index >> level) & HASH_MASK as usize;
+            if let Entry::Node(ref sub_node) = self.children[sub_index] {
+                out.set(
+                    sub_index,
+                    Entry::Node(Arc::new(sub_node.set_in(level - HASH_BITS, index, value))),
+                );
+            } else {
+                panic!("Vector::set_in: found non-node where node was expected");
+            }
+        }
+        out
+    }
+
+    pub fn set_in_mut(&mut self, level: usize, end: usize, index: usize, value: Entry<A>) {
+        if level == end {
+            self.set((index >> end) & HASH_MASK as usize, value);
+        } else {
+            let sub_index = (index >> level) & HASH_MASK as usize;
+            if let Some(&mut Entry::Node(ref mut sub_node)) = self.children.get_mut(sub_index) {
+                let mut node = Arc::make_mut(sub_node);
+                node.set_in_mut(level - HASH_BITS, end, index, value);
+                return;
+            }
+            self.set(sub_index, Entry::Node(Arc::new(Node::new())));
+            self.set_in_mut(level, end, index, value);
+        }
+    }
+
+    pub fn write<I: Iterator<Item = Arc<A>>>(
+        &mut self,
+        level: usize,
+        index: usize,
+        it: &mut I,
+        max: &mut usize,
+    ) -> bool {
+        let mut i = (index >> level) & HASH_MASK as usize;
+        if level > 0 {
+            let mut next = index;
+            loop {
+                let mut put = None;
+                let carry_on;
+                if let Some(&mut Entry::Node(ref mut sub_node)) = self.children.get_mut(i) {
+                    let mut node = Arc::make_mut(sub_node);
+                    carry_on = node.write(level - HASH_BITS, next, it, max);
+                } else {
+                    let mut node = Node::new();
+                    carry_on = node.write(level - HASH_BITS, next, it, max);
+                    put = Some(Entry::Node(Arc::new(node)));
+                }
+                if let Some(entry) = put {
+                    self.set(i, entry);
+                }
+                if !carry_on {
+                    return false;
+                }
+                i += 1;
+                if i >= HASH_SIZE {
+                    return true;
+                }
+                next = 0;
+            }
+        } else {
+            loop {
+                match it.next() {
+                    None => {
+                        return false;
+                    }
+                    Some(value) => {
+                        self.set(i, Entry::Value(value));
+                        *max -= 1;
+                        if *max == 0 {
+                            return false;
+                        }
+                        i += 1;
+                        if i >= HASH_SIZE {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 impl<A> Clone for Node<A> {
     fn clone(&self) -> Self {
         Node {
+            first: self.first,
             children: self.children.clone(),
         }
     }
@@ -89,130 +252,8 @@ impl<A> Default for Node<A> {
     }
 }
 
-pub fn push_tail<A>(count: usize, level: usize, parent: &Node<A>, tail_node: Node<A>) -> Node<A> {
-    let sub_index = ((count - 1) >> level) & HASH_MASK as usize;
-    let mut out = parent.clone();
-    out.children[sub_index] = Entry::Node(Arc::new(if level == HASH_BITS {
-        tail_node
-    } else {
-        match parent.children[sub_index] {
-            Entry::Node(ref child) => push_tail(count, level - HASH_BITS, child, tail_node),
-            Entry::Empty => new_path(level - HASH_BITS, tail_node),
-            Entry::Value(_) => {
-                panic!("Vector::push_tail: encountered value where node was expected")
-            }
-        }
-    }));
-    out
-}
-
-pub fn push_tail_mut<A>(count: usize, level: usize, parent: &mut Node<A>, tail_node: Node<A>) {
-    let sub_index = ((count - 1) >> level) & HASH_MASK as usize;
-    parent.children[sub_index] = Entry::Node(Arc::new(if level == HASH_BITS {
-        tail_node
-    } else {
-        match parent.children[sub_index] {
-            Entry::Node(ref mut child_ref) => {
-                let child = Arc::make_mut(child_ref);
-                push_tail_mut(count, level - HASH_BITS, child, tail_node);
-                return;
-            }
-            Entry::Empty => new_path(level - HASH_BITS, tail_node),
-            Entry::Value(_) => {
-                panic!("Vector::push_tail: encountered value where node was expected")
-            }
-        }
-    }));
-}
-
-pub fn pop_tail<A>(count: usize, level: usize, node: &Node<A>) -> Option<Node<A>> {
-    let sub_index = ((count - 2) >> level) & HASH_MASK as usize;
-    if level > HASH_BITS {
-        match pop_tail(
-            count,
-            level - HASH_BITS,
-            &node.children[sub_index].unwrap_node(),
-        ) {
-            None if sub_index == 0 => None,
-            None => {
-                let mut out = node.clone();
-                out.children[sub_index] = Entry::Empty;
-                Some(out)
-            }
-            Some(new_child) => {
-                let mut out = node.clone();
-                out.children[sub_index] = Entry::Node(Arc::new(new_child));
-                Some(out)
-            }
-        }
-    } else if sub_index == 0 {
-        None
-    } else {
-        let mut out = node.clone();
-        out.children[sub_index] = Entry::Empty;
-        Some(out)
-    }
-}
-
-pub fn pop_tail_mut<A>(count: usize, level: usize, node: &mut Node<A>) -> bool {
-    let sub_index = ((count - 2) >> level) & HASH_MASK as usize;
-    if level > HASH_BITS {
-        let mut child_ref = node.children[sub_index].unwrap_node();
-        let child = Arc::make_mut(&mut child_ref);
-        if !pop_tail_mut(count, level - HASH_BITS, child) {
-            if sub_index == 0 {
-                false
-            } else {
-                node.children[sub_index] = Entry::Empty;
-                true
-            }
-        } else {
-            true
-        }
-    } else if sub_index == 0 {
-        false
-    } else {
-        node.children[sub_index] = Entry::Empty;
-        true
-    }
-}
-
-pub fn new_path<A>(level: usize, node: Node<A>) -> Node<A> {
-    if level == 0 {
-        node
-    } else {
-        let mut out = Node::new();
-        out.children[0] = Entry::Node(Arc::new(new_path(level - HASH_BITS, node)));
-        out
-    }
-}
-
-pub fn set_in<A>(level: usize, node: &Node<A>, index: usize, value: Arc<A>) -> Node<A> {
-    let mut out: Node<A> = node.clone();
-    if level == 0 {
-        out.children[index & HASH_MASK as usize] = Entry::Value(value);
-    } else {
-        let sub_index = (index >> level) & HASH_MASK as usize;
-        if let Entry::Node(ref sub_node) = node.children[sub_index] {
-            out.children[sub_index] =
-                Entry::Node(Arc::new(set_in(level - HASH_BITS, sub_node, index, value)));
-        } else {
-            panic!("Vector::set_in: found non-node where node was expected");
-        }
-    }
-    out
-}
-
-pub fn set_in_mut<A>(level: usize, node: &mut Node<A>, index: usize, value: Arc<A>) {
-    if level == 0 {
-        node.children[index & HASH_MASK as usize] = Entry::Value(value);
-    } else {
-        let sub_index = (index >> level) & HASH_MASK as usize;
-        if let Entry::Node(ref mut sub_node_ref) = node.children[sub_index] {
-            let mut sub_node = Arc::make_mut(sub_node_ref);
-            set_in_mut(level - HASH_BITS, sub_node, index, value);
-        } else {
-            panic!("Vector::set_in_mut: found non-node where node was expected");
-        }
+impl<A: Debug> Debug for Node<A> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        self.children.fmt(f)
     }
 }

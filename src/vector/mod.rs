@@ -15,14 +15,13 @@
 //! [List]: ../list/struct.List.html
 
 use std::sync::Arc;
-use std::mem;
-use std::iter::{Extend, FromIterator, Sum};
-use std::fmt::{Debug, Error, Formatter};
 use std::cmp::Ordering;
-use std::ops::Add;
-use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::borrow::Borrow;
+use std::fmt::{Debug, Error, Formatter};
+use std::ops::Add;
+use std::hash::{Hash, Hasher};
+use std::iter::{FromIterator, Sum};
 
 use shared::Shared;
 use lens::PartialLens;
@@ -53,10 +52,29 @@ macro_rules! vector {
     ( $($x:expr),* ) => {{
         let mut l = $crate::vector::Vector::new();
         $(
-            l.push_mut($x);
+            l.push_back_mut($x);
         )*
             l
     }};
+}
+
+#[derive(Clone, Copy)]
+struct Meta {
+    origin: usize,
+    capacity: usize,
+    level: usize,
+    reverse: bool,
+}
+
+impl Default for Meta {
+    fn default() -> Self {
+        Meta {
+            origin: 0,
+            capacity: 0,
+            level: HASH_BITS,
+            reverse: false,
+        }
+    }
 }
 
 /// A persistent vector of elements of type `A`.
@@ -75,20 +93,18 @@ macro_rules! vector {
 /// [Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 /// [List]: ../list/struct.List.html
 pub struct Vector<A> {
-    count: usize,
-    shift: usize,
+    meta: Meta,
     root: Arc<Node<A>>,
-    tail: Arc<Vec<Entry<A>>>,
+    tail: Arc<Node<A>>,
 }
 
 impl<A> Vector<A> {
     /// Construct an empty vector.
     pub fn new() -> Self {
         Vector {
-            count: 0,
-            shift: HASH_BITS,
-            root: Arc::new(Node::new()),
-            tail: Arc::new(Vec::with_capacity(HASH_SIZE)),
+            meta: Default::default(),
+            root: Default::default(),
+            tail: Default::default(),
         }
     }
 
@@ -97,12 +113,11 @@ impl<A> Vector<A> {
     where
         R: Shared<A>,
     {
-        let mut tail = Vec::with_capacity(HASH_SIZE);
+        let mut tail = Node::new();
         tail.push(Entry::Value(a.shared()));
         Vector {
-            count: 0,
-            shift: HASH_BITS,
-            root: Arc::new(Node::new()),
+            meta: Default::default(),
+            root: Default::default(),
             tail: Arc::new(tail),
         }
     }
@@ -121,7 +136,7 @@ impl<A> Vector<A> {
     /// ```
     #[inline]
     pub fn len(&self) -> usize {
-        self.count
+        self.meta.capacity - self.meta.origin
     }
 
     /// Test whether a list is empty.
@@ -139,7 +154,7 @@ impl<A> Vector<A> {
     /// [next]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#tymethod.next
     #[inline]
     pub fn iter(&self) -> Iter<A> {
-        Iter::new(self)
+        Iter::new(self.clone())
     }
 
     /// Get the first element of a vector.
@@ -150,6 +165,21 @@ impl<A> Vector<A> {
     #[inline]
     pub fn head(&self) -> Option<Arc<A>> {
         self.get(0)
+    }
+
+    /// Get the vector without the first element.
+    ///
+    /// If the vector is empty, `None` is returned.
+    ///
+    /// Time: O(1)*
+    pub fn tail(&self) -> Option<Vector<A>> {
+        if self.is_empty() {
+            None
+        } else {
+            let mut v = self.clone();
+            v.resize(1, self.len() as isize);
+            Some(v)
+        }
     }
 
     /// Get the last element of a vector.
@@ -167,7 +197,13 @@ impl<A> Vector<A> {
     ///
     /// Time: O(1)*
     pub fn init(&self) -> Option<Vector<A>> {
-        self.pop().map(|(_, v)| v)
+        if self.is_empty() {
+            None
+        } else {
+            let mut v = self.clone();
+            v.resize(0, (self.len() - 1) as isize);
+            Some(v)
+        }
     }
 
     /// Get the value at index `index` in a vector.
@@ -176,19 +212,16 @@ impl<A> Vector<A> {
     ///
     /// Time: O(1)*
     pub fn get(&self, index: usize) -> Option<Arc<A>> {
-        if index >= self.len() {
-            return None;
-        }
-        let entry = match self.node_for(index) {
-            None => self.tail.get(index & HASH_MASK as usize).cloned(),
-            Some(node) => node.children.get(index & HASH_MASK as usize).cloned(),
+        let i = match self.map_index(index) {
+            None => return None,
+            Some(i) => i,
         };
-        match entry {
-            Some(Entry::Value(ref value)) => Some(value.clone()),
-            Some(Entry::Node(_)) => {
-                panic!("Vector::get: encountered node where value was expected")
-            }
-            Some(Entry::Empty) => panic!("Vector::get: encountered null, expected value"),
+
+        let node = self.node_for(i);
+        match node.get(i & HASH_MASK as usize) {
+            Some(&Entry::Value(ref value)) => Some(value.clone()),
+            Some(&Entry::Node(_)) => panic!("Vector::get: encountered node, expected value"),
+            Some(&Entry::Empty) => panic!("Vector::get: encountered null, expected value"),
             None => panic!("Vector::get: unhandled index out of bounds situation!"),
         }
     }
@@ -211,18 +244,19 @@ impl<A> Vector<A> {
     where
         RA: Shared<A>,
     {
-        assert!(
-            index < self.count,
-            "index out of bounds: index {} < {}",
-            index,
-            self.count
-        );
-        if index >= self.tailoff() {
+        let i = match self.map_index(index) {
+            None => panic!("index out of bounds: {} < {}", index, self.len()),
+            Some(i) => i,
+        };
+        if i >= tail_offset(self.meta.capacity) {
             let mut tail = (*self.tail).clone();
-            tail[index & HASH_MASK as usize] = Entry::Value(value.shared());
+            tail.set(i & HASH_MASK as usize, Entry::Value(value.shared()));
             self.update_tail(tail)
         } else {
-            self.update_root(nodes::set_in(self.shift, &self.root, index, value.shared()))
+            self.update_root(
+                self.root
+                    .set_in(self.meta.level, i, Entry::Value(value.shared())),
+            )
         }
     }
 
@@ -239,18 +273,16 @@ impl<A> Vector<A> {
     where
         RA: Shared<A>,
     {
-        assert!(
-            index < self.count,
-            "index out of bounds: index {} < {}",
-            index,
-            self.count
-        );
-        if index >= self.tailoff() {
+        let i = match self.map_index(index) {
+            None => panic!("index out of bounds: {} < {}", index, self.len()),
+            Some(i) => i,
+        };
+        if i >= tail_offset(self.meta.capacity) {
             let tail = Arc::make_mut(&mut self.tail);
-            tail[index & HASH_MASK as usize] = Entry::Value(value.shared());
+            tail.set(i & HASH_MASK as usize, Entry::Value(value.shared()));
         } else {
             let root = Arc::make_mut(&mut self.root);
-            nodes::set_in_mut(self.shift, root, index, value.shared())
+            root.set_in_mut(self.meta.level, 0, i, Entry::Value(value.shared()))
         }
     }
 
@@ -258,38 +290,15 @@ impl<A> Vector<A> {
     /// current vector.
     ///
     /// Time: O(1)*
-    pub fn push<RA>(&self, value: RA) -> Self
+    pub fn push_back<RA>(&self, value: RA) -> Self
     where
         RA: Shared<A>,
     {
-        if self.len() - self.tailoff() < HASH_SIZE {
-            let mut tail = (*self.tail).clone();
-            tail.push(Entry::Value(value.shared()));
-            Vector {
-                count: self.count + 1,
-                shift: self.shift,
-                root: self.root.clone(),
-                tail: Arc::new(tail),
-            }
-        } else {
-            let mut shift = self.shift;
-            let tail_node = Node::from_vec((*self.tail).clone());
-            let new_root = if (self.len() >> HASH_BITS) > (1 << self.shift) {
-                let mut node = Node::new();
-                node.children[0] = Entry::Node(self.root.clone());
-                node.children[1] = Entry::Node(Arc::new(nodes::new_path(self.shift, tail_node)));
-                shift += HASH_BITS;
-                node
-            } else {
-                nodes::push_tail(self.count, self.shift, &self.root, tail_node)
-            };
-            Vector {
-                count: self.count + 1,
-                shift,
-                root: Arc::new(new_root),
-                tail: Arc::new(vec![Entry::Value(value.shared())]),
-            }
-        }
+        let len = self.len();
+        let mut v = self.clone();
+        v.resize(0, (len + 1) as isize);
+        v.set_mut(len, value.shared());
+        v
     }
 
     /// Update a vector in place with a new value prepended to the end of it.
@@ -299,32 +308,32 @@ impl<A> Vector<A> {
     /// before mutating.
     ///
     /// Time: O(1)*
-    pub fn push_mut<RA>(&mut self, value: RA)
+    pub fn push_back_mut<RA>(&mut self, value: RA)
     where
         RA: Shared<A>,
     {
-        if self.count - self.tailoff() < HASH_SIZE {
-            let tail = Arc::make_mut(&mut self.tail);
-            tail.push(Entry::Value(value.shared()));
-        } else {
-            let tail_node = {
-                let tail = Arc::make_mut(&mut self.tail);
-                Node::from_vec(mem::replace(tail, Vec::with_capacity(HASH_SIZE)))
-            };
-            if (self.count >> HASH_BITS) > (1 << self.shift) {
-                let mut node = Node::new();
-                node.children[0] = Entry::Node(self.root.clone());
-                node.children[1] = Entry::Node(Arc::new(nodes::new_path(self.shift, tail_node)));
-                self.shift += HASH_BITS;
-                self.root = Arc::new(node);
-            } else {
-                let root = Arc::make_mut(&mut self.root);
-                nodes::push_tail_mut(self.count, self.shift, root, tail_node)
-            }
-            let tail = Arc::make_mut(&mut self.tail);
-            tail.push(Entry::Value(value.shared()));
-        }
-        self.count += 1;
+        let len = self.len();
+        self.resize(0, (len + 1) as isize);
+        self.set_mut(len, value.shared());
+    }
+
+    pub fn push_front<RA>(&self, value: RA) -> Self
+    where
+        RA: Shared<A>,
+    {
+        let mut v = self.clone();
+        v.resize(-1, self.len() as isize);
+        v.set_mut(0, value.shared());
+        v
+    }
+
+    pub fn push_front_mut<RA>(&mut self, value: RA)
+    where
+        RA: Shared<A>,
+    {
+        let len = self.len();
+        self.resize(-1, len as isize);
+        self.set_mut(0, value.shared());
     }
 
     /// Get the last element of a vector, as well as the vector with the last
@@ -335,50 +344,14 @@ impl<A> Vector<A> {
     /// Time: O(1)*
     ///
     /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
-    pub fn pop(&self) -> Option<(Arc<A>, Self)> {
-        if self.count == 0 {
+    pub fn pop_back(&self) -> Option<(Arc<A>, Self)> {
+        if self.is_empty() {
             return None;
         }
-        if self.count == 1 {
-            return Some((self.tail[0].unwrap_val(), Vector::new()));
-        }
-        if self.tail.len() > 1 {
-            let mut tail = (*self.tail).clone();
-            let value = tail.pop().unwrap().unwrap_val();
-            Some((
-                value,
-                Vector {
-                    count: self.count - 1,
-                    shift: self.shift,
-                    root: self.root.clone(),
-                    tail: Arc::new(tail),
-                },
-            ))
-        } else {
-            match self.node_for(self.count - 2) {
-                None => panic!("Vector::pop: unexpected non-node from node_for"),
-                Some(ref node) => {
-                    let tail = node.children.clone();
-                    let mut shift = self.shift;
-                    let mut root = Arc::new(
-                        nodes::pop_tail(self.count, self.shift, &self.root).unwrap_or_default(),
-                    );
-                    if self.shift > HASH_BITS && root.children[1].is_empty() {
-                        root = root.children[0].unwrap_node();
-                        shift -= HASH_BITS;
-                    }
-                    Some((
-                        self.get(self.count - 1).unwrap(),
-                        Vector {
-                            count: self.count - 1,
-                            shift,
-                            root,
-                            tail: Arc::new(tail),
-                        },
-                    ))
-                }
-            }
-        }
+        let val = self.get(self.len() - 1).unwrap();
+        let mut v = self.clone();
+        v.resize(0, -1 as isize);
+        Some((val, v))
     }
 
     /// Remove the last element of a vector in place and return it.
@@ -388,40 +361,65 @@ impl<A> Vector<A> {
     /// before mutating.
     ///
     /// Time: O(1)*
-    pub fn pop_mut(&mut self) -> Option<Arc<A>> {
-        if self.count == 0 {
+    pub fn pop_back_mut(&mut self) -> Option<Arc<A>> {
+        if self.is_empty() {
             return None;
         }
-        if self.count == 1 || (self.count - 1) & HASH_MASK as usize > 0 {
-            self.count -= 1;
-            let tail = Arc::make_mut(&mut self.tail);
-            return tail.pop().map(Entry::into_val);
+        let val = self.get(self.len() - 1).unwrap();
+        self.resize(0, -1);
+        Some(val)
+    }
+
+    pub fn pop_front(&self) -> Option<(Arc<A>, Self)> {
+        if self.is_empty() {
+            return None;
         }
-        let value = self.get(self.count - 1);
-        match self.node_for(self.count - 2) {
-            None => panic!("Vector::pop_mut: unexpected non-node from node_for"),
-            Some(tail_node) => {
-                let tail = tail_node.children.clone();
-                let mut set_root = None;
-                {
-                    let mut root = Arc::make_mut(&mut self.root);
-                    if nodes::pop_tail_mut(self.count, self.shift, root) {
-                        if self.shift > HASH_BITS && root.children[1].is_empty() {
-                            set_root = Some(root.children[0].unwrap_node());
-                            self.shift -= HASH_BITS;
-                        }
-                    } else {
-                        set_root = Some(Arc::new(Node::new()));
-                    }
-                }
-                if let Some(root) = set_root {
-                    self.root = root;
-                }
-                self.tail = Arc::new(tail);
-            }
+        let val = self.get(0).unwrap();
+        let mut v = self.clone();
+        v.resize(1, self.len() as isize);
+        Some((val, v))
+    }
+
+    pub fn pop_front_mut(&mut self) -> Option<Arc<A>> {
+        if self.is_empty() {
+            return None;
         }
-        self.count -= 1;
-        value
+        let len = self.len();
+        let val = self.get(0).unwrap();
+        self.resize(1, len as isize);
+        Some(val)
+    }
+
+    pub fn split_at(&self, index: usize) -> (Self, Self) {
+        if index >= self.len() {
+            return (self.clone(), Vector::new());
+        }
+        let mut left = self.clone();
+        left.resize(0, index as isize);
+        let mut right = self.clone();
+        right.resize(index as isize, self.len() as isize);
+        (left, right)
+    }
+
+    pub fn skip(&self, count: usize) -> Self {
+        let mut v = self.clone();
+        v.resize(count as isize, self.len() as isize);
+        v
+    }
+
+    pub fn take(&self, count: usize) -> Self {
+        let mut v = self.clone();
+        v.resize(0, count as isize);
+        v
+    }
+
+    pub fn slice(&self, start_index: usize, end_index: usize) -> Self {
+        if start_index >= end_index || start_index >= self.len() {
+            return Vector::new();
+        }
+        let mut v = self.clone();
+        v.resize(start_index as isize, end_index as isize);
+        v
     }
 
     /// Append the vector `other` to the end of the current vector.
@@ -444,18 +442,58 @@ impl<A> Vector<A> {
     where
         R: Borrow<Self>,
     {
-        let mut out = self.clone();
-        out.extend(other.borrow());
-        out
+        let o = other.borrow();
+        let mut v = self.clone();
+        v.resize(0, (self.len() + o.len()) as isize);
+        v.write(self.len(), o);
+        v
+    }
+
+    pub fn write<I: IntoIterator<Item = R>, R: Shared<A>>(&mut self, index: usize, iter: I) {
+        if let Some(raw_index) = self.map_index(index) {
+            let cap = self.meta.capacity;
+            let tail_offset = tail_offset(cap);
+            let mut it = iter.into_iter().map(|i| i.shared());
+            if raw_index >= tail_offset {
+                let mut tail = Arc::make_mut(&mut self.tail);
+                let mut i = raw_index - tail_offset;
+                loop {
+                    match it.next() {
+                        None => return,
+                        Some(value) => {
+                            tail.set(i, Entry::Value(value));
+                            i += 1;
+                            if tail_offset + i >= cap {
+                                return;
+                            }
+                        }
+                    }
+                }
+            } else {
+                let root = Arc::make_mut(&mut self.root);
+                let mut max_in_root = tail_offset - raw_index;
+                root.write(self.meta.level, raw_index, &mut it, &mut max_in_root);
+                let mut tail = Arc::make_mut(&mut self.tail);
+                let mut i = 0;
+                loop {
+                    match it.next() {
+                        None => return,
+                        Some(value) => {
+                            tail.set(i, Entry::Value(value));
+                            i += 1;
+                            if tail_offset + i >= cap {
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Construct a vector which is the reverse of the current vector.
     ///
-    /// Please note that if all you want is to iterate over the vector from back to front,
-    /// it is much more efficient to use a [reversed iterator][rev] rather than doing
-    /// the work of reversing the vector first.
-    ///
-    /// Time: O(n)
+    /// Time: O(1)
     ///
     /// # Examples
     ///
@@ -472,7 +510,13 @@ impl<A> Vector<A> {
     ///
     /// [rev]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.rev
     pub fn reverse(&self) -> Self {
-        self.iter().rev().collect()
+        let mut v = self.clone();
+        v.meta.reverse = !v.meta.reverse;
+        v
+    }
+
+    pub fn reverse_mut(&mut self) {
+        self.meta.reverse = !self.meta.reverse;
     }
 
     /// Sort a vector of ordered elements.
@@ -555,8 +599,7 @@ impl<A> Vector<A> {
                 i += 1;
             }
             swap(vector, i, r);
-            // FIXME: This is annoying: i - 1 will be negative occasionally,
-            // can't see an immediate workaround other than allowing it.
+
             let mut jp: isize = i as isize - 1;
             let mut k = l;
             i += 1;
@@ -612,59 +655,195 @@ impl<A> Vector<A> {
 
     // Implementation details
 
-    fn adopt(v: Vec<Entry<A>>) -> Self {
-        Vector {
-            count: v.len(),
-            shift: HASH_BITS,
-            root: Arc::new(Node::new()),
-            tail: Arc::new(v),
+    fn map_index(&self, index: usize) -> Option<usize> {
+        if index >= self.len() {
+            return None;
         }
+        let i = self.meta.origin + index;
+        Some(if self.meta.reverse {
+            (self.len() - 1) - i
+        } else {
+            i
+        })
     }
 
-    fn tailoff(&self) -> usize {
-        if self.count < HASH_SIZE {
-            0
+    fn node_for(&self, index: usize) -> &Arc<Node<A>> {
+        if index >= tail_offset(self.meta.capacity) {
+            &self.tail
         } else {
-            ((self.count - 1) >> HASH_BITS) << HASH_BITS
-        }
-    }
-
-    fn node_for(&self, index: usize) -> Option<Arc<Node<A>>> {
-        if index >= self.tailoff() {
-            None
-        } else {
-            let mut node = self.root.clone();
-            let mut level = self.shift;
+            let mut node = &self.root;
+            let mut level = self.meta.level;
             while level > 0 {
                 node = if let Some(&Entry::Node(ref child_node)) =
                     node.children.get((index >> level) & HASH_MASK as usize)
                 {
                     level -= HASH_BITS;
-                    child_node.clone()
+                    child_node
                 } else {
                     panic!("Vector::node_for: encountered value or null where node was expected")
                 };
             }
-            Some(node)
+            node
         }
     }
 
-    fn update_root(&self, root: Node<A>) -> Self {
+    fn clear(&mut self) {
+        self.meta = Default::default();
+        self.root = Default::default();
+        self.tail = Default::default();
+    }
+
+    fn resize(&mut self, mut start: isize, mut end: isize) {
+        if self.meta.reverse {
+            let len = self.len() as isize;
+            start = len - end;
+            end = len - start;
+        }
+
+        let mut o0 = self.meta.origin;
+        let mut c0 = self.meta.capacity;
+        let mut o = o0 as isize + start;
+        let mut c = if end < 0 {
+            c0 as isize + end
+        } else {
+            o0 as isize + end
+        } as usize;
+        if o == o0 as isize && c == c0 {
+            return;
+        }
+
+        if o >= c as isize {
+            self.clear();
+            return;
+        }
+
+        let mut level = self.meta.level;
+
+        // Create higher level roots until origin is positive
+        let mut origin_shift = 0;
+        while o + origin_shift < 0 {
+            if self.root.is_empty() {
+                self.root = Default::default()
+            } else {
+                self.root = Arc::new(Node::from_vec(
+                    Some(1),
+                    vec![Entry::Empty, Entry::Node(self.root.clone())],
+                ));
+            }
+            level += HASH_BITS;
+            origin_shift += 1 << level;
+        }
+        if origin_shift > 0 {
+            o0 += origin_shift as usize;
+            c0 += origin_shift as usize;
+            o += origin_shift;
+            c += origin_shift as usize;
+        }
+
+        // Create higher level roots until size fits
+        let tail_offset0 = tail_offset(c0);
+        let tail_offset = tail_offset(c as usize);
+        while tail_offset >= 1 << (level + HASH_BITS) {
+            if self.root.is_empty() {
+                self.root = Default::default()
+            } else {
+                self.root = Arc::new(Node::from_vec(
+                    Some(0),
+                    vec![Entry::Node(self.root.clone())],
+                ));
+            }
+            level += HASH_BITS;
+        }
+
+        // Merge old tail into tree
+        if tail_offset > tail_offset0 && (o as usize) < c0 && !self.tail.is_empty() {
+            let root = Arc::make_mut(&mut self.root);
+            root.set_in_mut(
+                level,
+                HASH_BITS,
+                tail_offset0,
+                Entry::Node(self.tail.clone()),
+            );
+        }
+
+        // Find the new tail
+        if tail_offset < tail_offset0 {
+            self.tail = self.node_for(c - 1).clone()
+        } else if tail_offset > tail_offset0 {
+            self.tail = Default::default()
+        }
+
+        // Trim new tail if needed
+        if c < c0 {
+            let t = Arc::make_mut(&mut self.tail);
+            t.remove_after(0, c);
+        }
+
+        // If new origin is inside tail, drop the root
+        if o as usize >= tail_offset {
+            o -= tail_offset as isize;
+            c -= tail_offset;
+            level = HASH_BITS;
+            self.root = Default::default();
+            let tail = Arc::make_mut(&mut self.tail);
+            tail.remove_before(0, o as usize);
+        } else if o as usize > o0 || tail_offset < tail_offset0 {
+            // If root has been trimmed, clean it up.
+            let mut shift = 0;
+            // Find the top root node inside the old tree.
+            loop {
+                let start_index = (o as usize >> level) & HASH_MASK as usize;
+                if start_index != (tail_offset >> level) & HASH_MASK as usize {
+                    break;
+                }
+                if start_index != 0 {
+                    shift += (1 << level) * start_index;
+                }
+                level -= HASH_BITS;
+                self.root = self.root.get(start_index).unwrap().unwrap_node();
+            }
+            // Trim the edges of the root.
+            if o as usize > o0 {
+                let root = Arc::make_mut(&mut self.root);
+                root.remove_before(level, o as usize - shift);
+            }
+            if tail_offset < tail_offset0 {
+                let root = Arc::make_mut(&mut self.root);
+                root.remove_after(level, tail_offset - shift);
+            }
+            if shift > 0 {
+                o -= shift as isize;
+                c -= shift;
+            }
+        }
+
+        self.meta.level = level;
+        self.meta.origin = o as usize;
+        self.meta.capacity = c;
+    }
+
+    fn update_root<Root: Shared<Node<A>>>(&self, root: Root) -> Self {
         Vector {
-            count: self.count,
-            shift: self.shift,
-            root: Arc::new(root),
+            meta: self.meta,
+            root: root.shared(),
             tail: self.tail.clone(),
         }
     }
 
-    fn update_tail(&self, tail: Vec<Entry<A>>) -> Self {
+    fn update_tail<Root: Shared<Node<A>>>(&self, tail: Root) -> Self {
         Vector {
-            count: self.count,
-            shift: self.shift,
+            meta: self.meta,
             root: self.root.clone(),
-            tail: Arc::new(tail),
+            tail: tail.shared(),
         }
+    }
+}
+
+fn tail_offset(size: usize) -> usize {
+    if size < HASH_SIZE {
+        0
+    } else {
+        ((size - 1) >> HASH_BITS) << HASH_BITS
     }
 }
 
@@ -673,8 +852,7 @@ impl<A> Vector<A> {
 impl<A> Clone for Vector<A> {
     fn clone(&self) -> Self {
         Vector {
-            count: self.count,
-            shift: self.shift,
+            meta: self.meta,
             root: self.root.clone(),
             tail: self.tail.clone(),
         }
@@ -704,7 +882,7 @@ impl<A: Debug> Debug for Vector<A> {
 #[cfg(not(has_specialisation))]
 impl<A: PartialEq> PartialEq for Vector<A> {
     fn eq(&self, other: &Self) -> bool {
-        if self.count != other.count {
+        if self.len() != other.len() {
             return false;
         }
         self.iter().eq(other.iter())
@@ -714,7 +892,7 @@ impl<A: PartialEq> PartialEq for Vector<A> {
 #[cfg(has_specialisation)]
 impl<A: PartialEq> PartialEq for Vector<A> {
     default fn eq(&self, other: &Self) -> bool {
-        if self.count != other.count {
+        if self.len() != other.len() {
             return false;
         }
         self.iter().eq(other.iter())
@@ -724,7 +902,7 @@ impl<A: PartialEq> PartialEq for Vector<A> {
 #[cfg(has_specialisation)]
 impl<A: Eq> PartialEq for Vector<A> {
     fn eq(&self, other: &Self) -> bool {
-        if self.count != other.count {
+        if self.len() != other.len() {
             return false;
         }
         if Arc::ptr_eq(&self.root, &other.root) && Arc::ptr_eq(&self.tail, &other.tail) {
@@ -789,8 +967,16 @@ impl<A, R: Shared<A>> Extend<R> for Vector<A> {
     where
         I: IntoIterator<Item = R>,
     {
-        for item in iter {
-            self.push_mut(item)
+        let len = self.len();
+        let it = iter.into_iter();
+        let (lower, upper) = it.size_hint();
+        if Some(lower) == upper {
+            self.resize(0, (len + lower) as isize);
+            self.write(len, it);
+        } else {
+            for item in it {
+                self.push_back_mut(item)
+            }
         }
     }
 }
@@ -839,23 +1025,9 @@ impl<A, RA: Shared<A>> FromIterator<RA> for Vector<A> {
     where
         T: IntoIterator<Item = RA>,
     {
-        let mut v = Vec::with_capacity(HASH_SIZE);
-        let mut it = iter.into_iter().peekable();
-        while let Some(item) = it.next() {
-            v.push(Entry::Value(item.shared()));
-            if v.len() == HASH_SIZE {
-                break;
-            }
-        }
-        if v.len() == HASH_SIZE && it.peek().is_some() {
-            let mut out = Vector::adopt(v);
-            for item in it {
-                out.push_mut(item);
-            }
-            out
-        } else {
-            Vector::adopt(v)
-        }
+        let mut v = Vector::new();
+        v.extend(iter);
+        v
     }
 }
 
@@ -888,26 +1060,59 @@ impl<A> From<Vec<A>> for Vector<A> {
 /// An iterator over vectors with values of type `A`.
 pub struct Iter<A> {
     vector: Vector<A>,
-    start_node: Option<Arc<Node<A>>>,
+    start_node: Arc<Node<A>>,
     start_index: usize,
     start_offset: usize,
-    end_node: Option<Arc<Node<A>>>,
+    end_node: Arc<Node<A>>,
     end_index: usize,
     end_offset: usize,
 }
 
 impl<A> Iter<A> {
-    fn new(vector: &Vector<A>) -> Self {
-        let end_index = vector.len() & !(HASH_MASK as usize);
+    fn new(vector: Vector<A>) -> Self {
+        let start = vector.meta.origin;
+        let start_index = start & !(HASH_MASK as usize);
+        let end = vector.meta.capacity;
+        let end_index = end & !(HASH_MASK as usize);
         Iter {
-            vector: vector.clone(),
-            start_node: vector.node_for(0),
-            end_node: vector.node_for(end_index),
-            start_index: 0,
-            start_offset: 0,
+            start_node: vector.node_for(start_index).clone(),
+            end_node: vector.node_for(end_index).clone(),
+            start_index,
+            start_offset: start - start_index,
             end_index,
-            end_offset: vector.len() - end_index,
+            end_offset: end - end_index,
+            vector,
         }
+    }
+
+    fn get_next(&mut self) -> Option<Arc<A>> {
+        if self.start_index + self.start_offset == self.end_index + self.end_offset {
+            return None;
+        }
+        if self.start_offset < HASH_SIZE {
+            let item = self.start_node.get(self.start_offset).unwrap().unwrap_val();
+            self.start_offset += 1;
+            return Some(item);
+        }
+        self.start_offset = 0;
+        self.start_index += HASH_SIZE;
+        self.start_node = self.vector.node_for(self.start_index).clone();
+        self.get_next()
+    }
+
+    fn get_next_back(&mut self) -> Option<Arc<A>> {
+        if self.start_index + self.start_offset == self.end_index + self.end_offset {
+            return None;
+        }
+        if self.end_offset > 0 {
+            self.end_offset -= 1;
+            let item = self.end_node.get(self.end_offset).unwrap().unwrap_val();
+            return Some(item);
+        }
+        self.end_offset = HASH_SIZE;
+        self.end_index -= HASH_SIZE;
+        self.end_node = self.vector.node_for(self.end_index).clone();
+        self.get_next_back()
     }
 }
 
@@ -915,27 +1120,11 @@ impl<A> Iterator for Iter<A> {
     type Item = Arc<A>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.start_index + self.start_offset == self.end_index + self.end_offset {
-            return None;
+        if self.vector.meta.reverse {
+            self.get_next_back()
+        } else {
+            self.get_next()
         }
-        match self.start_node {
-            None => {
-                let item = self.vector.tail[self.start_offset].unwrap_val();
-                self.start_offset += 1;
-                return Some(item);
-            }
-            Some(ref node) => {
-                if self.start_offset < HASH_SIZE {
-                    let item = node.children[self.start_offset].unwrap_val();
-                    self.start_offset += 1;
-                    return Some(item);
-                }
-            }
-        }
-        self.start_offset = 0;
-        self.start_index += HASH_SIZE;
-        self.start_node = self.vector.node_for(self.start_index);
-        self.next()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -946,29 +1135,11 @@ impl<A> Iterator for Iter<A> {
 
 impl<A> DoubleEndedIterator for Iter<A> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.start_index + self.start_offset == self.end_index + self.end_offset {
-            return None;
+        if self.vector.meta.reverse {
+            self.get_next()
+        } else {
+            self.get_next_back()
         }
-        match self.end_node {
-            None => {
-                if self.end_offset > 0 {
-                    self.end_offset -= 1;
-                    let item = self.vector.tail[self.end_offset].unwrap_val();
-                    return Some(item);
-                }
-            }
-            Some(ref node) => {
-                if self.end_offset > 0 {
-                    self.end_offset -= 1;
-                    let item = node.children[self.end_offset].unwrap_val();
-                    return Some(item);
-                }
-            }
-        }
-        self.end_offset = HASH_SIZE;
-        self.end_index -= HASH_SIZE;
-        self.end_node = self.vector.node_for(self.end_index);
-        self.next_back()
     }
 }
 
@@ -1019,6 +1190,21 @@ pub mod proptest {
 
 // Tests
 
+// impl<A: Debug> Debug for Vector<A> {
+//     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+//         write!(
+//             f,
+//             "Vector o={} c={} l={} n={} root={:?} tail={:?}",
+//             self.meta.origin,
+//             self.meta.capacity,
+//             self.meta.level,
+//             self.len(),
+//             self.root,
+//             self.tail
+//         )
+//     }
+// }
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -1026,6 +1212,15 @@ mod test {
     use std::iter;
     use proptest::num::i32;
     use proptest::collection;
+
+    #[test]
+    fn wat() {
+        let v1 = Vec::from_iter((0..1000).into_iter().map(Arc::new));
+        let v2 = Vector::from_iter(0..1000);
+        for (i, item) in v1.into_iter().enumerate() {
+            assert_eq!(Some(item), v2.get(i));
+        }
+    }
 
     #[test]
     fn double_ended_iterator() {
@@ -1042,11 +1237,11 @@ mod test {
 
     proptest! {
         #[test]
-        fn push(ref input in collection::vec(i32::ANY, 0..100)) {
+        fn push_back(ref input in collection::vec(i32::ANY, 0..100)) {
             let mut vector = Vector::new();
             for (count, value) in input.iter().cloned().enumerate() {
                 assert_eq!(count, vector.len());
-                vector = vector.push(value);
+                vector = vector.push_back(value);
                 assert_eq!(count + 1, vector.len());
             }
             for (index, value) in input.iter().cloned().enumerate() {
@@ -1055,16 +1250,38 @@ mod test {
         }
 
         #[test]
-        fn push_mut(ref input in collection::vec(i32::ANY, 0..100)) {
+        fn push_back_mut(ref input in collection::vec(i32::ANY, 0..100)) {
             let mut vector = Vector::new();
             for (count, value) in input.iter().cloned().enumerate() {
                 assert_eq!(count, vector.len());
-                vector.push_mut(value);
+                vector.push_back_mut(value);
                 assert_eq!(count + 1, vector.len());
             }
             for (index, value) in input.iter().cloned().enumerate() {
                 assert_eq!(Some(Arc::new(value)), vector.get(index));
             }
+        }
+
+        #[test]
+        fn push_front(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut vector = Vector::new();
+            for (count, value) in input.iter().cloned().enumerate() {
+                assert_eq!(count, vector.len());
+                vector = vector.push_front(value);
+                assert_eq!(count + 1, vector.len());
+            }
+            assert_eq!(input, &Vec::from_iter(vector.iter().rev().map(|a| *a)));
+        }
+
+        #[test]
+        fn push_front_mut(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut vector = Vector::new();
+            for (count, value) in input.iter().cloned().enumerate() {
+                assert_eq!(count, vector.len());
+                vector.push_front_mut(value);
+                assert_eq!(count + 1, vector.len());
+            }
+            assert_eq!(input, &Vec::from_iter(vector.iter().rev().map(|a| *a)));
         }
 
         #[test]
@@ -1103,11 +1320,11 @@ mod test {
         }
 
         #[test]
-        fn pop(ref input in collection::vec(i32::ANY, 0..100)) {
+        fn pop_back(ref input in collection::vec(i32::ANY, 0..100)) {
             let mut vector = Vector::from_iter(input.iter().cloned());
             assert_eq!(input.len(), vector.len());
             for (index, value) in input.iter().cloned().enumerate().rev() {
-                match vector.pop() {
+                match vector.pop_back() {
                     None => panic!("vector emptied unexpectedly"),
                     Some((item, next)) => {
                         vector = next;
@@ -1120,11 +1337,11 @@ mod test {
         }
 
         #[test]
-        fn pop_mut(ref input in collection::vec(i32::ANY, 0..100)) {
+        fn pop_back_mut(ref input in collection::vec(i32::ANY, 0..100)) {
             let mut vector = Vector::from_iter(input.iter().cloned());
             assert_eq!(input.len(), vector.len());
             for (index, value) in input.iter().cloned().enumerate().rev() {
-                match vector.pop_mut() {
+                match vector.pop_back_mut() {
                     None => panic!("vector emptied unexpectedly"),
                     Some(item) => {
                         assert_eq!(index, vector.len());
@@ -1188,6 +1405,20 @@ mod test {
             input_sorted.sort();
             let sorted = Vector::from_iter(input_sorted.iter().cloned());
             assert_eq!(sorted, vector.sort());
+        }
+
+        #[test]
+        fn reverse(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut vector = Vector::from_iter(input.iter().cloned()).reverse();
+            let mut reversed = input.clone();
+            reversed.reverse();
+            for (index, value) in reversed.into_iter().enumerate() {
+                assert_eq!(Some(Arc::new(value)), vector.get(index));
+            }
+            vector.reverse_mut();
+            for (index, value) in input.iter().cloned().enumerate() {
+                assert_eq!(Some(Arc::new(value)), vector.get(index));
+            }
         }
     }
 }
