@@ -8,8 +8,16 @@
 //! like. If you don't need lookups or updates by index, but do need fast concatenation
 //! of whole lists, you should use the [`CatList`][CatList] instead.
 //!
+//! If you're familiar with the Clojure variant, this improves on it by being
+//! efficiently extensible at the front as well as the back. If you're familiar with
+//! [Immutable.js][immutablejs], this is essentially the same, but with easier
+//! mutability because Rust has the advantage of direct access to the garbage
+//! collector (which in our case is just [`Arc`][Arc]).
+//!
 //! [bmvt]: https://hypirion.com/musings/understanding-persistent-vector-pt-1
+//! [immutablejs]: https://facebook.github.io/immutable-js/
 //! [Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
+//! [Arc]: https://doc.rust-lang.org/std/sync/struct.Arc.html
 //! [CatList]: ../catlist/struct.CatList.html
 
 use std::sync::Arc;
@@ -85,8 +93,16 @@ impl Default for Meta {
 /// like. If you don't need lookups or updates by index, but do need fast concatenation
 /// of whole lists, you should use the [`CatList`][CatList] instead.
 ///
+/// If you're familiar with the Clojure variant, this improves on it by being
+/// efficiently extensible at the front as well as the back. If you're familiar with
+/// [Immutable.js][immutablejs], this is essentially the same, but with easier
+/// mutability because Rust has the advantage of direct access to the garbage
+/// collector (which in our case is just [`Arc`][Arc]).
+///
 /// [bmvt]: https://hypirion.com/musings/understanding-persistent-vector-pt-1
+/// [immutablejs]: https://facebook.github.io/immutable-js/
 /// [Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
+/// [Arc]: https://doc.rust-lang.org/std/sync/struct.Arc.html
 /// [CatList]: ../catlist/struct.CatList.html
 pub struct Vector<A> {
     meta: Meta,
