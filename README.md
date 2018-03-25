@@ -1,6 +1,6 @@
 # im-rs
 
-Assorted immutable collection datatypes for Rust.
+Blazing fast immutable collection datatypes for Rust.
 
 ## Documentation
 
