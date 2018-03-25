@@ -11,16 +11,16 @@
 //! [vector::Vector]: ../vector/struct.Vector.html
 //! [conslist::ConsList]: ../conslist/struct.ConsList.html
 
-use std::sync::Arc;
+use bits::HASH_SIZE;
+use shared::Shared;
+use std::borrow::Borrow;
+use std::cmp::Ordering;
+use std::fmt::{Debug, Error, Formatter};
+use std::hash::{Hash, Hasher};
 use std::iter::{FromIterator, Sum};
 use std::ops::{Add, Deref};
-use std::cmp::Ordering;
-use std::hash::{Hash, Hasher};
-use std::fmt::{Debug, Error, Formatter};
-use std::borrow::Borrow;
+use std::sync::Arc;
 use vector::Vector;
-use shared::Shared;
-use bits::HASH_SIZE;
 
 /// Construct a list from a sequence of elements.
 ///
@@ -122,39 +122,20 @@ where
 /// [queue::Queue]: ../queue/struct.Queue.html
 /// [vector::Vector]: ../vector/struct.Vector.html
 /// [conslist::ConsList]: ../conslist/struct.ConsList.html
-pub struct CatList<A>(Arc<ListNode<A>>);
-
-#[doc(hidden)]
-pub struct ListNode<A> {
+pub struct CatList<A> {
     size: usize,
     head: Arc<Vec<Arc<A>>>,
     tail: Vector<CatList<A>>,
 }
 
-impl<A> ListNode<A> {
-    fn new() -> Self {
-        ListNode {
+impl<A> CatList<A> {
+    /// Construct an empty list.
+    pub fn new() -> Self {
+        CatList {
             size: 0,
             head: Arc::new(Vec::new()),
             tail: Vector::new(),
         }
-    }
-}
-
-impl<A> Clone for ListNode<A> {
-    fn clone(&self) -> Self {
-        ListNode {
-            size: self.size,
-            head: self.head.clone(),
-            tail: self.tail.clone(),
-        }
-    }
-}
-
-impl<A> CatList<A> {
-    /// Construct an empty list.
-    pub fn new() -> Self {
-        CatList(Arc::new(ListNode::new()))
     }
 
     /// Construct a list with a single value.
@@ -166,19 +147,19 @@ impl<A> CatList<A> {
     }
 
     fn from_head(head: Vec<Arc<A>>) -> Self {
-        CatList(Arc::new(ListNode {
+        CatList {
             size: head.len(),
             head: Arc::new(head),
             tail: Vector::new(),
-        }))
+        }
     }
 
     fn make<VA: Shared<Vec<Arc<A>>>>(size: usize, head: VA, tail: Vector<CatList<A>>) -> Self {
-        CatList(Arc::new(ListNode {
+        CatList {
             size,
             head: head.shared(),
             tail,
-        }))
+        }
     }
 
     /// Construct a list by consuming an [`IntoIterator`][std::iter::IntoIterator].
@@ -211,6 +192,7 @@ impl<A> CatList<A> {
     }
 
     /// Test whether a list is empty.
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -227,8 +209,9 @@ impl<A> CatList<A> {
     /// assert_eq!(5, catlist![1, 2, 3, 4, 5].len());
     /// # }
     /// ```
+    #[inline]
     pub fn len(&self) -> usize {
-        self.0.size
+        self.size
     }
 
     /// Get the first element of a list.
@@ -238,7 +221,7 @@ impl<A> CatList<A> {
         if self.is_empty() {
             None
         } else {
-            self.0.head.last().cloned()
+            self.head.last().cloned()
         }
     }
 
@@ -251,26 +234,23 @@ impl<A> CatList<A> {
     pub fn pop_back(&self) -> Option<(Arc<A>, CatList<A>)> {
         if self.is_empty() {
             None
-        } else if self.0.tail.is_empty() {
+        } else if self.tail.is_empty() {
             Some((
-                self.0.head.first().unwrap().clone(),
-                CatList::from_head(self.0.head.iter().skip(1).cloned().collect()),
+                self.head.first().unwrap().clone(),
+                CatList::from_head(self.head.iter().skip(1).cloned().collect()),
             ))
         } else {
-            match self.0.tail.pop_back() {
+            match self.tail.pop_back() {
                 None => unreachable!(),
                 Some((last_list, queue_without_last_list)) => match last_list.pop_back() {
                     None => unreachable!(),
                     Some((last_item, list_without_last_item)) => {
-                        let new_node = ListNode {
-                            size: self.0.size - last_list.len(),
-                            head: self.0.head.clone(),
+                        let new_node = CatList {
+                            size: self.size - last_list.len(),
+                            head: self.head.clone(),
                             tail: queue_without_last_list,
                         };
-                        Some((
-                            last_item,
-                            CatList(Arc::new(new_node)).append(list_without_last_item),
-                        ))
+                        Some((last_item, new_node.append(list_without_last_item)))
                     }
                 },
             }
@@ -283,10 +263,10 @@ impl<A> CatList<A> {
     pub fn last(&self) -> Option<Arc<A>> {
         if self.is_empty() {
             None
-        } else if self.0.tail.is_empty() {
-            self.0.head.first().cloned()
+        } else if self.tail.is_empty() {
+            self.head.first().cloned()
         } else {
-            self.0.tail.last().unwrap().last()
+            self.tail.last().unwrap().last()
         }
     }
 
@@ -308,30 +288,28 @@ impl<A> CatList<A> {
             None
         } else if self.len() == 1 {
             Some(CatList::new())
-        } else if self.0.tail.is_empty() {
+        } else if self.tail.is_empty() {
             Some(CatList::from_head(
-                self.0
-                    .head
+                self.head
                     .iter()
-                    .take(self.0.head.len() - 1)
+                    .take(self.head.len() - 1)
                     .cloned()
                     .collect(),
             ))
-        } else if self.0.head.len() > 1 {
+        } else if self.head.len() > 1 {
             Some(CatList::make(
                 self.len() - 1,
                 Arc::new(
-                    self.0
-                        .head
+                    self.head
                         .iter()
-                        .take(self.0.head.len() - 1)
+                        .take(self.head.len() - 1)
                         .cloned()
                         .collect(),
                 ),
-                self.0.tail.clone(),
+                self.tail.clone(),
             ))
         } else {
-            Some(self.0.tail.iter().fold(CatList::new(), |a, b| a.append(b)))
+            Some(self.tail.iter().fold(CatList::new(), |a, b| a.append(b)))
         }
     }
 
@@ -359,28 +337,28 @@ impl<A> CatList<A> {
             (l, r) if l.is_empty() => r.clone(),
             (l, r) if r.is_empty() => l.clone(),
             (l, r) => {
-                if l.0.tail.is_empty() && l.0.head.len() + r.0.head.len() <= HASH_SIZE {
-                    let mut new_head = (*r.0.head).clone();
-                    new_head.extend(l.0.head.iter().cloned());
-                    CatList::make(l.len() + r.len(), new_head, r.0.tail.clone())
-                } else if !l.0.tail.is_empty() && l.0.tail.last().unwrap().0.tail.is_empty()
-                    && l.0.tail.last().unwrap().0.head.len() + r.0.head.len() <= HASH_SIZE
+                if l.tail.is_empty() && l.head.len() + r.head.len() <= HASH_SIZE {
+                    let mut new_head = (*r.head).clone();
+                    new_head.extend(l.head.iter().cloned());
+                    CatList::make(l.len() + r.len(), new_head, r.tail.clone())
+                } else if !l.tail.is_empty() && l.tail.last().unwrap().tail.is_empty()
+                    && l.tail.last().unwrap().head.len() + r.head.len() <= HASH_SIZE
                 {
-                    let (last, tail_but_last) = l.0.tail.pop_back().unwrap();
-                    let mut new_head = (*r.0.head).clone();
-                    new_head.extend(last.0.head.iter().cloned());
+                    let (last, tail_but_last) = l.tail.pop_back().unwrap();
+                    let mut new_head = (*r.head).clone();
+                    new_head.extend(last.head.iter().cloned());
                     let last_plus_right =
-                        CatList::make(last.len() + r.len(), new_head, r.0.tail.clone());
+                        CatList::make(last.len() + r.len(), new_head, r.tail.clone());
                     CatList::make(
                         l.len() + r.len(),
-                        l.0.head.clone(),
+                        l.head.clone(),
                         tail_but_last.push_back(last_plus_right),
                     )
                 } else {
                     CatList::make(
                         l.len() + r.len(),
-                        self.0.head.clone(),
-                        self.0.tail.push_back(r.clone()),
+                        self.head.clone(),
+                        self.tail.push_back(r.clone()),
                     )
                 }
             }
@@ -414,24 +392,16 @@ impl<A> CatList<A> {
         if other.is_empty() {
             return;
         } else if self.is_empty() {
-            self.0 = other.0.clone();
-        } else if self.0.tail.is_empty() && self.0.head.len() + other.0.head.len() <= HASH_SIZE {
-            let node = Arc::make_mut(&mut self.0);
-            node.head = Arc::new(
-                other
-                    .0
-                    .head
-                    .iter()
-                    .chain(node.head.iter())
-                    .cloned()
-                    .collect(),
-            );
-            node.tail = Vector::singleton(other.clone());
-            node.size += other.len();
+            self.size = other.size;
+            self.head = other.head.clone();
+            self.tail = other.tail.clone();
+        } else if self.tail.is_empty() && self.head.len() + other.head.len() <= HASH_SIZE {
+            self.head = Arc::new(other.head.iter().chain(self.head.iter()).cloned().collect());
+            self.tail = Vector::singleton(other.clone());
+            self.size += other.len();
         } else {
-            let node = Arc::make_mut(&mut self.0);
-            node.tail.push_back_mut(other.borrow().clone());
-            node.size += other.len();
+            self.tail.push_back_mut(other.borrow().clone());
+            self.size += other.len();
         }
     }
 
@@ -439,19 +409,16 @@ impl<A> CatList<A> {
     where
         R: Shared<A>,
     {
-        if self.0.head.len() >= HASH_SIZE {
-            let next = CatList(self.0.clone());
-            self.0 = Arc::new(ListNode {
-                size: 1,
-                head: Arc::new(vec![a.shared()]),
-                tail: Vector::new(),
-            });
+        if self.head.len() >= HASH_SIZE {
+            let next = self.clone();
+            self.size = 1;
+            self.head = Arc::new(vec![a.shared()]);
+            self.tail = Vector::new();
             self.append_mut(next);
         } else {
-            let node = Arc::make_mut(&mut self.0);
-            let head = Arc::make_mut(&mut node.head);
+            let head = Arc::make_mut(&mut self.head);
             head.push(a.shared());
-            node.size += 1;
+            self.size += 1;
         }
     }
 
@@ -459,11 +426,10 @@ impl<A> CatList<A> {
     where
         R: Shared<A>,
     {
-        if self.0.tail.is_empty() && self.0.head.len() < HASH_SIZE {
-            let node = Arc::make_mut(&mut self.0);
-            let head = Arc::make_mut(&mut node.head);
+        if self.tail.is_empty() && self.head.len() < HASH_SIZE {
+            let head = Arc::make_mut(&mut self.head);
             head.insert(0, a.shared());
-            node.size += 1;
+            self.size += 1;
         } else {
             self.append_mut(CatList::singleton(a))
         }
@@ -472,20 +438,17 @@ impl<A> CatList<A> {
     pub fn pop_front_mut(&mut self) -> Option<Arc<A>> {
         if self.is_empty() {
             None
-        } else if self.0.head.len() > 1 {
-            let node = Arc::make_mut(&mut self.0);
-            let head = Arc::make_mut(&mut node.head);
+        } else if self.head.len() > 1 {
+            let head = Arc::make_mut(&mut self.head);
             let item = head.pop();
-            node.size -= 1;
+            self.size -= 1;
             item
         } else {
-            let item = self.0.head.last().cloned();
-            let tail = self.0.tail.clone();
-            self.0 = Arc::new(ListNode {
-                size: 0,
-                head: Arc::new(Vec::new()),
-                tail: Vector::new(),
-            });
+            let item = self.head.last().cloned();
+            let tail = self.tail.clone();
+            self.size = 0;
+            self.head = Default::default();
+            self.tail = Default::default();
             for list in tail {
                 self.append_mut(list);
             }
@@ -496,19 +459,17 @@ impl<A> CatList<A> {
     pub fn pop_back_mut(&mut self) -> Option<Arc<A>> {
         if self.is_empty() {
             None
-        } else if self.0.tail.is_empty() {
-            let node = Arc::make_mut(&mut self.0);
-            node.size -= 1;
-            let head = Arc::make_mut(&mut node.head);
+        } else if self.tail.is_empty() {
+            self.size -= 1;
+            let head = Arc::make_mut(&mut self.head);
             Some(head.remove(0))
         } else {
-            let node = Arc::make_mut(&mut self.0);
-            node.size -= 1;
-            let mut last = node.tail.pop_back_mut().unwrap();
+            self.size -= 1;
+            let mut last = self.tail.pop_back_mut().unwrap();
             let last_node = Arc::make_mut(&mut last);
             let item = last_node.pop_back_mut();
             if !last_node.is_empty() {
-                node.tail.push_back_mut(last_node.clone());
+                self.tail.push_back_mut(last_node.clone());
             }
             item
         }
@@ -806,7 +767,11 @@ impl CatList<i32> {
 
 impl<A> Clone for CatList<A> {
     fn clone(&self) -> Self {
-        CatList(self.0.clone())
+        CatList {
+            size: self.size,
+            head: self.head.clone(),
+            tail: self.tail.clone(),
+        }
     }
 }
 
@@ -841,7 +806,9 @@ impl<A: PartialEq> PartialEq for CatList<A> {
 #[cfg(has_specialisation)]
 impl<A: Eq> PartialEq for CatList<A> {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0) || self.len() == other.len() && self.iter().eq(other.iter())
+        self.len() == other.len()
+            && ((Arc::ptr_eq(&self.head, &other.head) && self.tail == other.tail)
+                || self.iter().eq(other.iter()))
     }
 }
 
@@ -1083,11 +1050,11 @@ pub mod proptest {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use super::proptest::*;
-    use test::is_sorted;
-    use proptest::num::i32;
+    use super::*;
     use proptest::collection;
+    use proptest::num::i32;
+    use test::is_sorted;
 
     #[test]
     fn basic_consistency() {
@@ -1101,11 +1068,8 @@ mod test {
         loop {
             assert_eq!(vec.len() - index, list.len());
             assert_eq!(
-                list.0.size,
-                list.0
-                    .tail
-                    .iter()
-                    .fold(list.0.head.len(), |a, n| a + n.len())
+                list.size,
+                list.tail.iter().fold(list.head.len(), |a, n| a + n.len())
             );
             match list.pop_front() {
                 None => {
