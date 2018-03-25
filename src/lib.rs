@@ -35,13 +35,13 @@
 //!
 //! Care has been taken to use method names similar to those
 //! in Rust over those used in the source material (largely
-//! Haskell) where possible (eg. `List::new()` rather than
-//! `List::empty()`, `Map::get()` rather than `Map::lookup()`).
+//! Haskell) where possible (eg. `Vector::new()` rather than
+//! `Vector::empty()`, `HashMap::get()` rather than `HashMap::lookup()`).
 //! Where Rust equivalents don't exist, terminology tends to
 //! follow Haskell where the Haskell isn't too confusing,
 //! or, when it is, we provide more readily understandable
 //! aliases (because we wouldn't want to deprive the user
-//! of their enjoyment of the word '[`snoc`][list::List::snoc],'
+//! of their enjoyment of the word '[`snoc`][conslist::ConsList::snoc],'
 //! even though it's reportedly not an obviously intuitive term).
 //!
 //! ## Why Immutable Data Structures
@@ -78,10 +78,10 @@
 //!
 //! While all immutable data structures tend to be less efficient than their mutable
 //! counterparts, when chosen carefully they can perform just as well for the operations
-//! you need, and there are some, like [`List`][list::List] and [`HashMap`][hashmap::HashMap],
+//! you need, and there are some, like [`Vector`][vector::Vector] and [`HashMap`][hashmap::HashMap],
 //! which have performance characteristics good enough for most operations that you can
 //! safely choose them without worrying too much about whether they're going to be the
-//! right choice for any given use case. Better yet, some of them can even be safely
+//! right choice for any given use case. Better yet, most of them can even be safely
 //! mutated in place when they aren't sharing any structure with other instances,
 //! making them nearly as performant as their mutable counterparts.
 //!
@@ -115,10 +115,11 @@
 //! operations, and index lookup tends to be O(n). Lists are for collections of
 //! items where you expect to iterate rather than lookup.
 //!
-//! | Type | Constraints | Order | Push Front | Pop Front | Push Back | Pop Back |
+//! | Type | Constraints | Order | Push Front | Pop Front | Push Back | Pop Back | Append | Lookup |
 //! | --- | --- | --- | --- | --- | --- | --- |
-//! | [`List<A>`][list::List] | | insertion | O(1)* | O(1)* | O(1)* | O(1)* |
-//! | [`ConsList<A>`][conslist::ConsList] | | insertion | O(1) | O(1) | O(n) | O(n) |
+//! | [`Vector<A>`][vector::Vector] | | insertion | O(1)* | O(1)* | O(1)* | O(1)* | O(n) | O(1)* |
+//! | [`CatList<A>`][catlist::CatList] | | insertion | O(1)* | O(1)* | O(1)* | O(1)* | O(1) | O(n) |
+//! | [`ConsList<A>`][conslist::ConsList] | | insertion | O(1) | O(1) | O(n) | O(n) | O(n) | O(n) |
 //!
 //! ### Maps
 //!
@@ -144,19 +145,6 @@
 //! | --- | --- | --- | --- | --- | --- |
 //! | [`HashSet<A>`][hashset::HashSet] | [`Hash`][std::hash::Hash] + [`Eq`][std::cmp::Eq] | undefined | O(1)* | O(1)* | O(1)* |
 //! | [`OrdSet<A>`][ordset::OrdSet] | [`Ord`][std::cmp::Ord] | sorted | O(log n) | O(log n) | O(log n) |
-//!
-//! ### Queues
-//!
-//! Queues are specialised data structures where you can only append
-//! items to the end of the queue, and pop them off the front.
-//!
-//! Strictly speaking, these queues are called *FIFO queues* ("first in, first out"),
-//! and there are other types of queue in which items go in and come out in different
-//! ways, but we currently only provide this one type.
-//!
-//! | Type | Constraints | Ordering | Push | Pop |
-//! | --- | --- | --- | --- | --- |
-//! | [`Queue<A>`][queue::Queue] | | FIFO | O(1)* | O(1)* |
 //!
 //! ## In-place Mutation
 //!
@@ -185,9 +173,9 @@
 //! [ordmap::OrdMap]: ./ordmap/struct.OrdMap.html
 //! [ordset::OrdSet]: ./ordset/struct.OrdSet.html
 //! [conslist::ConsList]: ./conslist/struct.ConsList.html
-//! [list::List]: ./list/struct.List.html
-//! [queue::Queue]: ./queue/struct.Queue.html
-//! [list::List::snoc]: ./list/struct.List.html#method.snoc
+//! [catlist::CatList]: ./catlist/struct.CatList.html
+//! [vector::Vector]: ./vector/struct.Vector.html
+//! [conslist::ConsList::snoc]: ./conlist/struct.ConsList.html#method.snoc
 
 // Get some clippy feedback: `cargo +nightly build --features "clippy"`
 #![cfg_attr(feature = "clippy", feature(plugin))]
@@ -218,6 +206,7 @@ extern crate serde_json;
 #[macro_use]
 extern crate lazy_static;
 
+mod bits;
 pub mod hash;
 #[macro_use]
 pub mod conslist;
@@ -230,7 +219,7 @@ pub mod ordset;
 #[macro_use]
 pub mod hashset;
 #[macro_use]
-pub mod list;
+pub mod catlist;
 #[macro_use]
 pub mod vector;
 
@@ -248,12 +237,11 @@ pub use ordmap::OrdMap;
 pub use hashmap::HashMap;
 pub use ordset::OrdSet;
 pub use hashset::HashSet;
-pub use list::List;
+pub use catlist::CatList;
 pub use conslist::ConsList;
 pub use vector::Vector;
 pub use iter::unfold;
 
-pub type Set<A> = HashSet<A>;
-pub type Map<K, V> = HashMap<K, V>;
-
-mod bits;
+pub type List<A> = vector::Vector<A>;
+pub type Set<A> = hashset::HashSet<A>;
+pub type Map<K, V> = hashmap::HashMap<K, V>;

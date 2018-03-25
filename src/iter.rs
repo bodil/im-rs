@@ -34,14 +34,14 @@ where
 /// ```
 /// # #[macro_use] extern crate im;
 /// # use im::iter::unfold;
-/// # use im::list::List;
+/// # use im::catlist::CatList;
 /// # fn main() {
 /// // Create an infinite stream of numbers, starting at 0.
 /// let mut it = unfold(0, |i| Some((*i, *i + 1)));
 ///
 /// // Make a list out of its first five elements.
-/// let numbers = List::from(it.take(5));
-/// assert_eq!(numbers, list![0, 1, 2, 3, 4]);
+/// let numbers = CatList::from(it.take(5));
+/// assert_eq!(numbers, catlist![0, 1, 2, 3, 4]);
 /// # }
 /// ```
 ///

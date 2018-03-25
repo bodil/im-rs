@@ -1,6 +1,7 @@
 //! A cons list.
 //!
-//! A cons list is a singly linked list built out of 'cons cells,'
+//! The cons list is perhaps the most basic immutable data structure:
+//! a singly linked list built out of 'cons cells,'
 //! which are cells containing two values, the left hand value being
 //! the head of the list and the right hand value being a reference
 //! to the rest of the list, or a `Nil` value denoting the end of the
@@ -13,13 +14,14 @@
 //! the length of a list is also O(1). Otherwise, operations
 //! are generally O(n).
 //!
-//! Unless you know you want a `ConsList`, you might be better
-//! off using a [`List`][list::List], which has more generically efficient
-//! performance characteristics, but which is outperformed by
-//! the `ConsList` if you're usually only operating on the
-//! front of the list.
+//! Unless you know you want a `ConsList`, you're probably better off
+//! using a [`Vector`][vector::Vector], which has more efficient
+//! performance characteristics in almost all cases. The `ConsList`
+//! is particularly useful as an immutable stack where you only
+//! push and pop items from the front of the list. Beware that it has
+//! no mutable operations.
 //!
-//! [list::List]: ../list/struct.List.html
+//! [vector::Vector]: ../vector/struct.Vector.html
 
 use std::sync::Arc;
 use std::iter::{FromIterator, Iterator, Sum};
@@ -123,7 +125,14 @@ where
     cdr.borrow().cons(car)
 }
 
-/// An implementation of immutable proper cons lists.
+/// An immutable proper cons lists.
+///
+/// The cons list is perhaps the most basic immutable data structure:
+/// a singly linked list built out of 'cons cells,'
+/// which are cells containing two values, the left hand value being
+/// the head of the list and the right hand value being a reference
+/// to the rest of the list, or a `Nil` value denoting the end of the
+/// list.
 ///
 /// Structure can be shared between lists (and is reference
 /// counted), and append to the front of a list is O(1).
@@ -132,13 +141,14 @@ where
 /// the length of a list is also O(1). Otherwise, operations
 /// are generally O(n).
 ///
-/// Items in the list are stored in [`Arc`][std::sync::Arc]s, and insertion
-/// operations accept any value for which there's a [`Shared`][shared::Shared]
-/// implementation into `Arc<A>`. Iterators and lookup
-/// operations, conversely, produce `Arc<A>`.
+/// Unless you know you want a `ConsList`, you're probably better off
+/// using a [`Vector`][vector::Vector], which has more efficient
+/// performance characteristics in almost all cases. The `ConsList`
+/// is particularly useful as an immutable stack where you only
+/// push and pop items from the front of the list. Beware that it has
+/// no mutable operations.
 ///
-/// [std::sync::Arc]: https://doc.rust-lang.org/std/sync/struct.Arc.html
-/// [shared::Shared]: ./shared/trait.Shared.html
+/// [vector::Vector]: ../vector/struct.Vector.html
 pub struct ConsList<A>(Arc<ConsListNode<A>>);
 
 #[doc(hidden)]

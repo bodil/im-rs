@@ -1,19 +1,14 @@
 //! A catenable list.
 //!
-//! A data structure like the simple [`ConsList`][conslist::ConsList] but with
-//! efficient (generally O(1) in the worst case) add
-//! and remove operations on both ends, implemented as a [`Queue`][queue::Queue]
-//! of [`ConsList`][conslist::ConsList]s.
+//! A list data structure with O(1)* push and pop operations on both ends and
+//! O(1) concatenation of lists.
 //!
-//! If you need a list but haven't thought hard about your
-//! performance requirements, this is most likely the list you
-//! want. If you're mostly going to be consing and unconsing, and
-//! you have a lot of data, or a lot of lists, you might want the
-//! [`ConsList`][conslist::ConsList] instead. If you really just need a queue, you might
-//! be looking for the [`Queue`][queue::Queue]. When in doubt, choose the [`List`][list::List].
+//! You usually want the [`Vector`][vector::Vector] instead, which performs better
+//! on all operations except concatenation. If fast concatenation is what you need,
+//! the `CatList` is the cat for you.
 //!
 //! [queue::Queue]: ../queue/struct.Queue.html
-//! [list::List]: ../list/struct.List.html
+//! [vector::Vector]: ../vector/struct.Vector.html
 //! [conslist::ConsList]: ../conslist/struct.ConsList.html
 
 use std::sync::Arc;
@@ -33,25 +28,25 @@ use bits::HASH_SIZE;
 ///
 /// ```
 /// # #[macro_use] extern crate im;
-/// # use im::list::{List, cons};
+/// # use im::catlist::{CatList, cons};
 /// # fn main() {
 /// assert_eq!(
-///   list![1, 2, 3],
-///   List::from(vec![1, 2, 3])
+///   catlist![1, 2, 3],
+///   CatList::from(vec![1, 2, 3])
 /// );
 ///
 /// assert_eq!(
-///   list![1, 2, 3],
-///   cons(1, cons(2, cons(3, List::new())))
+///   catlist![1, 2, 3],
+///   cons(1, cons(2, cons(3, CatList::new())))
 /// );
 /// # }
 /// ```
 #[macro_export]
-macro_rules! list {
-    () => { $crate::list::List::new() };
+macro_rules! catlist {
+    () => { $crate::catlist::CatList::new() };
 
     ( $($x:expr),* ) => {{
-        let mut l = $crate::list::List::new();
+        let mut l = $crate::catlist::CatList::new();
         $(
             l = l.push_back($x);
         )*
@@ -65,19 +60,19 @@ macro_rules! list {
 /// front of the list `cdr`.
 ///
 /// This is just a shorthand for `list.cons(item)`, but I find
-/// it much easier to read `cons(1, cons(2, List::new()))`
-/// than `List::new().cons(2).cons(1)`, given that the resulting
+/// it much easier to read `cons(1, cons(2, CatList::new()))`
+/// than `CatList::new().cons(2).cons(1)`, given that the resulting
 /// list will be `[1, 2]`.
 ///
 /// # Examples
 ///
 /// ```
 /// # #[macro_use] extern crate im;
-/// # use im::list::{List, cons};
+/// # use im::catlist::{CatList, cons};
 /// # fn main() {
 /// assert_eq!(
-///   cons(1, cons(2, cons(3, List::new()))),
-///   list![1, 2, 3]
+///   cons(1, cons(2, cons(3, CatList::new()))),
+///   catlist![1, 2, 3]
 /// );
 /// # }
 /// ```
@@ -107,36 +102,33 @@ macro_rules! list {
 /// `cdr` of the `cdr`) is 'cadudder'. It can get a little subtle for the
 /// untrained ear.
 #[inline]
-pub fn cons<A, RA, RD>(car: RA, cdr: RD) -> List<A>
+pub fn cons<A, RA, RD>(car: RA, cdr: RD) -> CatList<A>
 where
     RA: Shared<A>,
-    RD: Borrow<List<A>>,
+    RD: Borrow<CatList<A>>,
 {
     cdr.borrow().cons(car)
 }
 
 /// A catenable list of values of type `A`.
 ///
-/// A data structure like the simple [`ConsList`][conslist::ConsList] but with
-/// efficient (generally O(1) in the worst case) add
-/// and remove operations on both ends.
+/// A list data structure with O(1)* push and pop operations on both ends and
+/// O(1) concatenation of lists.
 ///
-/// If you need a list but haven't thought hard about your
-/// performance requirements, this is most likely the list you
-/// want. If you're mostly going to be consing and unconsing, and
-/// you have a lot of data, or a lot of lists, you might want the
-/// [`ConsList`][conslist::ConsList] instead.
-/// When in doubt, choose the [`List`][list::List].
+/// You usually want the [`Vector`][vector::Vector] instead, which performs better
+/// on all operations except concatenation. If fast concatenation is what you need,
+/// the `CatList` is the cat for you.
 ///
-/// [list::List]: ../list/struct.List.html
+/// [queue::Queue]: ../queue/struct.Queue.html
+/// [vector::Vector]: ../vector/struct.Vector.html
 /// [conslist::ConsList]: ../conslist/struct.ConsList.html
-pub struct List<A>(Arc<ListNode<A>>);
+pub struct CatList<A>(Arc<ListNode<A>>);
 
 #[doc(hidden)]
 pub struct ListNode<A> {
     size: usize,
     head: Arc<Vec<Arc<A>>>,
-    tail: Vector<List<A>>,
+    tail: Vector<CatList<A>>,
 }
 
 impl<A> ListNode<A> {
@@ -159,10 +151,10 @@ impl<A> Clone for ListNode<A> {
     }
 }
 
-impl<A> List<A> {
+impl<A> CatList<A> {
     /// Construct an empty list.
     pub fn new() -> Self {
-        List(Arc::new(ListNode::new()))
+        CatList(Arc::new(ListNode::new()))
     }
 
     /// Construct a list with a single value.
@@ -170,19 +162,19 @@ impl<A> List<A> {
     where
         R: Shared<A>,
     {
-        List::from_head(vec![a.shared()])
+        CatList::from_head(vec![a.shared()])
     }
 
     fn from_head(head: Vec<Arc<A>>) -> Self {
-        List(Arc::new(ListNode {
+        CatList(Arc::new(ListNode {
             size: head.len(),
             head: Arc::new(head),
             tail: Vector::new(),
         }))
     }
 
-    fn make<VA: Shared<Vec<Arc<A>>>>(size: usize, head: VA, tail: Vector<List<A>>) -> Self {
-        List(Arc::new(ListNode {
+    fn make<VA: Shared<Vec<Arc<A>>>>(size: usize, head: VA, tail: Vector<CatList<A>>) -> Self {
+        CatList(Arc::new(ListNode {
             size,
             head: head.shared(),
             tail,
@@ -200,17 +192,17 @@ impl<A> List<A> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::list::List;
+    /// # use im::catlist::CatList;
     /// # fn main() {
     /// assert_eq!(
-    ///   List::from(vec![1, 2, 3, 4, 5]),
-    ///   list![1, 2, 3, 4, 5]
+    ///   CatList::from(vec![1, 2, 3, 4, 5]),
+    ///   catlist![1, 2, 3, 4, 5]
     /// );
     /// # }
     /// ```
     ///
     /// [std::iter::IntoIterator]: https://doc.rust-lang.org/std/iter/trait.IntoIterator.html
-    pub fn from<R, I>(it: I) -> List<A>
+    pub fn from<R, I>(it: I) -> CatList<A>
     where
         I: IntoIterator<Item = R>,
         R: Shared<A>,
@@ -232,7 +224,7 @@ impl<A> List<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # fn main() {
-    /// assert_eq!(5, list![1, 2, 3, 4, 5].len());
+    /// assert_eq!(5, catlist![1, 2, 3, 4, 5].len());
     /// # }
     /// ```
     pub fn len(&self) -> usize {
@@ -256,13 +248,13 @@ impl<A> List<A> {
     /// If the list is empty, [`None`][None] is returned.
     ///
     /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
-    pub fn pop_back(&self) -> Option<(Arc<A>, List<A>)> {
+    pub fn pop_back(&self) -> Option<(Arc<A>, CatList<A>)> {
         if self.is_empty() {
             None
         } else if self.0.tail.is_empty() {
             Some((
                 self.0.head.first().unwrap().clone(),
-                List::from_head(self.0.head.iter().skip(1).cloned().collect()),
+                CatList::from_head(self.0.head.iter().skip(1).cloned().collect()),
             ))
         } else {
             match self.0.tail.pop_back() {
@@ -277,7 +269,7 @@ impl<A> List<A> {
                         };
                         Some((
                             last_item,
-                            List(Arc::new(new_node)).append(list_without_last_item),
+                            CatList(Arc::new(new_node)).append(list_without_last_item),
                         ))
                     }
                 },
@@ -301,7 +293,7 @@ impl<A> List<A> {
     /// Get the list without the last element.
     ///
     /// If the list is empty, `None` is returned.
-    pub fn init(&self) -> Option<List<A>> {
+    pub fn init(&self) -> Option<CatList<A>> {
         self.pop_back().map(|a| a.1)
     }
 
@@ -315,9 +307,9 @@ impl<A> List<A> {
         if self.is_empty() {
             None
         } else if self.len() == 1 {
-            Some(List::new())
+            Some(CatList::new())
         } else if self.0.tail.is_empty() {
-            Some(List::from_head(
+            Some(CatList::from_head(
                 self.0
                     .head
                     .iter()
@@ -326,7 +318,7 @@ impl<A> List<A> {
                     .collect(),
             ))
         } else if self.0.head.len() > 1 {
-            Some(List::make(
+            Some(CatList::make(
                 self.len() - 1,
                 Arc::new(
                     self.0
@@ -339,7 +331,7 @@ impl<A> List<A> {
                 self.0.tail.clone(),
             ))
         } else {
-            Some(self.0.tail.iter().fold(List::new(), |a, b| a.append(b)))
+            Some(self.0.tail.iter().fold(CatList::new(), |a, b| a.append(b)))
         }
     }
 
@@ -351,11 +343,11 @@ impl<A> List<A> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::list::List;
+    /// # use im::catlist::CatList;
     /// # fn main() {
     /// assert_eq!(
-    ///   list![1, 2, 3].append(list![7, 8, 9]),
-    ///   list![1, 2, 3, 7, 8, 9]
+    ///   catlist![1, 2, 3].append(catlist![7, 8, 9]),
+    ///   catlist![1, 2, 3, 7, 8, 9]
     /// );
     /// # }
     /// ```
@@ -370,7 +362,7 @@ impl<A> List<A> {
                 if l.0.tail.is_empty() && l.0.head.len() + r.0.head.len() <= HASH_SIZE {
                     let mut new_head = (*r.0.head).clone();
                     new_head.extend(l.0.head.iter().cloned());
-                    List::make(l.len() + r.len(), new_head, r.0.tail.clone())
+                    CatList::make(l.len() + r.len(), new_head, r.0.tail.clone())
                 } else if !l.0.tail.is_empty() && l.0.tail.last().unwrap().0.tail.is_empty()
                     && l.0.tail.last().unwrap().0.head.len() + r.0.head.len() <= HASH_SIZE
                 {
@@ -378,14 +370,14 @@ impl<A> List<A> {
                     let mut new_head = (*r.0.head).clone();
                     new_head.extend(last.0.head.iter().cloned());
                     let last_plus_right =
-                        List::make(last.len() + r.len(), new_head, r.0.tail.clone());
-                    List::make(
+                        CatList::make(last.len() + r.len(), new_head, r.0.tail.clone());
+                    CatList::make(
                         l.len() + r.len(),
                         l.0.head.clone(),
                         tail_but_last.push_back(last_plus_right),
                     )
                 } else {
-                    List::make(
+                    CatList::make(
                         l.len() + r.len(),
                         self.0.head.clone(),
                         self.0.tail.push_back(r.clone()),
@@ -401,7 +393,7 @@ impl<A> List<A> {
     where
         R: Shared<A>,
     {
-        List::singleton(a).append(self)
+        CatList::singleton(a).append(self)
     }
 
     /// Construct a list with a new value prepended to the front of the
@@ -448,7 +440,7 @@ impl<A> List<A> {
         R: Shared<A>,
     {
         if self.0.head.len() >= HASH_SIZE {
-            let next = List(self.0.clone());
+            let next = CatList(self.0.clone());
             self.0 = Arc::new(ListNode {
                 size: 1,
                 head: Arc::new(vec![a.shared()]),
@@ -473,7 +465,7 @@ impl<A> List<A> {
             head.insert(0, a.shared());
             node.size += 1;
         } else {
-            self.append_mut(List::singleton(a))
+            self.append_mut(CatList::singleton(a))
         }
     }
 
@@ -536,7 +528,7 @@ impl<A> List<A> {
     where
         R: Shared<A>,
     {
-        self.append(List::singleton(a))
+        self.append(CatList::singleton(a))
     }
 
     /// Construct a list with a new value appended to the back of the
@@ -563,9 +555,9 @@ impl<A> List<A> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::list::{List, cons};
+    /// # use im::catlist::{CatList, cons};
     /// # use std::fmt::Debug;
-    /// fn walk_through_list<A>(list: &List<A>) where A: Debug {
+    /// fn walk_through_list<A>(list: &CatList<A>) where A: Debug {
     ///     match list.pop_front() {
     ///         None => (),
     ///         Some((ref head, ref tail)) => {
@@ -581,7 +573,7 @@ impl<A> List<A> {
     /// [head]: #method.head
     /// [tail]: #method.tail
     /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
-    pub fn pop_front(&self) -> Option<(Arc<A>, List<A>)> {
+    pub fn pop_front(&self) -> Option<(Arc<A>, CatList<A>)> {
         self.head().and_then(|h| self.tail().map(|t| (h, t)))
     }
 
@@ -591,11 +583,11 @@ impl<A> List<A> {
     ///
     /// [pop_front]: #method.pop_front
     #[inline]
-    pub fn uncons(&self) -> Option<(Arc<A>, List<A>)> {
+    pub fn uncons(&self) -> Option<(Arc<A>, CatList<A>)> {
         self.pop_front()
     }
 
-    pub fn uncons2(&self) -> Option<(Arc<A>, Arc<A>, List<A>)> {
+    pub fn uncons2(&self) -> Option<(Arc<A>, Arc<A>, CatList<A>)> {
         self.uncons()
             .and_then(|(a1, d)| d.uncons().map(|(a2, d)| (a1, a2, d)))
     }
@@ -620,18 +612,18 @@ impl<A> List<A> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::list::List;
+    /// # use im::catlist::CatList;
     /// # fn main() {
     /// assert_eq!(
-    ///   list![1, 2, 3, 4, 5].reverse(),
-    ///   list![5, 4, 3, 2, 1]
+    ///   catlist![1, 2, 3, 4, 5].reverse(),
+    ///   catlist![5, 4, 3, 2, 1]
     /// );
     /// # }
     /// ```
     ///
     /// [rev]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.rev
     pub fn reverse(&self) -> Self {
-        let mut out = List::new();
+        let mut out = CatList::new();
         for i in self.iter() {
             out = out.cons(i)
         }
@@ -645,7 +637,7 @@ impl<A> List<A> {
     where
         F: Fn(&A, &A) -> Ordering,
     {
-        fn merge<A>(la: &List<A>, lb: &List<A>, cmp: &Fn(&A, &A) -> Ordering) -> List<A> {
+        fn merge<A>(la: &CatList<A>, lb: &CatList<A>, cmp: &Fn(&A, &A) -> Ordering) -> CatList<A> {
             match (la.uncons(), lb.uncons()) {
                 (Some((ref a, _)), Some((ref b, ref lb1))) if cmp(a, b) == Ordering::Greater => {
                     cons(b.clone(), &merge(la, lb1, cmp))
@@ -656,16 +648,19 @@ impl<A> List<A> {
             }
         }
 
-        fn merge_pairs<A>(l: &List<List<A>>, cmp: &Fn(&A, &A) -> Ordering) -> List<List<A>> {
+        fn merge_pairs<A>(
+            l: &CatList<CatList<A>>,
+            cmp: &Fn(&A, &A) -> Ordering,
+        ) -> CatList<CatList<A>> {
             match l.uncons2() {
                 Some((a, b, rest)) => cons(merge(&a, &b, cmp), &merge_pairs(&rest, cmp)),
                 _ => l.clone(),
             }
         }
 
-        fn merge_all<A>(l: &List<List<A>>, cmp: &Fn(&A, &A) -> Ordering) -> List<A> {
+        fn merge_all<A>(l: &CatList<CatList<A>>, cmp: &Fn(&A, &A) -> Ordering) -> CatList<A> {
             match l.uncons() {
-                None => list![],
+                None => catlist![],
                 Some((ref a, ref d)) if d.is_empty() => a.deref().clone(),
                 _ => merge_all(&merge_pairs(l, cmp), cmp),
             }
@@ -673,24 +668,24 @@ impl<A> List<A> {
 
         fn ascending<A>(
             a: &Arc<A>,
-            f: &Fn(List<A>) -> List<A>,
-            l: &List<A>,
+            f: &Fn(CatList<A>) -> CatList<A>,
+            l: &CatList<A>,
             cmp: &Fn(&A, &A) -> Ordering,
-        ) -> List<List<A>> {
+        ) -> CatList<CatList<A>> {
             match l.uncons() {
                 Some((ref b, ref lb)) if cmp(a, b) != Ordering::Greater => {
                     ascending(&b.clone(), &|ys| f(cons(a.clone(), &ys)), lb, cmp)
                 }
-                _ => cons(f(List::singleton(a.clone())), &sequences(l, cmp)),
+                _ => cons(f(CatList::singleton(a.clone())), &sequences(l, cmp)),
             }
         }
 
         fn descending<A>(
             a: &Arc<A>,
-            la: &List<A>,
-            lb: &List<A>,
+            la: &CatList<A>,
+            lb: &CatList<A>,
             cmp: &Fn(&A, &A) -> Ordering,
-        ) -> List<List<A>> {
+        ) -> CatList<CatList<A>> {
             match lb.uncons() {
                 Some((ref b, ref bs)) if cmp(a, b) == Ordering::Greater => {
                     descending(&b.clone(), &cons(a.clone(), la), bs, cmp)
@@ -699,15 +694,15 @@ impl<A> List<A> {
             }
         }
 
-        fn sequences<A>(l: &List<A>, cmp: &Fn(&A, &A) -> Ordering) -> List<List<A>> {
+        fn sequences<A>(l: &CatList<A>, cmp: &Fn(&A, &A) -> Ordering) -> CatList<CatList<A>> {
             match l.uncons2() {
                 Some((ref a, ref b, ref xs)) if cmp(a, b) == Ordering::Greater => {
-                    descending(&b.clone(), &List::singleton(a.clone()), xs, cmp)
+                    descending(&b.clone(), &CatList::singleton(a.clone()), xs, cmp)
                 }
                 Some((ref a, ref b, ref xs)) => {
                     ascending(&b.clone(), &|l| cons(a.clone(), l), xs, cmp)
                 }
-                None => list![l.clone()],
+                None => catlist![l.clone()],
             }
         }
 
@@ -722,11 +717,11 @@ impl<A> List<A> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::list::List;
+    /// # use im::catlist::CatList;
     /// # fn main() {
     /// assert_eq!(
-    ///   list![2, 8, 1, 6, 3, 7, 5, 4].sort(),
-    ///   List::range(1, 8)
+    ///   catlist![2, 8, 1, 6, 3, 7, 5, 4].sort(),
+    ///   CatList::range(1, 8)
     /// );
     /// # }
     /// ```
@@ -751,8 +746,8 @@ impl<A> List<A> {
     /// # #[macro_use] extern crate im;
     /// # fn main() {
     /// assert_eq!(
-    ///   list![2, 4, 6].insert(5).insert(1).insert(3),
-    ///   list![1, 2, 3, 4, 5, 6]
+    ///   catlist![2, 4, 6].insert(5).insert(1).insert(3),
+    ///   catlist![1, 2, 3, 4, 5, 6]
     /// );
     /// # }
     /// ```
@@ -769,7 +764,7 @@ impl<A> List<A> {
         A: Ord,
     {
         match self.uncons() {
-            None => List::singleton(item),
+            None => CatList::singleton(item),
             Some((a, d)) => {
                 if a.deref() > item.deref() {
                     self.cons(item)
@@ -781,23 +776,23 @@ impl<A> List<A> {
     }
 }
 
-impl List<i32> {
+impl CatList<i32> {
     /// Construct a list of numbers between `from` and `to` inclusive.
     ///
     /// # Examples
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::list::{List, cons};
+    /// # use im::catlist::{CatList, cons};
     /// # fn main() {
     /// assert_eq!(
-    ///   List::range(1, 5),
-    ///   list![1, 2, 3, 4, 5]
+    ///   CatList::range(1, 5),
+    ///   catlist![1, 2, 3, 4, 5]
     /// );
     /// # }
     /// ```
-    pub fn range(from: i32, to: i32) -> List<i32> {
-        let mut list = List::new();
+    pub fn range(from: i32, to: i32) -> CatList<i32> {
+        let mut list = CatList::new();
         let mut c = to;
         while c >= from {
             list = cons(c, &list);
@@ -809,20 +804,20 @@ impl List<i32> {
 
 // Core traits
 
-impl<A> Clone for List<A> {
+impl<A> Clone for CatList<A> {
     fn clone(&self) -> Self {
-        List(self.0.clone())
+        CatList(self.0.clone())
     }
 }
 
-impl<A> Default for List<A> {
+impl<A> Default for CatList<A> {
     fn default() -> Self {
-        List::new()
+        CatList::new()
     }
 }
 
-impl<A> Add for List<A> {
-    type Output = List<A>;
+impl<A> Add for CatList<A> {
+    type Output = CatList<A>;
 
     fn add(self, other: Self) -> Self::Output {
         self.append(&other)
@@ -830,41 +825,41 @@ impl<A> Add for List<A> {
 }
 
 #[cfg(not(has_specialisation))]
-impl<A: PartialEq> PartialEq for List<A> {
+impl<A: PartialEq> PartialEq for CatList<A> {
     fn eq(&self, other: &Self) -> bool {
         self.len() == other.len() && self.iter().eq(other.iter())
     }
 }
 
 #[cfg(has_specialisation)]
-impl<A: PartialEq> PartialEq for List<A> {
+impl<A: PartialEq> PartialEq for CatList<A> {
     default fn eq(&self, other: &Self) -> bool {
         self.len() == other.len() && self.iter().eq(other.iter())
     }
 }
 
 #[cfg(has_specialisation)]
-impl<A: Eq> PartialEq for List<A> {
+impl<A: Eq> PartialEq for CatList<A> {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0) || self.len() == other.len() && self.iter().eq(other.iter())
     }
 }
 
-impl<A: Eq> Eq for List<A> {}
+impl<A: Eq> Eq for CatList<A> {}
 
-impl<A: PartialOrd> PartialOrd for List<A> {
+impl<A: PartialOrd> PartialOrd for CatList<A> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.iter().partial_cmp(other.iter())
     }
 }
 
-impl<A: Ord> Ord for List<A> {
+impl<A: Ord> Ord for CatList<A> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.iter().cmp(other.iter())
     }
 }
 
-impl<A: Hash> Hash for List<A> {
+impl<A: Hash> Hash for CatList<A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         for i in self {
             i.hash(state)
@@ -872,7 +867,7 @@ impl<A: Hash> Hash for List<A> {
     }
 }
 
-impl<A: Debug> Debug for List<A> {
+impl<A: Debug> Debug for CatList<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         // write!(
         //     f,
@@ -904,7 +899,7 @@ impl<A: Debug> Debug for List<A> {
 
 /// An iterator over lists with values of type `A`.
 pub struct Iter<A> {
-    current: List<A>,
+    current: CatList<A>,
 }
 
 impl<A> Iterator for Iter<A> {
@@ -942,7 +937,7 @@ impl<A> DoubleEndedIterator for Iter<A> {
 
 impl<A> ExactSizeIterator for Iter<A> {}
 
-impl<A> IntoIterator for List<A> {
+impl<A> IntoIterator for CatList<A> {
     type Item = Arc<A>;
     type IntoIter = Iter<A>;
 
@@ -951,7 +946,7 @@ impl<A> IntoIterator for List<A> {
     }
 }
 
-impl<'a, A> IntoIterator for &'a List<A> {
+impl<'a, A> IntoIterator for &'a CatList<A> {
     type Item = Arc<A>;
     type IntoIter = Iter<A>;
 
@@ -960,7 +955,7 @@ impl<'a, A> IntoIterator for &'a List<A> {
     }
 }
 
-impl<A> Sum for List<A> {
+impl<A> Sum for CatList<A> {
     fn sum<I>(it: I) -> Self
     where
         I: Iterator<Item = Self>,
@@ -969,7 +964,7 @@ impl<A> Sum for List<A> {
     }
 }
 
-impl<A, T> FromIterator<T> for List<A>
+impl<A, T> FromIterator<T> for CatList<A>
 where
     T: Shared<A>,
 {
@@ -983,7 +978,7 @@ where
 
 // Conversions
 
-impl<'a, A, T> From<&'a [T]> for List<A>
+impl<'a, A, T> From<&'a [T]> for CatList<A>
 where
     &'a T: Shared<A>,
 {
@@ -992,7 +987,7 @@ where
     }
 }
 
-impl<'a, A, T> From<&'a Vec<T>> for List<A>
+impl<'a, A, T> From<&'a Vec<T>> for CatList<A>
 where
     &'a T: Shared<A>,
 {
@@ -1001,13 +996,13 @@ where
     }
 }
 
-impl<A> From<Vec<A>> for List<A> {
+impl<A> From<Vec<A>> for CatList<A> {
     fn from(vec: Vec<A>) -> Self {
         vec.into_iter().collect()
     }
 }
 
-impl<A> From<Vec<Arc<A>>> for List<A> {
+impl<A> From<Vec<Arc<A>>> for CatList<A> {
     fn from(vec: Vec<Arc<A>>) -> Self {
         if vec.len() <= HASH_SIZE {
             Self::from_head(vec)
@@ -1023,9 +1018,9 @@ impl<A> From<Vec<Arc<A>>> for List<A> {
 use quickcheck::{Arbitrary, Gen};
 
 #[cfg(any(test, feature = "quickcheck"))]
-impl<A: Arbitrary + Sync> Arbitrary for List<A> {
+impl<A: Arbitrary + Sync> Arbitrary for CatList<A> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
-        List::from_iter(Vec::<A>::arbitrary(g))
+        CatList::from_iter(Vec::<A>::arbitrary(g))
     }
 }
 
@@ -1044,18 +1039,18 @@ pub mod proptest {
     /// ```rust,ignore
     /// proptest! {
     ///     #[test]
-    ///     fn proptest_a_list(ref l in list(".*", 10..100)) {
+    ///     fn proptest_a_catlist(ref l in catlist(".*", 10..100)) {
     ///         assert!(l.len() < 100);
     ///         assert!(l.len() >= 10);
     ///     }
     /// }
     /// ```
-    pub fn list<T: Strategy + 'static>(
+    pub fn catlist<T: Strategy + 'static>(
         element: T,
         size: Range<usize>,
-    ) -> BoxedStrategy<List<<T::Value as ValueTree>::Value>> {
+    ) -> BoxedStrategy<CatList<<T::Value as ValueTree>::Value>> {
         ::proptest::collection::vec(element, size)
-            .prop_map(List::from)
+            .prop_map(CatList::from)
             .boxed()
     }
 
@@ -1066,20 +1061,20 @@ pub mod proptest {
     /// ```rust,ignore
     /// proptest! {
     ///     #[test]
-    ///     fn proptest_ordered_list(ref l in ordered_list(".*", 10..100)) {
+    ///     fn proptest_ordered_catlist(ref l in ordered_catlist(".*", 10..100)) {
     ///         assert_eq!(l, l.sort());
     ///     }
     /// }
     /// ```
-    pub fn ordered_list<T: Strategy + 'static>(
+    pub fn ordered_catlist<T: Strategy + 'static>(
         element: T,
         size: Range<usize>,
-    ) -> BoxedStrategy<List<<T::Value as ValueTree>::Value>>
+    ) -> BoxedStrategy<CatList<<T::Value as ValueTree>::Value>>
     where
         <T::Value as ValueTree>::Value: Ord,
     {
         ::proptest::collection::vec(element, size)
-            .prop_map(|v| List::from(v).sort())
+            .prop_map(|v| CatList::from(v).sort())
             .boxed()
     }
 }
@@ -1100,7 +1095,7 @@ mod test {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, -1,
         ];
-        let mut list = List::from_iter(vec.clone());
+        let mut list = CatList::from_iter(vec.clone());
         assert_eq!(Some(Arc::new(-1)), list.last());
         let mut index = 0;
         loop {
@@ -1129,43 +1124,43 @@ mod test {
     proptest! {
         #[test]
         fn length(ref v in collection::vec(i32::ANY, 0..100)) {
-            let list = List::from_iter(v.clone());
+            let list = CatList::from_iter(v.clone());
             v.len() == list.len()
         }
 
         #[test]
         fn order(ref vec in collection::vec(i32::ANY, 0..100)) {
-            let list = List::from_iter(vec.clone());
+            let list = CatList::from_iter(vec.clone());
             assert_eq!(vec, &Vec::from_iter(list.iter().map(|a| *a)));
         }
 
         #[test]
         fn reverse_order(ref vec in collection::vec(i32::ANY, 0..100)) {
-            let list = List::from_iter(vec.iter().rev().cloned());
+            let list = CatList::from_iter(vec.iter().rev().cloned());
             assert_eq!(vec, &Vec::from_iter(list.iter().rev().map(|a| *a)));
         }
 
         #[test]
         fn equality(ref vec in collection::vec(i32::ANY, 0..100)) {
-            let left = List::from_iter(vec.clone());
-            let right = List::from_iter(vec.clone());
+            let left = CatList::from_iter(vec.clone());
+            let right = CatList::from_iter(vec.clone());
             assert_eq!(left, right);
         }
 
         #[test]
-        fn proptest_a_list(ref l in list(i32::ANY, 10..100)) {
+        fn proptest_a_list(ref l in catlist(i32::ANY, 10..100)) {
             assert!(l.len() < 100);
             assert!(l.len() >= 10);
         }
 
         #[test]
-        fn proptest_ordered_list(ref l in ordered_list(i32::ANY, 10..100)) {
+        fn proptest_ordered_list(ref l in ordered_catlist(i32::ANY, 10..100)) {
             assert_eq!(l, &l.sort());
         }
 
         #[test]
         fn push_back(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut list = List::new();
+            let mut list = CatList::new();
             for (count, value) in input.iter().cloned().enumerate() {
                 assert_eq!(count, list.len());
                 list = list.push_back(value);
@@ -1176,7 +1171,7 @@ mod test {
 
         #[test]
         fn push_back_mut(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut list = List::new();
+            let mut list = CatList::new();
             for (count, value) in input.iter().cloned().enumerate() {
                 assert_eq!(count, list.len());
                 list.push_back_mut(value);
@@ -1187,7 +1182,7 @@ mod test {
 
         #[test]
         fn push_front(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut list = List::new();
+            let mut list = CatList::new();
             for (count, value) in input.iter().cloned().enumerate() {
                 assert_eq!(count, list.len());
                 list = list.push_front(value);
@@ -1198,7 +1193,7 @@ mod test {
 
         #[test]
         fn push_front_mut(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut list = List::new();
+            let mut list = CatList::new();
             for (count, value) in input.iter().cloned().enumerate() {
                 assert_eq!(count, list.len());
                 list.push_front_mut(value);
@@ -1209,7 +1204,7 @@ mod test {
 
         #[test]
         fn pop_back(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut list = List::from_iter(input.iter().cloned());
+            let mut list = CatList::from_iter(input.iter().cloned());
             for value in input.iter().rev().cloned() {
                 if let Some((popped, new_list)) = list.pop_back() {
                     assert_eq!(Arc::new(value), popped);
@@ -1223,7 +1218,7 @@ mod test {
 
         #[test]
         fn pop_back_mut(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut list = List::from_iter(input.iter().cloned());
+            let mut list = CatList::from_iter(input.iter().cloned());
             for value in input.iter().rev().cloned() {
                 assert_eq!(Some(Arc::new(value)), list.pop_back_mut());
             }
@@ -1232,7 +1227,7 @@ mod test {
 
         #[test]
         fn pop_front(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut list = List::from_iter(input.iter().cloned());
+            let mut list = CatList::from_iter(input.iter().cloned());
             for value in input.iter().cloned() {
                 if let Some((popped, new_list)) = list.pop_front() {
                     assert_eq!(Arc::new(value), popped);
@@ -1246,7 +1241,7 @@ mod test {
 
         #[test]
         fn pop_front_mut(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut list = List::from_iter(input.iter().cloned());
+            let mut list = CatList::from_iter(input.iter().cloned());
             for value in input.iter().cloned() {
                 assert_eq!(Some(Arc::new(value)), list.pop_front_mut());
             }
@@ -1254,21 +1249,21 @@ mod test {
         }
 
         #[test]
-        fn reverse_a_list(ref l in list(i32::ANY, 0..100)) {
+        fn reverse_a_list(ref l in catlist(i32::ANY, 0..100)) {
             let vec: Vec<i32> = l.iter().map(|v| *v).collect();
-            let rev = List::from_iter(vec.into_iter().rev());
+            let rev = CatList::from_iter(vec.into_iter().rev());
             assert_eq!(l.reverse(), rev);
         }
 
         #[test]
-        fn append_two_lists(ref xs in list(i32::ANY, 0..100), ref ys in list(i32::ANY, 0..100)) {
-            let extended = List::from_iter(xs.iter().map(|v| *v).chain(ys.iter().map(|v| *v)));
+        fn append_two_lists(ref xs in catlist(i32::ANY, 0..100), ref ys in catlist(i32::ANY, 0..100)) {
+            let extended = CatList::from_iter(xs.iter().map(|v| *v).chain(ys.iter().map(|v| *v)));
             assert_eq!(xs.append(ys), extended);
             assert_eq!(xs.append(ys).len(), extended.len());
         }
 
         #[test]
-        fn sort_a_list(ref l in list(i32::ANY, 0..100)) {
+        fn sort_a_list(ref l in catlist(i32::ANY, 0..100)) {
             let sorted = l.sort();
             assert_eq!(l.len(), sorted.len());
             assert!(is_sorted(&sorted));

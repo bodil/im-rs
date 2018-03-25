@@ -5,7 +5,7 @@ use std::hash::Hash;
 use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use hash::SharedHasher;
-use list::List;
+use catlist::CatList;
 use conslist::ConsList;
 use ordset::OrdSet;
 use ordmap::OrdMap;
@@ -118,18 +118,18 @@ where
     }
 }
 
-// List
+// CatList
 
-impl<'de, A: Deserialize<'de>> Deserialize<'de> for List<A> {
+impl<'de, A: Deserialize<'de>> Deserialize<'de> for CatList<A> {
     fn deserialize<D>(des: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        des.deserialize_seq(SeqVisitor::<'de, List<A>, A>::new())
+        des.deserialize_seq(SeqVisitor::<'de, CatList<A>, A>::new())
     }
 }
 
-impl<A: Serialize> Serialize for List<A> {
+impl<A: Serialize> Serialize for CatList<A> {
     fn serialize<S>(&self, ser: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -294,8 +294,8 @@ impl<A: Serialize> Serialize for Vector<A> {
 mod test {
     use super::*;
     use serde_json::{from_str, to_string};
-    use list::proptest::list;
     use proptest::num::i32;
+    use catlist::proptest::catlist;
     use conslist::proptest::conslist;
     use hashmap::proptest::hash_map;
     use hashset::proptest::hash_set;
@@ -305,8 +305,8 @@ mod test {
 
     proptest! {
         #[test]
-        fn ser_list(ref v in list(i32::ANY, 0..100)) {
-            assert_eq!(v, &from_str::<List<i32>>(&to_string(&v).unwrap()).unwrap());
+        fn ser_catlist(ref v in catlist(i32::ANY, 0..100)) {
+            assert_eq!(v, &from_str::<CatList<i32>>(&to_string(&v).unwrap()).unwrap());
         }
 
         #[test]

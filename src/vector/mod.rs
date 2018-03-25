@@ -2,17 +2,15 @@
 //!
 //! This is an implementation of Rich Hickey's [bitmapped vector tries][bmvt],
 //! which offers highly efficient (amortised linear time) index lookups as well
-//! as appending elements to, or popping elements off, the end of the vector.
+//! as appending elements to, or popping elements off, either side of the vector.
 //!
-//! Use this if you need a [`Vec`][Vec]-like structure with fast index lookups and
-//! similar performance characteristics otherwise.
-//! If you don't need lookups or updates by index, you might be better off using
-//! a [`List`][List], which has better performance characteristics for other
-//! structural operations.
+//! This is generally the best data structure if you're looking for something list
+//! like. If you don't need lookups or updates by index, but do need fast concatenation
+//! of whole lists, you should use the [`CatList`][CatList] instead.
 //!
 //! [bmvt]: https://hypirion.com/musings/understanding-persistent-vector-pt-1
 //! [Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
-//! [List]: ../list/struct.List.html
+//! [CatList]: ../catlist/struct.CatList.html
 
 use std::sync::Arc;
 use std::cmp::Ordering;
@@ -81,17 +79,15 @@ impl Default for Meta {
 ///
 /// This is an implementation of Rich Hickey's [bitmapped vector tries][bmvt],
 /// which offers highly efficient (amortised linear time) index lookups as well
-/// as appending elements to, or popping elements off, the end of the vector.
+/// as appending elements to, or popping elements off, either side of the vector.
 ///
-/// Use this if you need a [`Vec`][Vec]-like structure with fast index lookups and
-/// similar performance characteristics otherwise.
-/// If you don't need lookups or updates by index, you might be better off using
-/// a [`List`][List], which has better performance characteristics for other
-/// structural operations.
+/// This is generally the best data structure if you're looking for something list
+/// like. If you don't need lookups or updates by index, but do need fast concatenation
+/// of whole lists, you should use the [`CatList`][CatList] instead.
 ///
 /// [bmvt]: https://hypirion.com/musings/understanding-persistent-vector-pt-1
 /// [Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
-/// [List]: ../list/struct.List.html
+/// [CatList]: ../catlist/struct.CatList.html
 pub struct Vector<A> {
     meta: Meta,
     root: Arc<Node<A>>,
@@ -317,6 +313,10 @@ impl<A> Vector<A> {
         self.set_mut(len, value.shared());
     }
 
+    /// Construct a vector with a new value prepended to the front of the
+    /// current vector.
+    ///
+    /// Time: O(1)*
     pub fn push_front<RA>(&self, value: RA) -> Self
     where
         RA: Shared<A>,
@@ -327,6 +327,13 @@ impl<A> Vector<A> {
         v
     }
 
+    /// Update a vector in place with a new value prepended to the front of it.
+    ///
+    /// This is a copy-on-write operation, so that the parts of the vector's
+    /// structure which are shared with other vectors will be safely copied
+    /// before mutating.
+    ///
+    /// Time: O(1)*
     pub fn push_front_mut<RA>(&mut self, value: RA)
     where
         RA: Shared<A>,
@@ -370,6 +377,14 @@ impl<A> Vector<A> {
         Some(val)
     }
 
+    /// Get the first element of a vector, as well as the vector with the first
+    /// element removed.
+    ///
+    /// If the vector is empty, [`None`][None] is returned.
+    ///
+    /// Time: O(1)*
+    ///
+    /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
     pub fn pop_front(&self) -> Option<(Arc<A>, Self)> {
         if self.is_empty() {
             return None;
@@ -380,6 +395,13 @@ impl<A> Vector<A> {
         Some((val, v))
     }
 
+    /// Remove the first element of a vector in place and return it.
+    ///
+    /// This is a copy-on-write operation, so that the parts of the vector's
+    /// structure which are shared with other vectors will be safely copied
+    /// before mutating.
+    ///
+    /// Time: O(1)*
     pub fn pop_front_mut(&mut self) -> Option<Arc<A>> {
         if self.is_empty() {
             return None;
@@ -390,6 +412,11 @@ impl<A> Vector<A> {
         Some(val)
     }
 
+    /// Split a vector at a given index, returning a vector containing
+    /// every element before of the index and a vector containing
+    /// every element from the index onward.
+    ///
+    /// Time: O(1)*
     pub fn split_at(&self, index: usize) -> (Self, Self) {
         if index >= self.len() {
             return (self.clone(), Vector::new());
@@ -401,18 +428,30 @@ impl<A> Vector<A> {
         (left, right)
     }
 
+    /// Construct a vector with `count` elements removed from the
+    /// start of the current vector.
+    ///
+    /// Time: O(1)*
     pub fn skip(&self, count: usize) -> Self {
         let mut v = self.clone();
         v.resize(count as isize, self.len() as isize);
         v
     }
 
+    /// Construct a vector of the first `count` elements from the
+    /// current vector.
+    ///
+    /// Time: O(1)*
     pub fn take(&self, count: usize) -> Self {
         let mut v = self.clone();
         v.resize(0, count as isize);
         v
     }
 
+    /// Construct a vector with the elements from `start_index`
+    /// until `end_index` in the current vector.
+    ///
+    /// Time: O(1)*
     pub fn slice(&self, start_index: usize, end_index: usize) -> Self {
         if start_index >= end_index || start_index >= self.len() {
             return Vector::new();
@@ -424,7 +463,7 @@ impl<A> Vector<A> {
 
     /// Append the vector `other` to the end of the current vector.
     ///
-    /// Time: O(n)
+    /// Time: O(n) where n = the length of `other`
     ///
     /// # Examples
     ///
@@ -449,6 +488,12 @@ impl<A> Vector<A> {
         v
     }
 
+    /// Write from an iterator into a vector, starting at the given index.
+    ///
+    /// This will overwrite elements in the vector until the iterator ends
+    /// or the end of the vector is reached.
+    ///
+    /// Time: O(n) where n = the length of the iterator
     pub fn write<I: IntoIterator<Item = R>, R: Shared<A>>(&mut self, index: usize, iter: I) {
         if let Some(raw_index) = self.map_index(index) {
             let cap = self.meta.capacity;
@@ -515,13 +560,16 @@ impl<A> Vector<A> {
         v
     }
 
+    /// Reverse a vector in place.
+    ///
+    /// Time: O(1)
     pub fn reverse_mut(&mut self) {
         self.meta.reverse = !self.meta.reverse;
     }
 
     /// Sort a vector of ordered elements.
     ///
-    /// Time: O(n log n) roughly
+    /// Time: O(n log n) worst case
     ///
     /// # Examples
     ///
