@@ -25,12 +25,10 @@ use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{Hash, Hasher};
 use std::iter::{FromIterator, Sum};
-use std::marker::PhantomData;
 use std::ops::Add;
 use std::sync::Arc;
 
 use bits::{HASH_BITS, HASH_MASK, HASH_SIZE};
-use lens::PartialLens;
 use shared::Shared;
 
 mod nodes;
@@ -710,29 +708,6 @@ impl<A> Vector<A> {
         }
     }
 
-    /// Make a `PartialLens` from the vector to the value at the
-    /// given `index`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::vector::Vector;
-    /// # use std::sync::Arc;
-    /// # use im::lens::{self, PartialLens};
-    /// # fn main() {
-    /// let vector = vector!["foo"];
-    /// let lens = Vector::lens(0);
-    /// assert_eq!(lens.try_get(&vector), Some(Arc::new("foo")));
-    /// # }
-    /// ```
-    pub fn lens(index: usize) -> VectorLens<A> {
-        VectorLens {
-            index,
-            value: PhantomData,
-        }
-    }
-
     // Implementation details
 
     fn map_index(&self, index: usize) -> Option<usize> {
@@ -1065,43 +1040,6 @@ impl<A, R: Shared<A>> Extend<R> for Vector<A> {
 }
 
 // Conversions
-
-pub struct VectorLens<A> {
-    index: usize,
-    value: PhantomData<A>,
-}
-
-impl<A> Clone for VectorLens<A> {
-    fn clone(&self) -> Self {
-        VectorLens {
-            index: self.index,
-            value: PhantomData,
-        }
-    }
-}
-
-impl<A> PartialLens for VectorLens<A> {
-    type From = Vector<A>;
-    type To = A;
-
-    fn try_get(&self, s: &Self::From) -> Option<Arc<Self::To>> {
-        s.get(self.index)
-    }
-
-    fn try_put<Convert>(&self, cv: Option<Convert>, s: &Self::From) -> Option<Self::From>
-    where
-        Convert: Shared<Self::To>,
-    {
-        match cv.map(Shared::shared) {
-            None => panic!("can't remove from a vector through a lens"),
-            Some(v) => if self.index < s.len() {
-                Some(s.set(self.index, v))
-            } else {
-                None
-            },
-        }
-    }
-}
 
 impl<A, RA: Shared<A>> FromIterator<RA> for Vector<A> {
     fn from_iter<T>(iter: T) -> Self

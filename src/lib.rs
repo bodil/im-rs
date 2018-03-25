@@ -224,7 +224,6 @@ pub mod catlist;
 pub mod vector;
 
 pub mod iter;
-pub mod lens;
 pub mod shared;
 
 #[cfg(test)]

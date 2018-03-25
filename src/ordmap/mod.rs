@@ -21,10 +21,8 @@ use std::hash::{Hash, Hasher};
 use std::fmt::{Debug, Error, Formatter};
 use std::ops::Add;
 use std::borrow::Borrow;
-use std::marker::PhantomData;
 
 use shared::Shared;
-use lens::PartialLens;
 use hashmap::HashMap;
 
 mod nodes;
@@ -216,55 +214,6 @@ impl<K, V> OrdMap<K, V> {
 }
 
 impl<K: Ord, V> OrdMap<K, V> {
-    /// Make a `PartialLens` from the map to the value described by the
-    /// given `key`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::ordmap::OrdMap;
-    /// # use std::sync::Arc;
-    /// # use im::lens::{self, PartialLens};
-    /// # fn main() {
-    /// let map =
-    ///   ordmap!{
-    ///     "foo" => "bar"
-    /// };
-    /// let lens = OrdMap::lens("foo");
-    /// assert_eq!(lens.try_get(&map), Some(Arc::new("bar")));
-    /// # }
-    /// ```
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::ordmap::OrdMap;
-    /// # use im::lens::{self, PartialLens};
-    /// # use std::sync::Arc;
-    /// # fn main() {
-    /// // Make a lens into a map of maps
-    /// let map =
-    ///   ordmap!{
-    ///     "foo" => ordmap!{
-    ///       "bar" => "gazonk"
-    ///     }
-    /// };
-    /// let lens1 = OrdMap::lens("foo");
-    /// let lens2 = OrdMap::lens("bar");
-    /// let lens = lens::compose(&lens1, &lens2);
-    /// assert_eq!(lens.try_get(&map), Some(Arc::new("gazonk")));
-    /// # }
-    /// ```
-    pub fn lens<RK>(key: RK) -> OrdMapLens<K, V>
-    where
-        RK: Shared<K>,
-    {
-        OrdMapLens {
-            key: key.shared(),
-            value: PhantomData,
-        }
-    }
-
     /// Get the value for a key from a map.
     ///
     /// Time: O(log n)
@@ -1160,42 +1109,6 @@ where
 }
 
 // Conversions
-
-pub struct OrdMapLens<K, V> {
-    key: Arc<K>,
-    value: PhantomData<V>,
-}
-
-impl<K, V> Clone for OrdMapLens<K, V> {
-    fn clone(&self) -> Self {
-        OrdMapLens {
-            key: self.key.clone(),
-            value: PhantomData,
-        }
-    }
-}
-
-impl<K, V> PartialLens for OrdMapLens<K, V>
-where
-    K: Ord,
-{
-    type From = OrdMap<K, V>;
-    type To = V;
-
-    fn try_get(&self, s: &Self::From) -> Option<Arc<Self::To>> {
-        s.get(&self.key)
-    }
-
-    fn try_put<Convert>(&self, cv: Option<Convert>, s: &Self::From) -> Option<Self::From>
-    where
-        Convert: Shared<Self::To>,
-    {
-        Some(match cv.map(Shared::shared) {
-            None => s.remove(&self.key),
-            Some(v) => s.insert(self.key.clone(), v),
-        })
-    }
-}
 
 impl<K, V> AsRef<OrdMap<K, V>> for OrdMap<K, V> {
     fn as_ref(&self) -> &Self {

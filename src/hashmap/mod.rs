@@ -27,11 +27,9 @@ use std::iter::FromIterator;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};
 use std::borrow::Borrow;
-use std::marker::PhantomData;
 use std::collections;
 
 use shared::Shared;
-use lens::PartialLens;
 use hash::{SharedHasher, hash_key};
 use ordmap::OrdMap;
 
@@ -861,59 +859,6 @@ where
     {
         self.len() != other.borrow().len() && self.is_submap_by(other, cmp)
     }
-
-    /// Make a [`PartialLens`][PartialLens] from the hash map to the value described by the
-    /// given `key`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::hashmap::HashMap;
-    /// # use std::sync::Arc;
-    /// # use im::lens::{self, PartialLens};
-    /// # fn main() {
-    /// let map =
-    ///   hashmap!{
-    ///     "foo" => "bar"
-    /// };
-    /// let lens = HashMap::lens("foo");
-    /// assert_eq!(lens.try_get(&map), Some(Arc::new("bar")));
-    /// # }
-    /// ```
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::hashmap::HashMap;
-    /// # use im::lens::{self, PartialLens};
-    /// # use std::sync::Arc;
-    /// # fn main() {
-    /// // Make a lens into a map of maps
-    /// let map =
-    ///   hashmap!{
-    ///     "foo" => hashmap!{
-    ///       "bar" => "gazonk"
-    ///     }
-    /// };
-    /// let lens1 = HashMap::lens("foo");
-    /// let lens2 = HashMap::lens("bar");
-    /// let lens = lens::compose(&lens1, &lens2);
-    /// assert_eq!(lens.try_get(&map), Some(Arc::new("gazonk")));
-    /// # }
-    /// ```
-    ///
-    /// [PartialLens]: ../lens/trait.PartialLens.html
-    #[inline]
-    pub fn lens<RK>(key: RK) -> HashMapLens<K, V, S>
-    where
-        RK: Shared<K>,
-    {
-        HashMapLens {
-            key: key.shared(),
-            value: PhantomData,
-            hasher: PhantomData,
-        }
-    }
 }
 
 impl<K, V, S> HashMap<K, V, S>
@@ -1210,46 +1155,6 @@ impl<K, V, S> IntoIterator for HashMap<K, V, S> {
 }
 
 // Conversions
-
-pub struct HashMapLens<K, V, S> {
-    key: Arc<K>,
-    value: PhantomData<V>,
-    hasher: PhantomData<S>,
-}
-
-impl<K, V, S> Clone for HashMapLens<K, V, S> {
-    #[inline]
-    fn clone(&self) -> Self {
-        HashMapLens {
-            key: self.key.clone(),
-            value: PhantomData,
-            hasher: PhantomData,
-        }
-    }
-}
-
-impl<K, V, S> PartialLens for HashMapLens<K, V, S>
-where
-    K: Hash + Eq,
-    S: SharedHasher,
-{
-    type From = HashMap<K, V, S>;
-    type To = V;
-
-    fn try_get(&self, s: &Self::From) -> Option<Arc<Self::To>> {
-        s.get(&self.key)
-    }
-
-    fn try_put<Convert>(&self, cv: Option<Convert>, s: &Self::From) -> Option<Self::From>
-    where
-        Convert: Shared<Self::To>,
-    {
-        Some(match cv.map(Shared::shared) {
-            None => s.remove(&self.key),
-            Some(v) => s.insert(self.key.clone(), v),
-        })
-    }
-}
 
 impl<K, V, S> AsRef<HashMap<K, V, S>> for HashMap<K, V, S> {
     #[inline]
