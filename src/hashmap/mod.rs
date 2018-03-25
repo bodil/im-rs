@@ -20,22 +20,22 @@
 
 #![cfg_attr(feature = "clippy", allow(implicit_hasher))]
 
-use std::sync::Arc;
+use std::borrow::Borrow;
+use std::cmp::Ordering;
+use std::collections;
 use std::collections::hash_map::RandomState;
+use std::fmt::{Debug, Error, Formatter};
 use std::hash::{Hash, Hasher};
 use std::iter::FromIterator;
-use std::cmp::Ordering;
-use std::fmt::{Debug, Error, Formatter};
-use std::borrow::Borrow;
-use std::collections;
+use std::sync::Arc;
 
-use shared::Shared;
-use hash::{SharedHasher, hash_key};
+use hash::{hash_key, SharedHasher};
 use ordmap::OrdMap;
+use shared::Shared;
 
 mod nodes;
-use self::nodes::Node;
 pub use self::nodes::Iter;
+use self::nodes::Node;
 
 /// Construct a hash map from a sequence of key/value pairs.
 ///
@@ -415,6 +415,35 @@ where
         if added {
             self.size += 1
         }
+    }
+
+    /// Construct a new map by inserting a key/value mapping into a map.
+    ///
+    /// This is an alias for [`insert`][insert].
+    ///
+    /// [insert]: #method.insert
+    #[inline]
+    pub fn set<RK, RV>(&self, k: RK, v: RV) -> Self
+    where
+        RK: Shared<K>,
+        RV: Shared<V>,
+    {
+        self.insert(k, v)
+    }
+
+    /// Insert a key/value mapping into a map, mutating it in place when it is
+    /// safe to do so.
+    ///
+    /// This is an alias for [`insert_mut`][insert_mut].
+    ///
+    /// [insert_mut]: #method.insert_mut
+    #[inline]
+    pub fn set_mut<RK, RV>(&mut self, k: RK, v: RV)
+    where
+        RK: Shared<K>,
+        RV: Shared<V>,
+    {
+        self.insert_mut(k, v)
     }
 
     /// Construct a new hash map by inserting a key/value mapping into a map.

@@ -13,21 +13,21 @@
 //! [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 //! [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 
-use std::sync::Arc;
-use std::iter::{FromIterator, Iterator};
-use std::collections;
-use std::cmp::Ordering;
-use std::hash::{Hash, Hasher};
-use std::fmt::{Debug, Error, Formatter};
-use std::ops::Add;
 use std::borrow::Borrow;
+use std::cmp::Ordering;
+use std::collections;
+use std::fmt::{Debug, Error, Formatter};
+use std::hash::{Hash, Hasher};
+use std::iter::{FromIterator, Iterator};
+use std::ops::Add;
+use std::sync::Arc;
 
-use shared::Shared;
 use hashmap::HashMap;
+use shared::Shared;
 
 mod nodes;
-use self::nodes::{Insert, Node, Remove};
 pub use self::nodes::Iter;
+use self::nodes::{Insert, Node, Remove};
 
 /// Construct a map from a sequence of key/value pairs.
 ///
@@ -288,6 +288,35 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// ```
     pub fn contains_key(&self, k: &K) -> bool {
         self.get(k).is_some()
+    }
+
+    /// Construct a new map by inserting a key/value mapping into a map.
+    ///
+    /// This is an alias for [`insert`][insert].
+    ///
+    /// [insert]: #method.insert
+    #[inline]
+    pub fn set<RK, RV>(&self, k: RK, v: RV) -> Self
+    where
+        RK: Shared<K>,
+        RV: Shared<V>,
+    {
+        self.insert(k, v)
+    }
+
+    /// Insert a key/value mapping into a map, mutating it in place when it is
+    /// safe to do so.
+    ///
+    /// This is an alias for [`insert_mut`][insert_mut].
+    ///
+    /// [insert_mut]: #method.insert_mut
+    #[inline]
+    pub fn set_mut<RK, RV>(&mut self, k: RK, v: RV)
+    where
+        RK: Shared<K>,
+        RV: Shared<V>,
+    {
+        self.insert_mut(k, v)
     }
 
     /// Construct a new map by inserting a key/value mapping into a map.
@@ -1266,12 +1295,12 @@ pub mod proptest {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use super::proptest::*;
-    use test::is_sorted;
+    use super::*;
     use conslist::ConsList;
     use proptest::collection;
     use proptest::num::{usize, i16};
+    use test::is_sorted;
 
     #[test]
     fn iterates_in_order() {
