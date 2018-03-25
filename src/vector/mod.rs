@@ -20,18 +20,18 @@
 //! [Arc]: https://doc.rust-lang.org/std/sync/struct.Arc.html
 //! [CatList]: ../catlist/struct.CatList.html
 
-use std::sync::Arc;
-use std::cmp::Ordering;
-use std::marker::PhantomData;
 use std::borrow::Borrow;
+use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};
-use std::ops::Add;
 use std::hash::{Hash, Hasher};
 use std::iter::{FromIterator, Sum};
+use std::marker::PhantomData;
+use std::ops::Add;
+use std::sync::Arc;
 
-use shared::Shared;
-use lens::PartialLens;
 use bits::{HASH_BITS, HASH_MASK, HASH_SIZE};
+use lens::PartialLens;
+use shared::Shared;
 
 mod nodes;
 
@@ -579,6 +579,22 @@ impl<A> Vector<A> {
     /// Reverse a vector in place.
     ///
     /// Time: O(1)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::vector::Vector;
+    /// # fn main() {
+    /// let mut v = vector![1, 2, 3, 4, 5];
+    /// v.reverse_mut();
+    ///
+    /// assert_eq!(
+    ///   v,
+    ///   vector![5, 4, 3, 2, 1]
+    /// );
+    /// # }
+    /// ```
     pub fn reverse_mut(&mut self) {
         self.meta.reverse = !self.meta.reverse;
     }
@@ -720,15 +736,17 @@ impl<A> Vector<A> {
     // Implementation details
 
     fn map_index(&self, index: usize) -> Option<usize> {
-        if index >= self.len() {
+        let len = self.len();
+        if index >= len {
             return None;
         }
-        let i = self.meta.origin + index;
-        Some(if self.meta.reverse {
-            (self.len() - 1) - i
-        } else {
-            i
-        })
+        Some(
+            self.meta.origin + if self.meta.reverse {
+                (len - 1) - index
+            } else {
+                index
+            },
+        )
     }
 
     fn node_for(&self, index: usize) -> &Arc<Node<A>> {
@@ -760,8 +778,9 @@ impl<A> Vector<A> {
     fn resize(&mut self, mut start: isize, mut end: isize) {
         if self.meta.reverse {
             let len = self.len() as isize;
-            start = len - end;
-            end = len - start;
+            let swap = start;
+            start = if end < 0 { 0 } else { len } - end;
+            end = len - swap;
         }
 
         let mut o0 = self.meta.origin;
@@ -1271,11 +1290,11 @@ pub mod proptest {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use super::proptest::*;
-    use std::iter;
-    use proptest::num::i32;
+    use super::*;
     use proptest::collection;
+    use proptest::num::i32;
+    use std::iter;
 
     #[test]
     fn wat() {
@@ -1417,6 +1436,39 @@ mod test {
         }
 
         #[test]
+        fn pop_front(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut vector = Vector::from_iter(input.iter().cloned());
+            assert_eq!(input.len(), vector.len());
+            for (index, value) in input.iter().cloned().rev().enumerate().rev() {
+                match vector.pop_front() {
+                    None => panic!("vector emptied unexpectedly"),
+                    Some((item, next)) => {
+                        vector = next;
+                        assert_eq!(index, vector.len());
+                        assert_eq!(Arc::new(value), item);
+                    }
+                }
+            }
+            assert_eq!(0, vector.len());
+        }
+
+        #[test]
+        fn pop_front_mut(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut vector = Vector::from_iter(input.iter().cloned());
+            assert_eq!(input.len(), vector.len());
+            for (index, value) in input.iter().cloned().rev().enumerate().rev() {
+                match vector.pop_front_mut() {
+                    None => panic!("vector emptied unexpectedly"),
+                    Some(item) => {
+                        assert_eq!(index, vector.len());
+                        assert_eq!(Arc::new(value), item);
+                    }
+                }
+            }
+            assert_eq!(0, vector.len());
+        }
+
+        #[test]
         fn iterator(ref input in collection::vec(i32::ANY, 0..100)) {
             let vector = Vector::from_iter(input.iter().cloned());
             assert_eq!(input.len(), vector.len());
@@ -1483,6 +1535,66 @@ mod test {
             for (index, value) in input.iter().cloned().enumerate() {
                 assert_eq!(Some(Arc::new(value)), vector.get(index));
             }
+        }
+
+        #[test]
+        fn reversed_push_front(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut vector = Vector::new().reverse();
+            for (count, value) in input.iter().cloned().enumerate() {
+                assert_eq!(count, vector.len());
+                vector = vector.push_front(value);
+                assert_eq!(count + 1, vector.len());
+            }
+            vector = vector.reverse();
+            for (index, value) in input.iter().cloned().enumerate() {
+                assert_eq!(Some(Arc::new(value)), vector.get(index));
+            }
+        }
+
+        #[test]
+        fn reversed_push_back(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut vector = Vector::new().reverse();
+            for (count, value) in input.iter().cloned().enumerate() {
+                assert_eq!(count, vector.len());
+                vector = vector.push_back(value);
+                assert_eq!(count + 1, vector.len());
+            }
+            vector = vector.reverse();
+            assert_eq!(input, &Vec::from_iter(vector.iter().rev().map(|a| *a)));
+        }
+
+        #[test]
+        fn reversed_pop_front(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut vector = Vector::from_iter(input.iter().cloned()).reverse();
+            assert_eq!(input.len(), vector.len());
+            for (index, value) in input.iter().cloned().enumerate().rev() {
+                match vector.pop_front() {
+                    None => panic!("vector emptied unexpectedly"),
+                    Some((item, next)) => {
+                        vector = next;
+                        assert_eq!(index, vector.len());
+                        assert_eq!(Arc::new(value), item);
+                    }
+                }
+            }
+            assert_eq!(0, vector.len());
+        }
+
+        #[test]
+        fn reversed_pop_back(ref input in collection::vec(i32::ANY, 0..100)) {
+            let mut vector = Vector::from_iter(input.iter().cloned()).reverse();
+            assert_eq!(input.len(), vector.len());
+            for (index, value) in input.iter().cloned().rev().enumerate().rev() {
+                match vector.pop_back() {
+                    None => panic!("vector emptied unexpectedly"),
+                    Some((item, next)) => {
+                        vector = next;
+                        assert_eq!(index, vector.len());
+                        assert_eq!(Arc::new(value), item);
+                    }
+                }
+            }
+            assert_eq!(0, vector.len());
         }
     }
 }
