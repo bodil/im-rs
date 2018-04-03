@@ -1320,6 +1320,15 @@ mod test {
         assert_eq!(None, it.next());
     }
 
+    #[test]
+    fn safe_mutation() {
+        let v1 = Vector::from_iter(0..131072);
+        let mut v2 = v1.clone();
+        v2.set_mut(131000, 23);
+        assert_eq!(Some(Arc::new(23)), v2.get(131000));
+        assert_eq!(Some(Arc::new(131000)), v1.get(131000));
+    }
+
     proptest! {
         #[test]
         fn push_back(ref input in collection::vec(i32::ANY, 0..100)) {
