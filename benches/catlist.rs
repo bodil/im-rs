@@ -30,7 +30,7 @@ fn catlist_push_back(b: &mut Bencher) {
 
 #[bench]
 fn catlist_pop_front(b: &mut Bencher) {
-    let l = CatList::from(0..1001);
+    let l = CatList::from_iter(0..1001);
     b.iter(|| {
         let mut p = l.clone();
         for _ in 0..1000 {
@@ -41,7 +41,7 @@ fn catlist_pop_front(b: &mut Bencher) {
 
 #[bench]
 fn catlist_pop_back(b: &mut Bencher) {
-    let l = CatList::from(0..1001);
+    let l = CatList::from_iter(0..1001);
     b.iter(|| {
         let mut p = l.clone();
         for _ in 0..1000 {
@@ -52,7 +52,7 @@ fn catlist_pop_back(b: &mut Bencher) {
 
 #[bench]
 fn catlist_append(b: &mut Bencher) {
-    let size = Vec::from_iter((0..1000).into_iter().map(|i| CatList::from(0..i)));
+    let size = Vec::from_iter((0..1000).into_iter().map(|i| CatList::from_iter(0..i)));
     b.iter(|| {
         for item in &size {
             item.append(item.clone());
@@ -82,7 +82,7 @@ fn catlist_push_back_mut(b: &mut Bencher) {
 
 #[bench]
 fn catlist_pop_front_mut(b: &mut Bencher) {
-    let l = CatList::from(0..1001);
+    let l = CatList::from_iter(0..1001);
     b.iter(|| {
         let mut p = l.clone();
         for _ in 0..1000 {
@@ -93,7 +93,7 @@ fn catlist_pop_front_mut(b: &mut Bencher) {
 
 #[bench]
 fn catlist_pop_back_mut(b: &mut Bencher) {
-    let l = CatList::from(0..1001);
+    let l = CatList::from_iter(0..1001);
     b.iter(|| {
         let mut p = l.clone();
         for _ in 0..1000 {
@@ -104,7 +104,7 @@ fn catlist_pop_back_mut(b: &mut Bencher) {
 
 #[bench]
 fn catlist_append_mut(b: &mut Bencher) {
-    let size = Vec::from_iter((0..1000).into_iter().map(|i| CatList::from(0..i)));
+    let size = Vec::from_iter((0..1000).into_iter().map(|i| CatList::from_iter(0..i)));
     b.iter(|| {
         for item in &size {
             let mut l = item.clone();

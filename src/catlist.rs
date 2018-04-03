@@ -1,11 +1,11 @@
 //! A catenable list.
 //!
-//! A list data structure with O(1)* push and pop operations on both ends and
-//! O(1) concatenation of lists.
+//! A list data structure with O(1)* push and pop operations on both
+//! ends and O(1) concatenation of lists.
 //!
-//! You usually want the [`Vector`][vector::Vector] instead, which performs better
-//! on all operations except concatenation. If fast concatenation is what you need,
-//! the `CatList` is the cat for you.
+//! You usually want the [`Vector`][vector::Vector] instead, which
+//! performs better on all operations except concatenation. If instant
+//! concatenation is what you need, the `CatList` is the cat for you.
 //!
 //! [queue::Queue]: ../queue/struct.Queue.html
 //! [vector::Vector]: ../vector/struct.Vector.html
@@ -56,13 +56,13 @@ macro_rules! catlist {
 
 /// Prepend a value to a list.
 ///
-/// Constructs a list with the value `car` prepended to the
-/// front of the list `cdr`.
+/// Constructs a list with the value `car` prepended to the front of
+/// the list `cdr`.
 ///
-/// This is just a shorthand for `list.cons(item)`, but I find
-/// it much easier to read `cons(1, cons(2, CatList::new()))`
-/// than `CatList::new().cons(2).cons(1)`, given that the resulting
-/// list will be `[1, 2]`.
+/// This is just a shorthand for `list.cons(item)`, but I find it much
+/// easier to read `cons(1, cons(2, CatList::new()))` than
+/// `CatList::new().cons(2).cons(1)`, given that the resulting list
+/// will be `[1, 2]`.
 ///
 /// # Examples
 ///
@@ -84,15 +84,16 @@ macro_rules! catlist {
 /// cons cell, respectively. Cons cells in Lisp were simply containers
 /// for two values: the car and the cdr (pronounced 'cudder'), and,
 /// Lisp being an untyped language, had no restrictions on cons cells
-/// forming proper lists, but this is how they were most commonly used:
-/// forming singly linked lists by having the left hand side contain a
-/// value, and the right hand side a pointer to the rest of the list.
+/// forming proper lists, but this is how they were most commonly
+/// used: forming singly linked lists by having the left hand side
+/// contain a value, and the right hand side a pointer to the rest of
+/// the list.
 ///
-/// `cons` is short for 'construct', which is the easy one. `car` means
-/// 'contents of address register' and `cdr` means 'contents of decrement
-/// register.' These were the registers on the CPU of the IBM 704 computer
-/// (on which Lisp was originally implemented) used to hold the respective
-/// values.
+/// `cons` is short for 'construct', which is the easy one. `car`
+/// means 'contents of address register' and `cdr` means 'contents of
+/// decrement register.' These were the registers on the CPU of the
+/// IBM 704 computer (on which Lisp was originally implemented) used
+/// to hold the respective values.
 ///
 /// Lisp also commonly provided pre-composed sequences of the `car` and
 /// `cdr` functions, such as `cadr`, the `car` of the `cdr`, ie. the
@@ -112,12 +113,12 @@ where
 
 /// A catenable list of values of type `A`.
 ///
-/// A list data structure with O(1)* push and pop operations on both ends and
-/// O(1) concatenation of lists.
+/// A list data structure with O(1)* push and pop operations on both
+/// ends and O(1) concatenation of lists.
 ///
-/// You usually want the [`Vector`][vector::Vector] instead, which performs better
-/// on all operations except concatenation. If fast concatenation is what you need,
-/// the `CatList` is the cat for you.
+/// You usually want the [`Vector`][vector::Vector] instead, which
+/// performs better on all operations except concatenation. If instant
+/// concatenation is what you need, the `CatList` is the cat for you.
 ///
 /// [queue::Queue]: ../queue/struct.Queue.html
 /// [vector::Vector]: ../vector/struct.Vector.html
@@ -162,35 +163,6 @@ impl<A> CatList<A> {
         }
     }
 
-    /// Construct a list by consuming an [`IntoIterator`][std::iter::IntoIterator].
-    ///
-    /// Allows you to construct a list out of anything that implements
-    /// the [`IntoIterator`][std::iter::IntoIterator] trait.
-    ///
-    /// Time: O(n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::catlist::CatList;
-    /// # fn main() {
-    /// assert_eq!(
-    ///   CatList::from(vec![1, 2, 3, 4, 5]),
-    ///   catlist![1, 2, 3, 4, 5]
-    /// );
-    /// # }
-    /// ```
-    ///
-    /// [std::iter::IntoIterator]: https://doc.rust-lang.org/std/iter/trait.IntoIterator.html
-    pub fn from<R, I>(it: I) -> CatList<A>
-    where
-        I: IntoIterator<Item = R>,
-        R: Shared<A>,
-    {
-        it.into_iter().collect()
-    }
-
     /// Test whether a list is empty.
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -225,10 +197,12 @@ impl<A> CatList<A> {
         }
     }
 
-    /// Get the last element of a list, as well as the list with the last
-    /// element removed.
+    /// Get the last element of a list, as well as the list with the
+    /// last element removed.
     ///
     /// If the list is empty, [`None`][None] is returned.
+    ///
+    /// Time: O(1)*
     ///
     /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
     pub fn pop_back(&self) -> Option<(Arc<A>, CatList<A>)> {
@@ -259,6 +233,8 @@ impl<A> CatList<A> {
 
     /// Get the last element of a list.
     ///
+    /// Time: O(1)*
+    ///
     /// If the list is empty, `None` is returned.
     pub fn last(&self) -> Option<Arc<A>> {
         if self.is_empty() {
@@ -272,6 +248,8 @@ impl<A> CatList<A> {
 
     /// Get the list without the last element.
     ///
+    /// Time: O(1)*
+    ///
     /// If the list is empty, `None` is returned.
     pub fn init(&self) -> Option<CatList<A>> {
         self.pop_back().map(|a| a.1)
@@ -279,10 +257,11 @@ impl<A> CatList<A> {
 
     /// Get the tail of a list.
     ///
-    /// The tail means all elements in the list after the
-    /// first item (the head). If the list only has one
-    /// element, the result is an empty list. If the list is
-    /// empty, the result is `None`.
+    /// Time: O(1)
+    ///
+    /// The tail means all elements in the list after the first item
+    /// (the head). If the list only has one element, the result is an
+    /// empty list. If the list is empty, the result is `None`.
     pub fn tail(&self) -> Option<Self> {
         if self.is_empty() {
             None
@@ -315,7 +294,7 @@ impl<A> CatList<A> {
 
     /// Append the list `other` to the end of the current list.
     ///
-    /// Time: O(n)
+    /// Time: O(1)
     ///
     /// # Examples
     ///
@@ -365,25 +344,39 @@ impl<A> CatList<A> {
         }
     }
 
-    /// Construct a list with a new value prepended to the front of the
-    /// current list.
-    pub fn cons<R>(&self, a: R) -> Self
+    /// Construct a list with a new value prepended to the front of
+    /// the current list.
+    ///
+    /// Time: O(1)
+    #[inline]
+    pub fn push_front<R>(&self, a: R) -> Self
     where
         R: Shared<A>,
     {
         CatList::singleton(a).append(self)
     }
 
-    /// Construct a list with a new value prepended to the front of the
-    /// current list.
-    #[inline]
-    pub fn push_front<R>(&self, a: R) -> Self
-    where
-        R: Shared<A>,
-    {
-        self.cons(a)
-    }
-
+    /// Append the list `other` to the end of the current list, in
+    /// place.
+    ///
+    /// This is a copy-on-write operation, so that the parts of the
+    /// set's structure which are shared with other sets will be
+    /// safely copied before mutating.
+    ///
+    /// Time: O(1)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::catlist::CatList;
+    /// # fn main() {
+    /// let mut l = catlist![1, 2, 3];
+    /// l.append_mut(catlist![7, 8, 9]);
+    ///
+    /// assert_eq!(l, catlist![1, 2, 3, 7, 8, 9]);
+    /// # }
+    /// ```
     pub fn append_mut<R>(&mut self, other_ref: R)
     where
         R: Borrow<Self>,
@@ -405,6 +398,14 @@ impl<A> CatList<A> {
         }
     }
 
+    /// Push a value onto the front of a list, updating in
+    /// place.
+    ///
+    /// This is a copy-on-write operation, so that the parts of the
+    /// set's structure which are shared with other sets will be
+    /// safely copied before mutating.
+    ///
+    /// Time: O(1)
     pub fn push_front_mut<R>(&mut self, a: R)
     where
         R: Shared<A>,
@@ -422,6 +423,14 @@ impl<A> CatList<A> {
         }
     }
 
+    /// Push a value onto the back of a list, updating in
+    /// place.
+    ///
+    /// This is a copy-on-write operation, so that the parts of the
+    /// set's structure which are shared with other sets will be
+    /// safely copied before mutating.
+    ///
+    /// Time: O(1)
     pub fn push_back_mut<R>(&mut self, a: R)
     where
         R: Shared<A>,
@@ -435,6 +444,14 @@ impl<A> CatList<A> {
         }
     }
 
+    /// Remove a value from the front of a list, updating in place.
+    /// Returns the removed value.
+    ///
+    /// This is a copy-on-write operation, so that the parts of the
+    /// set's structure which are shared with other sets will be
+    /// safely copied before mutating.
+    ///
+    /// Time: O(1)*
     pub fn pop_front_mut(&mut self) -> Option<Arc<A>> {
         if self.is_empty() {
             None
@@ -456,6 +473,14 @@ impl<A> CatList<A> {
         }
     }
 
+    /// Remove a value from the back of a list, updating in place.
+    /// Returns the removed value.
+    ///
+    /// This is a copy-on-write operation, so that the parts of the
+    /// set's structure which are shared with other sets will be
+    /// safely copied before mutating.
+    ///
+    /// Time: O(1)*
     pub fn pop_back_mut(&mut self) -> Option<Arc<A>> {
         if self.is_empty() {
             None
@@ -483,6 +508,8 @@ impl<A> CatList<A> {
     /// If you don't find that as clever as whoever coined the term no
     /// doubt did, this method is also available as [`push_back()`][push_back].
     ///
+    /// Time: O(1)
+    ///
     /// [push_back]: #method.push_back
     /// [cons]: #method.cons
     pub fn snoc<R>(&self, a: R) -> Self
@@ -494,6 +521,8 @@ impl<A> CatList<A> {
 
     /// Construct a list with a new value appended to the back of the
     /// current list.
+    ///
+    /// Time: O(1)
     #[inline]
     pub fn push_back<R>(&self, a: R) -> Self
     where
@@ -508,6 +537,8 @@ impl<A> CatList<A> {
     /// the [`tail`][tail] function in one go, returning a tuple
     /// of the head and the tail, or [`None`][None] if the list is
     /// empty.
+    ///
+    /// Time: O(1)*
     ///
     /// # Examples
     ///
@@ -538,9 +569,27 @@ impl<A> CatList<A> {
         self.head().and_then(|h| self.tail().map(|t| (h, t)))
     }
 
+    /// Construct a list with a new value prepended to the front of
+    /// the current list.
+    ///
+    /// This is an alias for [push_front], for the Lispers in the
+    /// house.
+    ///
+    /// Time: O(1)
+    ///
+    /// [push_front]: #method.push_front
+    pub fn cons<R>(&self, a: R) -> Self
+    where
+        R: Shared<A>,
+    {
+        self.push_front(a)
+    }
+
     /// Get the head and the tail of a list.
     ///
     /// This is an alias for [`pop_front`][pop_front].
+    ///
+    /// Time: O(1)*
     ///
     /// [pop_front]: #method.pop_front
     #[inline]
@@ -563,9 +612,10 @@ impl<A> CatList<A> {
 
     /// Construct a list which is the reverse of the current list.
     ///
-    /// Please note that if all you want is to iterate over the list from back to front,
-    /// it is much more efficient to use a [reversed iterator][rev] rather than doing
-    /// the work of reversing the list first.
+    /// Please note that if all you want is to iterate over the list
+    /// from back to front, it is much more efficient to use a
+    /// [reversed iterator][rev] rather than doing the work of
+    /// reversing the list first.
     ///
     /// Time: O(n)
     ///
@@ -679,13 +729,15 @@ impl<A> CatList<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::catlist::CatList;
+    /// # use std::iter::FromIterator;
     /// # fn main() {
     /// assert_eq!(
     ///   catlist![2, 8, 1, 6, 3, 7, 5, 4].sort(),
-    ///   CatList::range(1, 8)
+    ///   CatList::from_iter(1..9)
     /// );
     /// # }
     /// ```
+    #[inline]
     pub fn sort(&self) -> Self
     where
         A: Ord,
@@ -696,8 +748,12 @@ impl<A> CatList<A> {
     /// Insert an item into a sorted list.
     ///
     /// Constructs a new list with the new item inserted before the
-    /// first item in the list which is larger than the new item,
-    /// as determined by the `Ord` trait.
+    /// first item in the list which is larger than the new item, as
+    /// determined by the `Ord` trait.
+    ///
+    /// Please note that this is a very inefficient operation; if you
+    /// want a sorted list, consider if [`OrdSet`][ordset::OrdSet]
+    /// might be a better choice for you.
     ///
     /// Time: O(n)
     ///
@@ -707,59 +763,37 @@ impl<A> CatList<A> {
     /// # #[macro_use] extern crate im;
     /// # fn main() {
     /// assert_eq!(
-    ///   catlist![2, 4, 6].insert(5).insert(1).insert(3),
+    ///   catlist![2, 4, 5].insert(1).insert(3).insert(6),
     ///   catlist![1, 2, 3, 4, 5, 6]
     /// );
     /// # }
     /// ```
+    ///
+    /// [ordset::OrdSet]: ../ordset/struct.OrdSet.html
+    #[inline]
     pub fn insert<T>(&self, item: T) -> Self
     where
         A: Ord,
         T: Shared<A>,
     {
-        self.insert_ref(item.shared())
-    }
-
-    fn insert_ref(&self, item: Arc<A>) -> Self
-    where
-        A: Ord,
-    {
-        match self.uncons() {
-            None => CatList::singleton(item),
-            Some((a, d)) => {
-                if a.deref() > item.deref() {
-                    self.cons(item)
-                } else {
-                    d.insert_ref(item).cons(a.clone())
-                }
+        let value = item.shared();
+        let mut out = CatList::new();
+        let mut inserted = false;
+        for next in self {
+            if next < value {
+                out.push_back_mut(next);
+                continue;
             }
+            if !inserted {
+                out.push_back_mut(value.clone());
+                inserted = true;
+            }
+            out.push_back_mut(next);
         }
-    }
-}
-
-impl CatList<i32> {
-    /// Construct a list of numbers between `from` and `to` inclusive.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::catlist::{CatList, cons};
-    /// # fn main() {
-    /// assert_eq!(
-    ///   CatList::range(1, 5),
-    ///   catlist![1, 2, 3, 4, 5]
-    /// );
-    /// # }
-    /// ```
-    pub fn range(from: i32, to: i32) -> CatList<i32> {
-        let mut list = CatList::new();
-        let mut c = to;
-        while c >= from {
-            list = cons(c, &list);
-            c -= 1;
+        if !inserted {
+            out.push_back_mut(value);
         }
-        list
+        out
     }
 }
 
@@ -1220,7 +1254,10 @@ mod test {
         }
 
         #[test]
-        fn append_two_lists(ref xs in catlist(i32::ANY, 0..100), ref ys in catlist(i32::ANY, 0..100)) {
+        fn append_two_lists(
+            ref xs in catlist(i32::ANY, 0..100),
+            ref ys in catlist(i32::ANY, 0..100)
+        ) {
             let extended = CatList::from_iter(xs.iter().map(|v| *v).chain(ys.iter().map(|v| *v)));
             assert_eq!(xs.append(ys), extended);
             assert_eq!(xs.append(ys).len(), extended.len());

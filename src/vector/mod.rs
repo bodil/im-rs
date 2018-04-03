@@ -1,18 +1,21 @@
 //! A vector.
 //!
-//! This is an implementation of Rich Hickey's [bitmapped vector tries][bmvt],
-//! which offers highly efficient (amortised linear time) index lookups as well
-//! as appending elements to, or popping elements off, either side of the vector.
+//! This is an implementation of [bitmapped vector tries][bmvt], which
+//! offers highly efficient (amortised linear time) index lookups as
+//! well as appending elements to, or popping elements off, either
+//! side of the vector.
 //!
-//! This is generally the best data structure if you're looking for something list
-//! like. If you don't need lookups or updates by index, but do need fast concatenation
-//! of whole lists, you should use the [`CatList`][CatList] instead.
+//! This is generally the best data structure if you're looking for
+//! something list like. If you don't need lookups or updates by
+//! index, but do need fast concatenation of whole lists, you should
+//! use the [`CatList`][CatList] instead.
 //!
-//! If you're familiar with the Clojure variant, this improves on it by being
-//! efficiently extensible at the front as well as the back. If you're familiar with
-//! [Immutable.js][immutablejs], this is essentially the same, but with easier
-//! mutability because Rust has the advantage of direct access to the garbage
-//! collector (which in our case is just [`Arc`][Arc]).
+//! If you're familiar with the Clojure variant, this improves on it
+//! by being efficiently extensible at the front as well as the back.
+//! If you're familiar with [Immutable.js][immutablejs], this is
+//! essentially the same, but with easier mutability because Rust has
+//! the advantage of direct access to the garbage collector (which in
+//! our case is just [`Arc`][Arc]).
 //!
 //! [bmvt]: https://hypirion.com/musings/understanding-persistent-vector-pt-1
 //! [immutablejs]: https://facebook.github.io/immutable-js/
@@ -83,19 +86,22 @@ impl Default for Meta {
 
 /// A persistent vector of elements of type `A`.
 ///
-/// This is an implementation of Rich Hickey's [bitmapped vector tries][bmvt],
-/// which offers highly efficient (amortised linear time) index lookups as well
-/// as appending elements to, or popping elements off, either side of the vector.
+/// This is an implementation of [bitmapped vector tries][bmvt], which
+/// offers highly efficient (amortised linear time) index lookups as
+/// well as appending elements to, or popping elements off, either
+/// side of the vector.
 ///
-/// This is generally the best data structure if you're looking for something list
-/// like. If you don't need lookups or updates by index, but do need fast concatenation
-/// of whole lists, you should use the [`CatList`][CatList] instead.
+/// This is generally the best data structure if you're looking for
+/// something list like. If you don't need lookups or updates by
+/// index, but do need fast concatenation of whole lists, you should
+/// use the [`CatList`][CatList] instead.
 ///
-/// If you're familiar with the Clojure variant, this improves on it by being
-/// efficiently extensible at the front as well as the back. If you're familiar with
-/// [Immutable.js][immutablejs], this is essentially the same, but with easier
-/// mutability because Rust has the advantage of direct access to the garbage
-/// collector (which in our case is just [`Arc`][Arc]).
+/// If you're familiar with the Clojure variant, this improves on it
+/// by being efficiently extensible at the front as well as the back.
+/// If you're familiar with [Immutable.js][immutablejs], this is
+/// essentially the same, but with easier mutability because Rust has
+/// the advantage of direct access to the garbage collector (which in
+/// our case is just [`Arc`][Arc]).
 ///
 /// [bmvt]: https://hypirion.com/musings/understanding-persistent-vector-pt-1
 /// [immutablejs]: https://facebook.github.io/immutable-js/
@@ -159,7 +165,7 @@ impl<A> Vector<A> {
 
     /// Get an iterator over a vector.
     ///
-    /// Time: O(1)* per [`next()`][next] call
+    /// Time: O(log n) per [`next()`][next] call
     ///
     /// [next]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#tymethod.next
     #[inline]
@@ -171,7 +177,7 @@ impl<A> Vector<A> {
     ///
     /// If the vector is empty, `None` is returned.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     #[inline]
     pub fn head(&self) -> Option<Arc<A>> {
         self.get(0)
@@ -181,7 +187,7 @@ impl<A> Vector<A> {
     ///
     /// If the vector is empty, `None` is returned.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn tail(&self) -> Option<Vector<A>> {
         if self.is_empty() {
             None
@@ -196,7 +202,7 @@ impl<A> Vector<A> {
     ///
     /// If the vector is empty, `None` is returned.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn last(&self) -> Option<Arc<A>> {
         self.get(self.len() - 1)
     }
@@ -205,7 +211,7 @@ impl<A> Vector<A> {
     ///
     /// If the vector is empty, `None` is returned.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn init(&self) -> Option<Vector<A>> {
         if self.is_empty() {
             None
@@ -220,7 +226,7 @@ impl<A> Vector<A> {
     ///
     /// Returns `None` if the index is out of bounds.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn get(&self, index: usize) -> Option<Arc<A>> {
         let i = match self.map_index(index) {
             None => return None,
@@ -240,7 +246,7 @@ impl<A> Vector<A> {
     ///
     /// Panics if the index is out of bounds.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn get_unwrapped(&self, index: usize) -> Arc<A> {
         self.get(index).expect("get_unwrapped index out of bounds")
     }
@@ -249,7 +255,7 @@ impl<A> Vector<A> {
     ///
     /// Panics if the index is out of bounds.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn set<RA>(&self, index: usize, value: RA) -> Self
     where
         RA: Shared<A>,
@@ -274,11 +280,11 @@ impl<A> Vector<A> {
     ///
     /// Panics if the index is out of bounds.
     ///
-    /// This is a copy-on-write operation, so that the parts of the vector's
-    /// structure which are shared with other vectors will be safely copied
-    /// before mutating.
+    /// This is a copy-on-write operation, so that the parts of the
+    /// vector's structure which are shared with other vectors will be
+    /// safely copied before mutating.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn set_mut<RA>(&mut self, index: usize, value: RA)
     where
         RA: Shared<A>,
@@ -296,10 +302,10 @@ impl<A> Vector<A> {
         }
     }
 
-    /// Construct a vector with a new value prepended to the end of the
-    /// current vector.
+    /// Construct a vector with a new value prepended to the end of
+    /// the current vector.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn push_back<RA>(&self, value: RA) -> Self
     where
         RA: Shared<A>,
@@ -311,13 +317,14 @@ impl<A> Vector<A> {
         v
     }
 
-    /// Update a vector in place with a new value prepended to the end of it.
+    /// Update a vector in place with a new value prepended to the end
+    /// of it.
     ///
-    /// This is a copy-on-write operation, so that the parts of the vector's
-    /// structure which are shared with other vectors will be safely copied
-    /// before mutating.
+    /// This is a copy-on-write operation, so that the parts of the
+    /// vector's structure which are shared with other vectors will be
+    /// safely copied before mutating.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn push_back_mut<RA>(&mut self, value: RA)
     where
         RA: Shared<A>,
@@ -327,10 +334,10 @@ impl<A> Vector<A> {
         self.set_mut(len, value.shared());
     }
 
-    /// Construct a vector with a new value prepended to the front of the
-    /// current vector.
+    /// Construct a vector with a new value prepended to the front of
+    /// the current vector.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn push_front<RA>(&self, value: RA) -> Self
     where
         RA: Shared<A>,
@@ -341,13 +348,14 @@ impl<A> Vector<A> {
         v
     }
 
-    /// Update a vector in place with a new value prepended to the front of it.
+    /// Update a vector in place with a new value prepended to the
+    /// front of it.
     ///
-    /// This is a copy-on-write operation, so that the parts of the vector's
-    /// structure which are shared with other vectors will be safely copied
-    /// before mutating.
+    /// This is a copy-on-write operation, so that the parts of the
+    /// vector's structure which are shared with other vectors will be
+    /// safely copied before mutating.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn push_front_mut<RA>(&mut self, value: RA)
     where
         RA: Shared<A>,
@@ -357,12 +365,12 @@ impl<A> Vector<A> {
         self.set_mut(0, value.shared());
     }
 
-    /// Get the last element of a vector, as well as the vector with the last
-    /// element removed.
+    /// Get the last element of a vector, as well as the vector with
+    /// the last element removed.
     ///
     /// If the vector is empty, [`None`][None] is returned.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     ///
     /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
     pub fn pop_back(&self) -> Option<(Arc<A>, Self)> {
@@ -377,11 +385,11 @@ impl<A> Vector<A> {
 
     /// Remove the last element of a vector in place and return it.
     ///
-    /// This is a copy-on-write operation, so that the parts of the vector's
-    /// structure which are shared with other vectors will be safely copied
-    /// before mutating.
+    /// This is a copy-on-write operation, so that the parts of the
+    /// vector's structure which are shared with other vectors will be
+    /// safely copied before mutating.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn pop_back_mut(&mut self) -> Option<Arc<A>> {
         if self.is_empty() {
             return None;
@@ -391,12 +399,12 @@ impl<A> Vector<A> {
         Some(val)
     }
 
-    /// Get the first element of a vector, as well as the vector with the first
-    /// element removed.
+    /// Get the first element of a vector, as well as the vector with
+    /// the first element removed.
     ///
     /// If the vector is empty, [`None`][None] is returned.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     ///
     /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
     pub fn pop_front(&self) -> Option<(Arc<A>, Self)> {
@@ -411,11 +419,11 @@ impl<A> Vector<A> {
 
     /// Remove the first element of a vector in place and return it.
     ///
-    /// This is a copy-on-write operation, so that the parts of the vector's
-    /// structure which are shared with other vectors will be safely copied
-    /// before mutating.
+    /// This is a copy-on-write operation, so that the parts of the
+    /// vector's structure which are shared with other vectors will be
+    /// safely copied before mutating.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn pop_front_mut(&mut self) -> Option<Arc<A>> {
         if self.is_empty() {
             return None;
@@ -430,7 +438,7 @@ impl<A> Vector<A> {
     /// every element before of the index and a vector containing
     /// every element from the index onward.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn split_at(&self, index: usize) -> (Self, Self) {
         if index >= self.len() {
             return (self.clone(), Vector::new());
@@ -445,7 +453,7 @@ impl<A> Vector<A> {
     /// Construct a vector with `count` elements removed from the
     /// start of the current vector.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn skip(&self, count: usize) -> Self {
         let mut v = self.clone();
         v.resize(count as isize, self.len() as isize);
@@ -455,7 +463,7 @@ impl<A> Vector<A> {
     /// Construct a vector of the first `count` elements from the
     /// current vector.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn take(&self, count: usize) -> Self {
         let mut v = self.clone();
         v.resize(0, count as isize);
@@ -465,7 +473,7 @@ impl<A> Vector<A> {
     /// Construct a vector with the elements from `start_index`
     /// until `end_index` in the current vector.
     ///
-    /// Time: O(1)*
+    /// Time: O(log n)
     pub fn slice(&self, start_index: usize, end_index: usize) -> Self {
         if start_index >= end_index || start_index >= self.len() {
             return Vector::new();
@@ -502,10 +510,11 @@ impl<A> Vector<A> {
         v
     }
 
-    /// Write from an iterator into a vector, starting at the given index.
+    /// Write from an iterator into a vector, starting at the given
+    /// index.
     ///
-    /// This will overwrite elements in the vector until the iterator ends
-    /// or the end of the vector is reached.
+    /// This will overwrite elements in the vector until the iterator
+    /// ends or the end of the vector is reached.
     ///
     /// Time: O(n) where n = the length of the iterator
     pub fn write<I: IntoIterator<Item = R>, R: Shared<A>>(&mut self, index: usize, iter: I) {
@@ -627,7 +636,8 @@ impl<A> Vector<A> {
     where
         F: Fn(&A, &A) -> Ordering,
     {
-        // FIXME: This is a simple in-place quicksort. There are faster algorithms.
+        // FIXME: This is a simple in-place quicksort. There are
+        // probably faster algorithms.
         fn swap<A>(vector: &mut Vector<A>, a: usize, b: usize) {
             let aval = vector.get(a).unwrap();
             let bval = vector.get(b).unwrap();
@@ -706,6 +716,56 @@ impl<A> Vector<A> {
             quicksort(&mut out, 0, self.len() - 1, &cmp);
             out
         }
+    }
+
+    /// Insert an item into a sorted vector.
+    ///
+    /// Constructs a new vector with the new item inserted before the
+    /// first item in the vector which is larger than the new item, as
+    /// determined by the `Ord` trait.
+    ///
+    /// Please note that this is a very inefficient operation; if you
+    /// want a sorted list, consider if [`OrdSet`][ordset::OrdSet]
+    /// might be a better choice for you.
+    ///
+    /// Time: O(n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # fn main() {
+    /// assert_eq!(
+    ///   vector![2, 4, 5].insert(1).insert(3).insert(6),
+    ///   vector![1, 2, 3, 4, 5, 6]
+    /// );
+    /// # }
+    /// ```
+    ///
+    /// [ordset::OrdSet]: ../ordset/struct.OrdSet.html
+    pub fn insert<RA>(&self, item: RA) -> Self
+    where
+        A: Ord,
+        RA: Shared<A>,
+    {
+        let value = item.shared();
+        let mut out = Vector::new();
+        let mut inserted = false;
+        for next in self {
+            if next < value {
+                out.push_back_mut(next);
+                continue;
+            }
+            if !inserted {
+                out.push_back_mut(value.clone());
+                inserted = true;
+            }
+            out.push_back_mut(next);
+        }
+        if !inserted {
+            out.push_back_mut(value);
+        }
+        out
     }
 
     // Implementation details

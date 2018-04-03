@@ -1,3 +1,5 @@
+//! Bitmap sizes for array mapped tries.
+
 pub type Bitmap = u16; // a uint of HASH_SIZE bits
 pub const HASH_BITS: usize = 4;
 pub const HASH_SIZE: usize = 1 << HASH_BITS;

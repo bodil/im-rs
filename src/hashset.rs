@@ -2,8 +2,9 @@
 //!
 //! An immutable hash set backed by a [`HashMap`][hashmap::HashMap].
 //!
-//! This is implemented as a [`HashMap`][hashmap::HashMap] with no values, so it shares
-//! the exact performance characteristics of [`HashMap`][hashmap::HashMap].
+//! This is implemented as a [`HashMap`][hashmap::HashMap] with no
+//! values, so it shares the exact performance characteristics of
+//! [`HashMap`][hashmap::HashMap].
 //!
 //! [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 
@@ -55,8 +56,9 @@ macro_rules! hashset {
 ///
 /// An immutable hash set backed by a [`HashMap`][hashmap::HashMap].
 ///
-/// This is implemented as a [`HashMap`][hashmap::HashMap] with no values, so it shares
-/// the exact performance characteristics of [`HashMap`][hashmap::HashMap].
+/// This is implemented as a [`HashMap`][hashmap::HashMap] with no
+/// values, so it shares the exact performance characteristics of
+/// [`HashMap`][hashmap::HashMap].
 ///
 /// [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 pub struct HashSet<A, S = RandomState>(HashMap<A, (), S>);
@@ -181,14 +183,11 @@ where
         HashSet(self.0.insert(a, ()))
     }
 
-    /// Insert a value into a set, mutating it in place when it is
-    /// safe to do so.
+    /// Insert a value into a set.
     ///
-    /// If you are the sole owner of the set, it is safe to mutate it without
-    /// losing immutability guarantees, gaining us a considerable performance
-    /// advantage. If the set is in use elsewhere, this operation will safely
-    /// clone the map before mutating it, acting just like the immutable `insert`
-    /// operation.
+    /// This is a copy-on-write operation, so that the parts of the
+    /// set's structure which are shared with other sets will be
+    /// safely copied before mutating.
     ///
     /// Time: O(log n)
     #[inline]
@@ -207,18 +206,17 @@ where
     }
 
     /// Remove a value from a set.
+    ///
+    /// Time: O(log n)
     pub fn remove(&self, a: &A) -> Self {
         HashSet(self.0.remove(a))
     }
 
-    /// Remove a value from a set if it exists, mutating it in place
-    /// when it is safe to do so.
+    /// Remove a value from a set if it exists.
     ///
-    /// If you are the sole owner of the set, it is safe to mutate it without
-    /// losing immutability guarantees, gaining us a considerable performance
-    /// advantage. If the set is in use elsewhere, this operation will safely
-    /// clone the map before mutating it, acting just like the immutable `insert`
-    /// operation.
+    /// This is a copy-on-write operation, so that the parts of the
+    /// set's structure which are shared with other sets will be
+    /// safely copied before mutating.
     ///
     /// Time: O(log n)
     pub fn remove_mut(&mut self, a: &A) {
@@ -226,8 +224,8 @@ where
     }
 
     /// Construct the union of two sets.
-    pub fn union(&self, other: &Self) -> Self {
-        HashSet(self.0.union(&other.0))
+    pub fn union<RS>(&self, other: RS) -> Self where RS: Borrow<Self> {
+        HashSet(self.0.union(&other.borrow().0))
     }
 
     /// Construct the union of multiple sets.
@@ -263,9 +261,9 @@ where
         self.0.is_submap(&other.borrow().0)
     }
 
-    /// Test whether a set is a proper subset of another set, meaning that
-    /// all values in our set must also be in the other set.
-    /// A proper subset must also be smaller than the other set.
+    /// Test whether a set is a proper subset of another set, meaning
+    /// that all values in our set must also be in the other set. A
+    /// proper subset must also be smaller than the other set.
     pub fn is_proper_subset<RS>(&self, other: RS) -> bool
     where
         RS: Borrow<Self>,

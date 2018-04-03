@@ -1,36 +1,34 @@
 //! A cons list.
 //!
 //! The cons list is perhaps the most basic immutable data structure:
-//! a singly linked list built out of 'cons cells,'
-//! which are cells containing two values, the left hand value being
-//! the head of the list and the right hand value being a reference
-//! to the rest of the list, or a `Nil` value denoting the end of the
-//! list.
+//! a singly linked list built out of 'cons cells,' which are cells
+//! containing two values, the left hand value being the head of the
+//! list and the right hand value being a reference to the rest of the
+//! list, or a `Nil` value denoting the end of the list.
 //!
-//! Structure can be shared between lists (and is reference
-//! counted), and append to the front of a list is O(1).
-//! Cons cells keep track of the length of the list at the
-//! current position, as an extra optimisation, so getting
-//! the length of a list is also O(1). Otherwise, operations
-//! are generally O(n).
+//! Structure can be shared between lists (and is reference counted),
+//! and append to the front of a list is O(1). Cons cells keep track
+//! of the length of the list at the current position, as an extra
+//! optimisation, so getting the length of a list is also O(1).
+//! Otherwise, operations are generally O(n).
 //!
 //! Unless you know you want a `ConsList`, you're probably better off
 //! using a [`Vector`][vector::Vector], which has more efficient
-//! performance characteristics in almost all cases. The `ConsList`
-//! is particularly useful as an immutable stack where you only
-//! push and pop items from the front of the list. Beware that it has
-//! no mutable operations.
+//! performance characteristics in almost all cases. The `ConsList` is
+//! particularly useful as an immutable stack where you only push and
+//! pop items from the front of the list. Beware that it has no
+//! mutable operations.
 //!
 //! [vector::Vector]: ../vector/struct.Vector.html
 
-use std::sync::Arc;
-use std::iter::{FromIterator, Iterator, Sum};
-use std::fmt::{Debug, Error, Formatter};
-use std::ops::Deref;
-use std::hash::{Hash, Hasher};
-use std::cmp::Ordering;
-use std::borrow::Borrow;
 use shared::Shared;
+use std::borrow::Borrow;
+use std::cmp::Ordering;
+use std::fmt::{Debug, Error, Formatter};
+use std::hash::{Hash, Hasher};
+use std::iter::{FromIterator, Iterator, Sum};
+use std::ops::Deref;
+use std::sync::Arc;
 
 use self::ConsListNode::{Cons, Nil};
 
@@ -71,13 +69,13 @@ macro_rules! conslist {
 
 /// Prepend a value to a list.
 ///
-/// Constructs a list with the value `car` prepended to the
-/// front of the list `cdr`.
+/// Constructs a list with the value `car` prepended to the front of
+/// the list `cdr`.
 ///
-/// This is just a shorthand for `list.cons(item)`, but I find
-/// it much easier to read `cons(1, cons(2, ConsList::new()))`
-/// than `ConsList::new().cons(2).cons(1)`, given that the resulting
-/// list will be `[1, 2]`.
+/// This is just a shorthand for `list.cons(item)`, but I find it much
+/// easier to read `cons(1, cons(2, ConsList::new()))` than
+/// `ConsList::new().cons(2).cons(1)`, given that the resulting list
+/// will be `[1, 2]`.
 ///
 /// # Examples
 ///
@@ -99,23 +97,24 @@ macro_rules! conslist {
 /// cons cell, respectively. Cons cells in Lisp were simply containers
 /// for two values: the car and the cdr (pronounced 'cudder'), and,
 /// Lisp being an untyped language, had no restrictions on cons cells
-/// forming proper lists, but this is how they were most commonly used:
-/// forming singly linked lists by having the left hand side contain a
-/// value, and the right hand side a pointer to the rest of the list.
+/// forming proper lists, but this is how they were most commonly
+/// used: forming singly linked lists by having the left hand side
+/// contain a value, and the right hand side a pointer to the rest of
+/// the list.
 ///
-/// `cons` is short for 'construct', which is the easy one. `car` means
-/// 'contents of address register' and `cdr` means 'contents of decrement
-/// register.' These were the registers on the CPU of the IBM 704 computer
-/// (on which Lisp was originally implemented) used to hold the respective
-/// values.
+/// `cons` is short for 'construct', which is the easy one. `car`
+/// means 'contents of address register' and `cdr` means 'contents of
+/// decrement register.' These were the registers on the CPU of the
+/// IBM 704 computer (on which Lisp was originally implemented) used
+/// to hold the respective values.
 ///
-/// Lisp also commonly provided pre-composed sequences of the `car` and
-/// `cdr` functions, such as `cadr`, the `car` of the `cdr`, ie. the
-/// second element of a list, and `cddr`, the list with the two first
-/// elements dropped. Pronunciation goes like this: `cadr` is, obviously,
-/// 'cadder', while `cddr` is 'cududder', and `caddr` (the `car` of the
-/// `cdr` of the `cdr`) is 'cadudder'. It can get a little subtle for the
-/// untrained ear.
+/// Lisp also commonly provided pre-composed sequences of the `car`
+/// and `cdr` functions, such as `cadr`, the `car` of the `cdr`, ie.
+/// the second element of a list, and `cddr`, the list with the two
+/// first elements dropped. Pronunciation goes like this: `cadr` is,
+/// obviously, 'cadder', while `cddr` is 'cududder', and `caddr` (the
+/// `car` of the `cdr` of the `cdr`) is 'cadudder'. It can get a
+/// little subtle for the untrained ear.
 #[inline]
 pub fn cons<A, RA, RD>(car: RA, cdr: RD) -> ConsList<A>
 where
@@ -128,25 +127,23 @@ where
 /// An immutable proper cons lists.
 ///
 /// The cons list is perhaps the most basic immutable data structure:
-/// a singly linked list built out of 'cons cells,'
-/// which are cells containing two values, the left hand value being
-/// the head of the list and the right hand value being a reference
-/// to the rest of the list, or a `Nil` value denoting the end of the
-/// list.
+/// a singly linked list built out of 'cons cells,' which are cells
+/// containing two values, the left hand value being the head of the
+/// list and the right hand value being a reference to the rest of the
+/// list, or a `Nil` value denoting the end of the list.
 ///
-/// Structure can be shared between lists (and is reference
-/// counted), and append to the front of a list is O(1).
-/// Cons cells keep track of the length of the list at the
-/// current position, as an extra optimisation, so getting
-/// the length of a list is also O(1). Otherwise, operations
-/// are generally O(n).
+/// Structure can be shared between lists (and is reference counted),
+/// and append to the front of a list is O(1). Cons cells keep track
+/// of the length of the list at the current position, as an extra
+/// optimisation, so getting the length of a list is also O(1).
+/// Otherwise, operations are generally O(n).
 ///
 /// Unless you know you want a `ConsList`, you're probably better off
 /// using a [`Vector`][vector::Vector], which has more efficient
-/// performance characteristics in almost all cases. The `ConsList`
-/// is particularly useful as an immutable stack where you only
-/// push and pop items from the front of the list. Beware that it has
-/// no mutable operations.
+/// performance characteristics in almost all cases. The `ConsList` is
+/// particularly useful as an immutable stack where you only push and
+/// pop items from the front of the list. Beware that it has no
+/// mutable operations.
 ///
 /// [vector::Vector]: ../vector/struct.Vector.html
 pub struct ConsList<A>(Arc<ConsListNode<A>>);
@@ -171,35 +168,6 @@ impl<A> ConsList<A> {
         ConsList(Arc::new(Cons(1, v.shared(), conslist![])))
     }
 
-    /// Construct a list by consuming an [`IntoIterator`][std::iter::IntoIterator].
-    ///
-    /// Allows you to construct a list out of anything that implements
-    /// the [`IntoIterator`][std::iter::IntoIterator] trait.
-    ///
-    /// Time: O(n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::conslist::ConsList;
-    /// # fn main() {
-    /// assert_eq!(
-    ///   ConsList::from(vec![1, 2, 3, 4, 5]),
-    ///   conslist![1, 2, 3, 4, 5]
-    /// );
-    /// # }
-    /// ```
-    ///
-    /// [std::iter::IntoIterator]: https://doc.rust-lang.org/std/iter/trait.IntoIterator.html
-    pub fn from<R, I>(it: I) -> ConsList<A>
-    where
-        I: IntoIterator<Item = R>,
-        R: Shared<A>,
-    {
-        it.into_iter().map(|a| a.shared()).collect()
-    }
-
     /// Test whether a list is empty.
     ///
     /// Time: O(1)
@@ -210,8 +178,8 @@ impl<A> ConsList<A> {
         }
     }
 
-    /// Construct a list with a new value prepended to the front of the
-    /// current list.
+    /// Construct a list with a new value prepended to the front of
+    /// the current list.
     ///
     /// Time: O(1)
     pub fn cons<R>(&self, car: R) -> ConsList<A>
@@ -235,10 +203,9 @@ impl<A> ConsList<A> {
 
     /// Get the tail of a list.
     ///
-    /// The tail means all elements in the list after the
-    /// first item (the head). If the list only has one
-    /// element, the result is an empty list. If the list is
-    /// empty, the result is `None`.
+    /// The tail means all elements in the list after the first item
+    /// (the head). If the list only has one element, the result is an
+    /// empty list. If the list is empty, the result is `None`.
     ///
     /// Time: O(1)
     pub fn tail(&self) -> Option<ConsList<A>> {
@@ -251,14 +218,13 @@ impl<A> ConsList<A> {
     /// Get the head and the tail of a list.
     ///
     /// This function performs both the [`head`][head] function and
-    /// the [`tail`][tail] function in one go, returning a tuple
-    /// of the head and the tail, or [`None`][None] if the list is
-    /// empty.
+    /// the [`tail`][tail] function in one go, returning a tuple of
+    /// the head and the tail, or [`None`][None] if the list is empty.
     ///
     /// # Examples
     ///
-    /// This can be useful when pattern matching your way through
-    /// a list:
+    /// This can be useful when pattern matching your way through a
+    /// list:
     ///
     /// ```
     /// # #[macro_use] extern crate im;
@@ -296,8 +262,8 @@ impl<A> ConsList<A> {
 
     /// Get the length of a list.
     ///
-    /// This operation is instant, because cons cells store the
-    /// length of the list they're the head of.
+    /// This operation is instant, because cons cells store the length
+    /// of the list they're the head of.
     ///
     /// Time: O(1)
     ///
@@ -467,38 +433,7 @@ impl<A> ConsList<A> {
     pub fn ptr_eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
-}
 
-impl ConsList<i32> {
-    /// Construct a list of numbers between `from` and `to` inclusive.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::conslist::{ConsList, cons};
-    /// # fn main() {
-    /// assert_eq!(
-    ///   ConsList::range(1, 5),
-    ///   conslist![1, 2, 3, 4, 5]
-    /// );
-    /// # }
-    /// ```
-    pub fn range(from: i32, to: i32) -> ConsList<i32> {
-        let mut list = ConsList::new();
-        let mut c = to;
-        while c >= from {
-            list = cons(c, &list);
-            c -= 1;
-        }
-        list
-    }
-}
-
-impl<A> ConsList<A>
-where
-    A: Ord,
-{
     /// Insert an item into a sorted list.
     ///
     /// Constructs a new list with the new item inserted before the
@@ -520,12 +455,16 @@ where
     /// ```
     pub fn insert<T>(&self, item: T) -> ConsList<A>
     where
+        A: Ord,
         T: Shared<A>,
     {
         self.insert_ref(item.shared())
     }
 
-    fn insert_ref(&self, item: Arc<A>) -> ConsList<A> {
+    fn insert_ref(&self, item: Arc<A>) -> ConsList<A>
+    where
+        A: Ord,
+    {
         match *self.0 {
             Nil => ConsList(Arc::new(Cons(0, item, ConsList::new()))),
             Cons(_, ref a, ref d) => {
@@ -547,16 +486,26 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::conslist::ConsList;
+    /// # use std::iter::FromIterator;
     /// # fn main() {
     /// assert_eq!(
     ///   conslist![2, 8, 1, 6, 3, 7, 5, 4].sort(),
-    ///   ConsList::range(1, 8)
+    ///   ConsList::from_iter(1..9)
     /// );
     /// # }
     /// ```
-    pub fn sort(&self) -> ConsList<A> {
+    pub fn sort(&self) -> ConsList<A>
+    where
+        A: Ord,
+    {
         self.sort_by(|a: Arc<A>, b: Arc<A>| a.cmp(&b))
     }
+}
+
+impl<A> ConsList<A>
+where
+    A: Ord,
+{
 }
 
 // Core traits
@@ -831,13 +780,13 @@ pub mod proptest {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use super::proptest::*;
+    use super::*;
     use test::is_sorted;
 
     #[test]
     fn exact_size_iterator() {
-        assert_eq!(10, ConsList::range(1, 10).iter().len());
+        assert_eq!(10, ConsList::from_iter(1..11).iter().len());
     }
 
     #[test]
@@ -848,7 +797,7 @@ mod test {
 
     #[test]
     fn disequality() {
-        let l = ConsList::range(1, 5);
+        let l = ConsList::from_iter(1..6);
         assert_ne!(l, cons(0, &l));
         assert_ne!(l, conslist![1, 2, 3, 4, 5, 6]);
     }
@@ -879,12 +828,12 @@ mod test {
 
         fn reverse_a_list(l: ConsList<i32>) -> bool {
             let vec: Vec<i32> = l.iter().map(|v| *v).collect();
-            let rev = ConsList::from(vec.into_iter().rev());
+            let rev = ConsList::from_iter(vec.into_iter().rev());
             l.reverse() == rev
         }
 
         fn append_two_lists(xs: ConsList<i32>, ys: ConsList<i32>) -> bool {
-            let extended = ConsList::from(xs.iter().map(|v| *v).chain(ys.iter().map(|v| *v)));
+            let extended = ConsList::from_iter(xs.iter().map(|v| *v).chain(ys.iter().map(|v| *v)));
             xs.append(&ys) == extended
         }
 

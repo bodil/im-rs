@@ -2,16 +2,18 @@
 //!
 //! An immutable hash map using [hash array mapped tries] [1].
 //!
-//! Most operations on this map will be O(1), but may sometimes run
-//! as high as O(log n). Because of this, it's a great choice for a
-//! generic map as long as you don't mind that keys will need to
-//! implement [`Hash`][std::hash::Hash] and [`Eq`][std::cmp::Eq].
+//! Most operations on this map are O(log<sub>x</sub> n) for a
+//! suitably high *x* that it should be nearly O(1) for most maps.
+//! Because of this, it's a great choice for a generic map as long as
+//! you don't mind that keys will need to implement
+//! [`Hash`][std::hash::Hash] and [`Eq`][std::cmp::Eq].
 //!
 //! Map entries will have a predictable order based on the hasher
 //! being used. Unless otherwise specified, all maps will share an
-//! instance of the default [`RandomState`][std::collections::hash_map::RandomState]
-//! hasher, which will produce consistent hashes for the duration of
-//! its lifetime, but not between restarts of your program.
+//! instance of the default
+//! [`RandomState`][std::collections::hash_map::RandomState] hasher,
+//! which will produce consistent hashes for the duration of its
+//! lifetime, but not between restarts of your program.
 //!
 //! [1]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
 //! [std::cmp::Eq]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
@@ -72,16 +74,18 @@ macro_rules! hashmap {
 ///
 /// An immutable hash map using [hash array mapped tries] [1].
 ///
-/// Most operations on this map will be O(1), but may sometimes run
-/// as high as O(log n). Because of this, it's a great choice for a
-/// generic map as long as you don't mind that keys will need to
-/// implement [`Hash`][std::hash::Hash] and [`Eq`][std::cmp::Eq].
+/// Most operations on this map are O(log<sub>x</sub> n) for a
+/// suitably high *x* that it should be nearly O(1) for most maps.
+/// Because of this, it's a great choice for a generic map as long as
+/// you don't mind that keys will need to implement
+/// [`Hash`][std::hash::Hash] and [`Eq`][std::cmp::Eq].
 ///
 /// Map entries will have a predictable order based on the hasher
 /// being used. Unless otherwise specified, all maps will share an
-/// instance of the default [`RandomState`][std::collections::hash_map::RandomState]
-/// hasher, which will produce consistent hashes for the duration of
-/// its lifetime, but not between restarts of your program.
+/// instance of the default
+/// [`RandomState`][std::collections::hash_map::RandomState] hasher,
+/// which will produce consistent hashes for the duration of its
+/// lifetime, but not between restarts of your program.
 ///
 /// [1]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
 /// [std::cmp::Eq]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
@@ -228,7 +232,8 @@ where
         }
     }
 
-    /// Construct an empty hash map using the same hasher as the current hash map.
+    /// Construct an empty hash map using the same hasher as the
+    /// current hash map.
     #[inline]
     pub fn new_from<K1, V1>(&self) -> HashMap<K1, V1, S>
     where
@@ -263,8 +268,8 @@ where
         self.root.lookup(0, hash_key(&*self.hasher, k), k)
     }
 
-    /// Get the value for a key from a hash map, or a default value
-    /// if the key isn't in the map.
+    /// Get the value for a key from a hash map, or a default value if
+    /// the key isn't in the map.
     ///
     /// Time: O(log n)
     ///
@@ -363,17 +368,14 @@ where
         }
     }
 
-    /// Insert a key/value mapping into a map, mutating it in place when it is
-    /// safe to do so.
+    /// Insert a key/value mapping into a map.
     ///
-    /// If you are the sole owner of the map, it is safe to mutate it without
-    /// losing immutability guarantees, gaining us a considerable performance
-    /// advantage. If the map is in use elsewhere, this operation will safely
-    /// clone the map before mutating it, acting just like the immutable
-    /// [`insert`][insert] operation.
+    /// If the map already has a mapping for the given key, the
+    /// previous value is overwritten.
     ///
-    /// If the map already has a mapping for the given key, the previous value
-    /// is overwritten.
+    /// This is a copy-on-write operation, so that the parts of the
+    /// set's structure which are shared with other sets will be
+    /// safely copied before mutating.
     ///
     /// Time: O(log n)
     ///
@@ -417,9 +419,12 @@ where
         }
     }
 
-    /// Construct a new map by inserting a key/value mapping into a map.
+    /// Construct a new map by inserting a key/value mapping into a
+    /// map.
     ///
     /// This is an alias for [`insert`][insert].
+    ///
+    /// Time: O(log n)
     ///
     /// [insert]: #method.insert
     #[inline]
@@ -431,10 +436,12 @@ where
         self.insert(k, v)
     }
 
-    /// Insert a key/value mapping into a map, mutating it in place when it is
-    /// safe to do so.
+    /// Insert a key/value mapping into a map, mutating it in place
+    /// when it is safe to do so.
     ///
     /// This is an alias for [`insert_mut`][insert_mut].
+    ///
+    /// Time: O(log n)
     ///
     /// [insert_mut]: #method.insert_mut
     #[inline]
@@ -446,11 +453,12 @@ where
         self.insert_mut(k, v)
     }
 
-    /// Construct a new hash map by inserting a key/value mapping into a map.
+    /// Construct a new hash map by inserting a key/value mapping into
+    /// a map.
     ///
-    /// If the map already has a mapping for the given key, we call the provided
-    /// function with the old value and the new value, and insert the result as
-    /// the new value.
+    /// If the map already has a mapping for the given key, we call
+    /// the provided function with the old value and the new value,
+    /// and insert the result as the new value.
     ///
     /// Time: O(log n)
     pub fn insert_with<RK, RV, F>(self, k: RK, v: RV, f: F) -> Self
@@ -467,11 +475,12 @@ where
         }
     }
 
-    /// Construct a new map by inserting a key/value mapping into a map.
+    /// Construct a new map by inserting a key/value mapping into a
+    /// map.
     ///
-    /// If the map already has a mapping for the given key, we call the provided
-    /// function with the key, the old value and the new value, and insert the result as
-    /// the new value.
+    /// If the map already has a mapping for the given key, we call
+    /// the provided function with the key, the old value and the new
+    /// value, and insert the result as the new value.
     ///
     /// Time: O(log n)
     pub fn insert_with_key<RK, RV, F>(self, k: RK, v: RV, f: F) -> Self
@@ -488,12 +497,13 @@ where
         }
     }
 
-    /// Construct a new map by inserting a key/value mapping into a map, returning
-    /// the old value for the key as well as the new map.
+    /// Construct a new map by inserting a key/value mapping into a
+    /// map, returning the old value for the key as well as the new
+    /// map.
     ///
-    /// If the map already has a mapping for the given key, we call the provided
-    /// function with the key, the old value and the new value, and insert the result as
-    /// the new value.
+    /// If the map already has a mapping for the given key, we call
+    /// the provided function with the key, the old value and the new
+    /// value, and insert the result as the new value.
     ///
     /// Time: O(log n)
     pub fn insert_lookup_with_key<RK, RV, F>(self, k: RK, v: RV, f: F) -> (Option<Arc<V>>, Self)
@@ -510,8 +520,9 @@ where
         }
     }
 
-    /// Update the value for a given key by calling a function with the current value
-    /// and overwriting it with the function's return value.
+    /// Update the value for a given key by calling a function with
+    /// the current value and overwriting it with the function's
+    /// return value.
     ///
     /// Time: O(log n)
     pub fn update<F>(&self, k: &K, f: F) -> Self
@@ -527,8 +538,9 @@ where
         }
     }
 
-    /// Update the value for a given key by calling a function with the key and the current value
-    /// and overwriting it with the function's return value.
+    /// Update the value for a given key by calling a function with
+    /// the key and the current value and overwriting it with the
+    /// function's return value.
     ///
     /// Time: O(log n)
     pub fn update_with_key<F>(&self, k: &K, f: F) -> Self
@@ -544,12 +556,15 @@ where
         }
     }
 
-    /// Update the value for a given key by calling a function with the key and the current value
-    /// and overwriting it with the function's return value.
+    /// Update the value for a given key by calling a function with
+    /// the key and the current value and overwriting it with the
+    /// function's return value.
     ///
-    /// If the key was not in the map, the function is never called and the map is left unchanged.
+    /// If the key was not in the map, the function is never called
+    /// and the map is left unchanged.
     ///
-    /// Return a tuple of the old value, if there was one, and the new map.
+    /// Return a tuple of the old value, if there was one, and the new
+    /// map.
     ///
     /// Time: O(log n)
     pub fn update_lookup_with_key<F>(&self, k: &K, f: F) -> (Option<Arc<V>>, Self)
@@ -565,12 +580,15 @@ where
         }
     }
 
-    /// Update the value for a given key by calling a function with the current value
-    /// and overwriting it with the function's return value.
+    /// Update the value for a given key by calling a function with
+    /// the current value and overwriting it with the function's
+    /// return value.
     ///
-    /// This is like the [`update`][update] method, except with more control: the function gets
-    /// an [`Option<V>`][std::option::Option] and returns the same, so that it can decide to delete a mapping
-    /// instead of updating the value, and decide what to do if the key isn't in the map.
+    /// This is like the [`update`][update] method, except with more
+    /// control: the function gets an
+    /// [`Option<V>`][std::option::Option] and returns the same, so
+    /// that it can decide to delete a mapping instead of updating the
+    /// value, and decide what to do if the key isn't in the map.
     ///
     /// Time: O(log n)
     ///
@@ -605,14 +623,11 @@ where
         }
     }
 
-    /// Remove a key/value mapping from a map if it exists, mutating it in place
-    /// when it is safe to do so.
+    /// Remove a key/value mapping from a map if it exists.
     ///
-    /// If you are the sole owner of the map, it is safe to mutate it without
-    /// losing immutability guarantees, gaining us a considerable performance
-    /// advantage. If the map is in use elsewhere, this operation will safely
-    /// clone the map before mutating it, acting just like the immutable
-    /// [`remove`][remove] operation.
+    /// This is a copy-on-write operation, so that the parts of the
+    /// set's structure which are shared with other sets will be
+    /// safely copied before mutating.
     ///
     /// Time: O(log n)
     ///
@@ -636,20 +651,28 @@ where
         self.pop_with_key_mut(k);
     }
 
-    /// Remove a key/value pair from a map, if it exists, and return the removed value
-    /// as well as the updated list.
+    /// Remove a key/value pair from a map, if it exists, and return
+    /// the removed value as well as the updated list.
     ///
     /// Time: O(log n)
     pub fn pop(&self, k: &K) -> Option<(Arc<V>, Self)> {
         self.pop_with_key(k).map(|(_, v, m)| (v, m))
     }
 
+    /// Remove a key/value pair from a map, if it exists, and return
+    /// the removed value.
+    ///
+    /// This is a copy-on-write operation, so that the parts of the
+    /// set's structure which are shared with other sets will be
+    /// safely copied before mutating.
+    ///
+    /// Time: O(log n)
     pub fn pop_mut(&mut self, k: &K) -> Option<Arc<V>> {
         self.pop_with_key_mut(k).map(|(_, v)| v)
     }
 
-    /// Remove a key/value pair from a map, if it exists, and return the removed key and value
-    /// as well as the updated list.
+    /// Remove a key/value pair from a map, if it exists, and return
+    /// the removed key and value as well as the updated list.
     ///
     /// Time: O(log n)
     pub fn pop_with_key(&self, k: &K) -> Option<(Arc<K>, Arc<V>, Self)> {
@@ -670,6 +693,14 @@ where
         })
     }
 
+    /// Remove a key/value pair from a map, if it exists, and return
+    /// the removed key and value.
+    ///
+    /// This is a copy-on-write operation, so that the parts of the
+    /// set's structure which are shared with other sets will be
+    /// safely copied before mutating.
+    ///
+    /// Time: O(log n)
     pub fn pop_with_key_mut(&mut self, k: &K) -> Option<(Arc<K>, Arc<V>)> {
         match self.root.remove_mut(0, hash_key(&*self.hasher, k), k) {
             (None, _) => None,
@@ -680,15 +711,15 @@ where
         }
     }
 
-    /// Construct the union of two maps, keeping the values in the current map
-    /// when keys exist in both maps.
+    /// Construct the union of two maps, keeping the values in the
+    /// current map when keys exist in both maps.
     #[inline]
     pub fn union(&self, other: &Self) -> Self {
         self.union_with_key(other, |_, v, _| v)
     }
 
-    /// Construct the union of two maps, using a function to decide what to do
-    /// with the value when a key is in both maps.
+    /// Construct the union of two maps, using a function to decide
+    /// what to do with the value when a key is in both maps.
     #[inline]
     pub fn union_with<F, RM>(&self, other: RM, f: F) -> Self
     where
@@ -698,9 +729,9 @@ where
         self.union_with_key(other, |_, v1, v2| f(v1, v2))
     }
 
-    /// Construct the union of two maps, using a function to decide what to do
-    /// with the value when a key is in both maps. The function receives the key
-    /// as well as both values.
+    /// Construct the union of two maps, using a function to decide
+    /// what to do with the value when a key is in both maps. The
+    /// function receives the key as well as both values.
     pub fn union_with_key<F, RM>(&self, other: RM, f: F) -> Self
     where
         F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
@@ -714,8 +745,8 @@ where
         })
     }
 
-    /// Construct the union of a sequence of maps, selecting the value of the
-    /// leftmost when a key appears in more than one map.
+    /// Construct the union of a sequence of maps, selecting the value
+    /// of the leftmost when a key appears in more than one map.
     pub fn unions<I>(i: I) -> Self
     where
         I: IntoIterator<Item = Self>,
@@ -723,8 +754,9 @@ where
         i.into_iter().fold(Default::default(), |a, b| a.union(&b))
     }
 
-    /// Construct the union of a sequence of maps, using a function to decide what to do
-    /// with the value when a key is in more than one map.
+    /// Construct the union of a sequence of maps, using a function to
+    /// decide what to do with the value when a key is in more than
+    /// one map.
     pub fn unions_with<I, F>(i: I, f: F) -> Self
     where
         I: IntoIterator<Item = Self>,
@@ -734,9 +766,9 @@ where
             .fold(Default::default(), |a, b| a.union_with(&b, &f))
     }
 
-    /// Construct the union of a sequence of maps, using a function to decide what to do
-    /// with the value when a key is in more than one map. The function receives the key
-    /// as well as both values.
+    /// Construct the union of a sequence of maps, using a function to
+    /// decide what to do with the value when a key is in more than
+    /// one map. The function receives the key as well as both values.
     pub fn unions_with_key<I, F>(i: I, f: F) -> Self
     where
         I: IntoIterator<Item = Self>,
@@ -746,7 +778,8 @@ where
             .fold(Default::default(), |a, b| a.union_with_key(&b, &f))
     }
 
-    /// Construct the difference between two maps by discarding keys which occur in both maps.
+    /// Construct the difference between two maps by discarding keys
+    /// which occur in both maps.
     #[inline]
     pub fn difference<B, RM>(&self, other: RM) -> Self
     where
@@ -755,8 +788,8 @@ where
         self.difference_with_key(other, |_, _, _| None)
     }
 
-    /// Construct the difference between two maps by using a function to decide
-    /// what to do if a key occurs in both.
+    /// Construct the difference between two maps by using a function
+    /// to decide what to do if a key occurs in both.
     #[inline]
     pub fn difference_with<B, RM, F>(&self, other: RM, f: F) -> Self
     where
@@ -766,9 +799,9 @@ where
         self.difference_with_key(other, |_, a, b| f(a, b))
     }
 
-    /// Construct the difference between two maps by using a function to decide
-    /// what to do if a key occurs in both. The function receives the key
-    /// as well as both values.
+    /// Construct the difference between two maps by using a function
+    /// to decide what to do if a key occurs in both. The function
+    /// receives the key as well as both values.
     pub fn difference_with_key<B, RM, F>(&self, other: RM, f: F) -> Self
     where
         F: Fn(Arc<K>, Arc<V>, Arc<B>) -> Option<Arc<V>>,
@@ -786,7 +819,8 @@ where
             })
     }
 
-    /// Construct the intersection of two maps, keeping the values from the current map.
+    /// Construct the intersection of two maps, keeping the values
+    /// from the current map.
     #[inline]
     pub fn intersection<B, RM>(&self, other: RM) -> Self
     where
@@ -795,8 +829,9 @@ where
         self.intersection_with_key(other, |_, v, _| v)
     }
 
-    /// Construct the intersection of two maps, calling a function with both values for each
-    /// key and using the result as the value for the key.
+    /// Construct the intersection of two maps, calling a function
+    /// with both values for each key and using the result as the
+    /// value for the key.
     #[inline]
     pub fn intersection_with<B, C, RM, F>(&self, other: RM, f: F) -> HashMap<K, C, S>
     where
@@ -807,8 +842,8 @@ where
     }
 
     /// Construct the intersection of two maps, calling a function
-    /// with the key and both values for each
-    /// key and using the result as the value for the key.
+    /// with the key and both values for each key and using the result
+    /// as the value for the key.
     pub fn intersection_with_key<B, C, RM, F>(&self, other: RM, f: F) -> HashMap<K, C, S>
     where
         F: Fn(Arc<K>, Arc<V>, Arc<B>) -> Arc<C>,
@@ -823,11 +858,13 @@ where
 
     /// Merge two maps.
     ///
-    /// First, we call the `combine` function for each key/value pair which exists in both maps,
-    /// updating the value or discarding it according to the function's return value.
+    /// First, we call the `combine` function for each key/value pair
+    /// which exists in both maps, updating the value or discarding it
+    /// according to the function's return value.
     ///
-    /// The `only1` and `only2` functions are called with the key/value pairs which are only in
-    /// the first and the second list respectively. The results of these are then merged with
+    /// The `only1` and `only2` functions are called with the
+    /// key/value pairs which are only in the first and the second
+    /// list respectively. The results of these are then merged with
     /// the result of the first operation.
     pub fn merge_with_key<B, C, RM, FC, F1, F2>(
         &self,
@@ -859,7 +896,8 @@ where
     }
 
     /// Test whether a map is a submap of another map, meaning that
-    /// all keys in our map must also be in the other map, with the same values.
+    /// all keys in our map must also be in the other map, with the
+    /// same values.
     ///
     /// Use the provided function to decide whether values are equal.
     pub fn is_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
@@ -876,9 +914,10 @@ where
         })
     }
 
-    /// Test whether a map is a proper submap of another map, meaning that
-    /// all keys in our map must also be in the other map, with the same values.
-    /// To be a proper submap, ours must also contain fewer keys than the other map.
+    /// Test whether a map is a proper submap of another map, meaning
+    /// that all keys in our map must also be in the other map, with
+    /// the same values. To be a proper submap, ours must also contain
+    /// fewer keys than the other map.
     ///
     /// Use the provided function to decide whether values are equal.
     pub fn is_proper_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
@@ -888,28 +927,25 @@ where
     {
         self.len() != other.borrow().len() && self.is_submap_by(other, cmp)
     }
-}
 
-impl<K, V, S> HashMap<K, V, S>
-where
-    K: Hash + Eq,
-    V: PartialEq,
-    S: SharedHasher,
-{
     /// Test whether a map is a submap of another map, meaning that
-    /// all keys in our map must also be in the other map, with the same values.
+    /// all keys in our map must also be in the other map, with the
+    /// same values.
     pub fn is_submap<RM>(&self, other: RM) -> bool
     where
+        V: PartialEq,
         RM: Borrow<Self>,
     {
         self.is_submap_by(other.borrow(), |a, b| a.as_ref().eq(b.as_ref()))
     }
 
-    /// Test whether a map is a proper submap of another map, meaning that
-    /// all keys in our map must also be in the other map, with the same values.
-    /// To be a proper submap, ours must also contain fewer keys than the other map.
+    /// Test whether a map is a proper submap of another map, meaning
+    /// that all keys in our map must also be in the other map, with
+    /// the same values. To be a proper submap, ours must also contain
+    /// fewer keys than the other map.
     pub fn is_proper_submap<RM>(&self, other: RM) -> bool
     where
+        V: PartialEq,
         RM: Borrow<Self>,
     {
         self.is_proper_submap_by(other.borrow(), |a, b| a.as_ref().eq(b.as_ref()))

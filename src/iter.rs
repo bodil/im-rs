@@ -38,25 +38,27 @@ where
     }
 }
 
-/// Create an iterator of values using a function to update
-/// a state value.
+/// Create an iterator of values using a function to update a state
+/// value.
 ///
-/// The function is called with the current state as its
-/// argument, and should return an [`Option`][std::option::Option] of a tuple of the
-/// next value to yield from the iterator and the updated state.
-/// If the function returns [`None`][std::option::Option::None], the iterator ends.
+/// The function is called with the current state as its argument, and
+/// should return an [`Option`][std::option::Option] of a tuple of the
+/// next value to yield from the iterator and the updated state. If
+/// the function returns [`None`][std::option::Option::None], the
+/// iterator ends.
 ///
 /// # Examples
 /// ```
 /// # #[macro_use] extern crate im;
 /// # use im::iter::unfold;
 /// # use im::catlist::CatList;
+/// # use std::iter::FromIterator;
 /// # fn main() {
 /// // Create an infinite stream of numbers, starting at 0.
 /// let mut it = unfold(0, |i| Some((*i, *i + 1)));
 ///
 /// // Make a list out of its first five elements.
-/// let numbers = CatList::from(it.take(5));
+/// let numbers = CatList::from_iter(it.take(5));
 /// assert_eq!(numbers, catlist![0, 1, 2, 3, 4]);
 /// # }
 /// ```
@@ -70,22 +72,25 @@ where
     Unfold { f, value }
 }
 
-/// Create an iterator of values using a function to mutate
-/// a state value.
+/// Create an iterator of values using a function to mutate a state
+/// value.
 ///
-/// The function is called with a mutable reference to the current state as its
-/// argument, and should return an [`Option`][std::option::Option] of the
-/// next value to yield from the iterator, updating the state as necessary.
-/// If the function returns [`None`][std::option::Option::None], the iterator ends.
+/// The function is called with a mutable reference to the current
+/// state as its argument, and should return an
+/// [`Option`][std::option::Option] of the next value to yield from
+/// the iterator, updating the state as necessary. If the function
+/// returns [`None`][std::option::Option::None], the iterator ends.
 ///
-/// This differs from [`unfold`] in that your update functions will probably be
-/// less elegant, but it's easier to deal with state that isn't efficiently cloneable.
+/// This differs from [`unfold`][unfold] in that your update functions
+/// will probably be less elegant, but it's easier to deal with state
+/// that isn't efficiently cloneable.
 ///
 /// # Examples
 /// ```
 /// # #[macro_use] extern crate im;
 /// # use im::iter::unfold_mut;
 /// # use im::catlist::CatList;
+/// # use std::iter::FromIterator;
 /// # fn main() {
 /// // Create an infinite stream of numbers, starting at 0.
 /// let mut it = unfold_mut(0, |i| {
@@ -95,13 +100,14 @@ where
 /// });
 ///
 /// // Make a list out of its first five elements.
-/// let numbers = CatList::from(it.take(5));
+/// let numbers = CatList::from_iter(it.take(5));
 /// assert_eq!(numbers, catlist![0, 1, 2, 3, 4]);
 /// # }
 /// ```
 ///
 /// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
 /// [std::option::Option::None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
+/// [unfold]: ./fn.unfold.html
 pub fn unfold_mut<F, S, A>(value: S, f: F) -> UnfoldMut<F, S>
 where
     F: Fn(&mut S) -> Option<A>,

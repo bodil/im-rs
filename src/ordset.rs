@@ -1,23 +1,22 @@
 //! An ordered set.
 //!
-//! An immutable ordered set implemented as a balanced 2-3 tree.
-//!
-//! This is implemented as an [`OrdMap`][ordmap::OrdMap] with no values, so it shares
-//! the exact performance characteristics of [`OrdMap`][ordmap::OrdMap].
+//! This is implemented as an [`OrdMap`][ordmap::OrdMap] with no
+//! values, so it shares the exact performance characteristics of
+//! [`OrdMap`][ordmap::OrdMap].
 //!
 //! [ordmap::OrdMap]: ../ordmap/struct.OrdMap.html
 
-use std::sync::Arc;
-use std::iter::{FromIterator, IntoIterator};
-use std::cmp::Ordering;
-use std::fmt::{Debug, Error, Formatter};
-use std::collections;
-use std::hash::{Hash, Hasher};
-use std::ops::{Add, Mul};
 use std::borrow::Borrow;
+use std::cmp::Ordering;
+use std::collections;
+use std::fmt::{Debug, Error, Formatter};
+use std::hash::{Hash, Hasher};
+use std::iter::{FromIterator, IntoIterator};
+use std::ops::{Add, Mul};
+use std::sync::Arc;
 
-use ordmap::{self, OrdMap};
 use hashset::HashSet;
+use ordmap::{self, OrdMap};
 use shared::Shared;
 
 /// Construct a set from a sequence of values.
@@ -49,10 +48,9 @@ macro_rules! ordset {
 
 /// # Ordered Set
 ///
-/// An immutable ordered set implemented as a balanced 2-3 tree.
-///
-/// This is implemented as an [`OrdMap`][ordmap::OrdMap] with no values, so it shares
-/// the exact performance characteristics of [`OrdMap`][ordmap::OrdMap].
+/// This is implemented as an [`OrdMap`][ordmap::OrdMap] with no
+/// values, so it shares the exact performance characteristics of
+/// [`OrdMap`][ordmap::OrdMap].
 ///
 /// [ordmap::OrdMap]: ../ordmap/struct.OrdMap.html
 pub struct OrdSet<A>(OrdMap<A, ()>);
@@ -167,6 +165,40 @@ impl<A: Ord> OrdSet<A> {
         OrdSet(self.0.insert(a, ()))
     }
 
+    /// Insert a value into a set.
+    ///
+    /// This is a copy-on-write operation, so that the parts of the
+    /// set's structure which are shared with other sets will be
+    /// safely copied before mutating.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordset::OrdSet;
+    /// # use std::sync::Arc;
+    /// # fn main() {
+    /// let mut set = ordset!{};
+    /// set.insert_mut(123);
+    /// set.insert_mut(456);
+    /// assert_eq!(
+    ///   set,
+    ///   ordset![123, 456]
+    /// );
+    /// # }
+    /// ```
+    ///
+    /// [insert]: #method.insert
+    #[inline]
+    pub fn insert_mut<R>(&mut self, a: R)
+    where
+        R: Shared<A>,
+    {
+        self.0.insert_mut(a, ())
+    }
+
     /// Test if a value is part of a set.
     ///
     /// Time: O(log n)
@@ -175,13 +207,30 @@ impl<A: Ord> OrdSet<A> {
     }
 
     /// Remove a value from a set.
+    ///
+    /// Time: O(log n)
     pub fn remove(&self, a: &A) -> Self {
         OrdSet(self.0.remove(a))
     }
 
+    /// Remove a value from a set.
+    ///
+    /// This is a copy-on-write operation, so that the parts of the
+    /// set's structure which are shared with other sets will be
+    /// safely copied before mutating.
+    ///
+    /// Time: O(log n)
+    #[inline]
+    pub fn remove_mut<R>(&mut self, a: &A) {
+        self.0.remove_mut(a)
+    }
+
     /// Construct the union of two sets.
-    pub fn union(&self, other: &Self) -> Self {
-        OrdSet(self.0.union(&other.0))
+    pub fn union<RS>(&self, other: RS) -> Self
+    where
+        RS: Borrow<Self>,
+    {
+        OrdSet(self.0.union(&other.borrow().0))
     }
 
     /// Construct the union of multiple sets.
@@ -208,8 +257,9 @@ impl<A: Ord> OrdSet<A> {
         OrdSet(self.0.intersection(&other.borrow().0))
     }
 
-    /// Split a set into two, with the left hand set containing values which are smaller
-    /// than `split`, and the right hand set containing values which are larger than `split`.
+    /// Split a set into two, with the left hand set containing values
+    /// which are smaller than `split`, and the right hand set
+    /// containing values which are larger than `split`.
     ///
     /// The `split` value itself is discarded.
     pub fn split(&self, split: &A) -> (Self, Self) {
@@ -217,11 +267,13 @@ impl<A: Ord> OrdSet<A> {
         (OrdSet(l), OrdSet(r))
     }
 
-    /// Split a set into two, with the left hand set containing values which are smaller
-    /// than `split`, and the right hand set containing values which are larger than `split`.
+    /// Split a set into two, with the left hand set containing values
+    /// which are smaller than `split`, and the right hand set
+    /// containing values which are larger than `split`.
     ///
-    /// Returns a tuple of the two maps and a boolean which is true if the `split` value
-    /// existed in the original set, and false otherwise.
+    /// Returns a tuple of the two maps and a boolean which is true if
+    /// the `split` value existed in the original set, and false
+    /// otherwise.
     pub fn split_member(&self, split: &A) -> (Self, bool, Self) {
         let (l, m, r) = self.0.split_lookup(split);
         (OrdSet(l), m.is_some(), OrdSet(r))
@@ -236,9 +288,9 @@ impl<A: Ord> OrdSet<A> {
         self.0.is_submap(&other.borrow().0)
     }
 
-    /// Test whether a set is a proper subset of another set, meaning that
-    /// all values in our set must also be in the other set.
-    /// A proper subset must also be smaller than the other set.
+    /// Test whether a set is a proper subset of another set, meaning
+    /// that all values in our set must also be in the other set. A
+    /// proper subset must also be smaller than the other set.
     pub fn is_proper_subset<RS>(&self, other: RS) -> bool
     where
         RS: Borrow<Self>,
@@ -246,34 +298,40 @@ impl<A: Ord> OrdSet<A> {
         self.0.is_proper_submap(&other.borrow().0)
     }
 
-    /// Construct a set with only the `n` smallest values from a given set.
+    /// Construct a set with only the `n` smallest values from a given
+    /// set.
     pub fn take(&self, n: usize) -> Self {
         OrdSet(self.0.take(n))
     }
 
-    /// Construct a set with the `n` smallest values removed from a given set.
+    /// Construct a set with the `n` smallest values removed from a
+    /// given set.
     pub fn drop(&self, n: usize) -> Self {
         OrdSet(self.0.drop(n))
     }
 
-    /// Remove the smallest value from a set, and return that value as well as the updated set.
+    /// Remove the smallest value from a set, and return that value as
+    /// well as the updated set.
     pub fn pop_min(&self) -> (Option<Arc<A>>, Self) {
         let (pair, set) = self.0.pop_min_with_key();
         (pair.map(|(a, _)| a), OrdSet(set))
     }
 
-    /// Remove the largest value from a set, and return that value as well as the updated set.
+    /// Remove the largest value from a set, and return that value as
+    /// well as the updated set.
     pub fn pop_max(&self) -> (Option<Arc<A>>, Self) {
         let (pair, set) = self.0.pop_max_with_key();
         (pair.map(|(a, _)| a), OrdSet(set))
     }
 
-    /// Discard the smallest value from a set, returning the updated set.
+    /// Discard the smallest value from a set, returning the updated
+    /// set.
     pub fn remove_min(&self) -> Self {
         self.pop_min().1
     }
 
-    /// Discard the largest value from a set, returning the updated set.
+    /// Discard the largest value from a set, returning the updated
+    /// set.
     pub fn remove_max(&self) -> Self {
         self.pop_max().1
     }
