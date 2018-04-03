@@ -23,3 +23,11 @@ Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public
 License along with this program. If not, see
 <http://www.gnu.org/licenses/>.
+
+## Code of Conduct
+
+Please note that this project is released with a [Contributor Code of
+Conduct][coc]. By participating in this project you agree to abide by its
+terms.
+
+[coc]: ./CODE_OF_CONDUCT.md
