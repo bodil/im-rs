@@ -232,11 +232,7 @@ extern crate serde;
 #[cfg(test)]
 extern crate serde_json;
 
-#[macro_use]
-extern crate lazy_static;
-
 mod bits;
-pub mod hash;
 #[macro_use]
 pub mod conslist;
 #[macro_use]

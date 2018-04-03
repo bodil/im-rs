@@ -1,12 +1,17 @@
 #![cfg_attr(feature = "clippy", allow(new_ret_no_self))]
 
-use std::sync::Arc;
-use std::hash::{BuildHasher, Hash};
 use std::fmt::{Debug, Error, Formatter};
+use std::hash::{BuildHasher, Hash, Hasher};
 use std::ptr;
+use std::sync::Arc;
 
-use bits::{bit_index, bitpos, mask, Bitmap, HASH_BITS, HASH_SIZE};
-use hash::hash_key;
+use bits::{bit_index, bitpos, mask, Bitmap, HASH_BITS, HASH_COERCE, HASH_SIZE};
+
+pub fn hash_key<K: Hash, S: BuildHasher>(bh: &S, key: &K) -> Bitmap {
+    let mut hasher = bh.build_hasher();
+    key.hash(&mut hasher);
+    (hasher.finish() & HASH_COERCE) as Bitmap
+}
 
 pub enum Node<K, V> {
     ArrayNode(Arc<ArrayNode<K, V>>),

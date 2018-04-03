@@ -27,17 +27,17 @@ use std::cmp::Ordering;
 use std::collections;
 use std::collections::hash_map::RandomState;
 use std::fmt::{Debug, Error, Formatter};
-use std::hash::{Hash, Hasher};
+use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::FromIterator;
 use std::sync::Arc;
 
-use hash::{hash_key, SharedHasher};
 use ordmap::OrdMap;
 use shared::Shared;
 
 mod nodes;
 pub use self::nodes::Iter;
 use self::nodes::Node;
+use self::nodes::hash_key;
 
 /// Construct a hash map from a sequence of key/value pairs.
 ///
@@ -215,16 +215,13 @@ impl<K, V, S> HashMap<K, V, S> {
     pub fn values(&self) -> Values<K, V> {
         Values { it: self.iter() }
     }
-}
 
-impl<K, V, S> HashMap<K, V, S>
-where
-    K: Hash + Eq,
-    S: SharedHasher,
-{
     /// Construct an empty hash map using the provided hasher.
     #[inline]
-    pub fn with_hasher(hasher: &Arc<S>) -> Self {
+    pub fn with_hasher(hasher: &Arc<S>) -> Self
+    where
+        K: Hash + Eq,
+    {
         HashMap {
             size: 0,
             root: Node::empty(),
@@ -237,6 +234,7 @@ where
     #[inline]
     pub fn new_from<K1, V1>(&self) -> HashMap<K1, V1, S>
     where
+        K: Hash + Eq,
         K1: Hash + Eq,
     {
         HashMap {
@@ -245,7 +243,13 @@ where
             hasher: self.hasher.clone(),
         }
     }
+}
 
+impl<K, V, S> HashMap<K, V, S>
+where
+    K: Hash + Eq,
+    S: BuildHasher + Default,
+{
     /// Get the value for a key from a hash map.
     ///
     /// Time: O(log n)
@@ -970,7 +974,7 @@ impl<K, V, S> PartialEq for HashMap<K, V, S>
 where
     K: Hash + Eq,
     V: PartialEq,
-    S: SharedHasher,
+    S: BuildHasher,
 {
     fn eq(&self, other: &Self) -> bool {
         if self.len() != other.len() {
@@ -997,7 +1001,7 @@ impl<K, V, S> PartialEq for HashMap<K, V, S>
 where
     K: Hash + Eq,
     V: PartialEq,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     default fn eq(&self, other: &Self) -> bool {
         if self.len() != other.len() {
@@ -1024,7 +1028,7 @@ impl<K, V, S> PartialEq for HashMap<K, V, S>
 where
     K: Hash + Eq,
     V: Eq,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn eq(&self, other: &Self) -> bool {
         if self.root.ptr_eq(&other.root) {
@@ -1049,13 +1053,13 @@ where
     }
 }
 
-impl<K: Hash + Eq, V: Eq, S: SharedHasher> Eq for HashMap<K, V, S> {}
+impl<K: Hash + Eq, V: Eq, S: BuildHasher + Default> Eq for HashMap<K, V, S> {}
 
 impl<K, V, S> PartialOrd for HashMap<K, V, S>
 where
     K: Hash + Eq + PartialOrd,
     V: PartialOrd,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         if Arc::ptr_eq(&self.hasher, &other.hasher) {
@@ -1071,7 +1075,7 @@ impl<K, V, S> Ord for HashMap<K, V, S>
 where
     K: Hash + Eq + Ord,
     V: Ord,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn cmp(&self, other: &Self) -> Ordering {
         if Arc::ptr_eq(&self.hasher, &other.hasher) {
@@ -1101,14 +1105,14 @@ where
 impl<K, V, S> Default for HashMap<K, V, S>
 where
     K: Hash + Eq,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     #[inline]
     fn default() -> Self {
         HashMap {
             size: 0,
             root: Node::empty(),
-            hasher: S::shared_hasher(),
+            hasher: Default::default(),
         }
     }
 }
@@ -1185,7 +1189,7 @@ where
     K: Hash + Eq,
     RK: Shared<K>,
     RV: Shared<V>,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn from_iter<T>(i: T) -> Self
     where
@@ -1232,7 +1236,7 @@ impl<'a, K: Hash + Eq, V: Clone, RK, RV, S> From<&'a [(RK, RV)]> for HashMap<K, 
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn from(m: &'a [(RK, RV)]) -> Self {
         m.into_iter()
@@ -1245,7 +1249,7 @@ impl<K: Hash + Eq, V, RK, RV, S> From<Vec<(RK, RV)>> for HashMap<K, V, S>
 where
     RK: Shared<K>,
     RV: Shared<V>,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn from(m: Vec<(RK, RV)>) -> Self {
         m.into_iter()
@@ -1258,7 +1262,7 @@ impl<'a, K: Hash + Eq, V, RK, RV, S> From<&'a Vec<(RK, RV)>> for HashMap<K, V, S
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn from(m: &'a Vec<(RK, RV)>) -> Self {
         m.into_iter()
@@ -1271,7 +1275,7 @@ impl<K: Hash + Eq, V, RK: Hash + Eq, RV, S> From<collections::HashMap<RK, RV>> f
 where
     RK: Shared<K>,
     RV: Shared<V>,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn from(m: collections::HashMap<RK, RV>) -> Self {
         m.into_iter()
@@ -1285,7 +1289,7 @@ impl<'a, K: Hash + Eq, V, RK: Hash + Eq, RV, S> From<&'a collections::HashMap<RK
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn from(m: &'a collections::HashMap<RK, RV>) -> Self {
         m.into_iter()
@@ -1298,7 +1302,7 @@ impl<K: Hash + Eq, V, RK, RV, S> From<collections::BTreeMap<RK, RV>> for HashMap
 where
     RK: Shared<K>,
     RV: Shared<V>,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn from(m: collections::BTreeMap<RK, RV>) -> Self {
         m.into_iter()
@@ -1311,7 +1315,7 @@ impl<'a, K: Hash + Eq, V, RK, RV, S> From<&'a collections::BTreeMap<RK, RV>> for
 where
     &'a RK: Shared<K>,
     &'a RV: Shared<V>,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn from(m: &'a collections::BTreeMap<RK, RV>) -> Self {
         m.into_iter()
@@ -1322,7 +1326,7 @@ where
 
 impl<K: Ord + Hash + Eq, V, S> From<OrdMap<K, V>> for HashMap<K, V, S>
 where
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn from(m: OrdMap<K, V>) -> Self {
         m.into_iter().collect()
@@ -1331,7 +1335,7 @@ where
 
 impl<'a, K: Ord + Hash + Eq, V, S> From<&'a OrdMap<K, V>> for HashMap<K, V, S>
 where
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn from(m: &'a OrdMap<K, V>) -> Self {
         m.into_iter().collect()

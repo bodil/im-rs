@@ -10,20 +10,19 @@
 
 #![cfg_attr(feature = "clippy", allow(implicit_hasher))]
 
-use std::sync::Arc;
-use std::iter::{FromIterator, IntoIterator};
-use std::fmt::{Debug, Error, Formatter};
-use std::collections::{self, BTreeSet};
-use std::hash::{Hash, Hasher};
-use std::ops::{Add, Mul};
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections::hash_map::RandomState;
+use std::collections::{self, BTreeSet};
+use std::fmt::{Debug, Error, Formatter};
+use std::hash::{BuildHasher, Hash, Hasher};
+use std::iter::{FromIterator, IntoIterator};
+use std::ops::{Add, Mul};
+use std::sync::Arc;
 
 use hashmap::{self, HashMap};
-use shared::Shared;
-use hash::SharedHasher;
 use ordset::OrdSet;
+use shared::Shared;
 
 /// Construct a set from a sequence of values.
 ///
@@ -141,7 +140,7 @@ impl<A, S> HashSet<A, S> {
 impl<A, S> HashSet<A, S>
 where
     A: Hash + Eq,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     /// Construct an empty hash set using the provided hasher.
     #[inline]
@@ -224,7 +223,10 @@ where
     }
 
     /// Construct the union of two sets.
-    pub fn union<RS>(&self, other: RS) -> Self where RS: Borrow<Self> {
+    pub fn union<RS>(&self, other: RS) -> Self
+    where
+        RS: Borrow<Self>,
+    {
         HashSet(self.0.union(&other.borrow().0))
     }
 
@@ -280,27 +282,27 @@ impl<A, S> Clone for HashSet<A, S> {
     }
 }
 
-impl<A: Hash + Eq, S: SharedHasher> PartialEq for HashSet<A, S> {
+impl<A: Hash + Eq, S: BuildHasher + Default> PartialEq for HashSet<A, S> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
-impl<A: Hash + Eq, S: SharedHasher> Eq for HashSet<A, S> {}
+impl<A: Hash + Eq, S: BuildHasher + Default> Eq for HashSet<A, S> {}
 
-impl<A: Hash + Eq + PartialOrd, S: SharedHasher> PartialOrd for HashSet<A, S> {
+impl<A: Hash + Eq + PartialOrd, S: BuildHasher + Default> PartialOrd for HashSet<A, S> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.0.partial_cmp(&other.0)
     }
 }
 
-impl<A: Hash + Eq + Ord, S: SharedHasher> Ord for HashSet<A, S> {
+impl<A: Hash + Eq + Ord, S: BuildHasher + Default> Ord for HashSet<A, S> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.0.cmp(&other.0)
     }
 }
 
-impl<A: Hash + Eq, S: SharedHasher> Hash for HashSet<A, S> {
+impl<A: Hash + Eq, S: BuildHasher + Default> Hash for HashSet<A, S> {
     fn hash<H>(&self, state: &mut H)
     where
         H: Hasher,
@@ -311,13 +313,13 @@ impl<A: Hash + Eq, S: SharedHasher> Hash for HashSet<A, S> {
     }
 }
 
-impl<A: Hash + Eq, S: SharedHasher> Default for HashSet<A, S> {
+impl<A: Hash + Eq, S: BuildHasher + Default> Default for HashSet<A, S> {
     fn default() -> Self {
         HashSet(Default::default())
     }
 }
 
-impl<'a, A: Hash + Eq, S: SharedHasher> Add for &'a HashSet<A, S> {
+impl<'a, A: Hash + Eq, S: BuildHasher + Default> Add for &'a HashSet<A, S> {
     type Output = HashSet<A, S>;
 
     fn add(self, other: Self) -> Self::Output {
@@ -325,7 +327,7 @@ impl<'a, A: Hash + Eq, S: SharedHasher> Add for &'a HashSet<A, S> {
     }
 }
 
-impl<'a, A: Hash + Eq, S: SharedHasher> Mul for &'a HashSet<A, S> {
+impl<'a, A: Hash + Eq, S: BuildHasher + Default> Mul for &'a HashSet<A, S> {
     type Output = HashSet<A, S>;
 
     fn mul(self, other: Self) -> Self::Output {
@@ -333,7 +335,7 @@ impl<'a, A: Hash + Eq, S: SharedHasher> Mul for &'a HashSet<A, S> {
     }
 }
 
-impl<A: Hash + Eq + Debug, S: SharedHasher> Debug for HashSet<A, S> {
+impl<A: Hash + Eq + Debug, S: BuildHasher + Default> Debug for HashSet<A, S> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "{{ ")?;
         let mut it = self.iter().peekable();
@@ -370,7 +372,7 @@ impl<A> Iterator for Iter<A> {
 impl<A: Hash + Eq, RA, S> FromIterator<RA> for HashSet<A, S>
 where
     RA: Shared<A>,
-    S: SharedHasher,
+    S: BuildHasher + Default,
 {
     fn from_iter<T>(i: T) -> Self
     where
@@ -404,43 +406,43 @@ impl<A, S> IntoIterator for HashSet<A, S> {
 
 // Conversions
 
-impl<'a, A: Hash + Eq + Clone, S: SharedHasher> From<&'a [A]> for HashSet<A, S> {
+impl<'a, A: Hash + Eq + Clone, S: BuildHasher + Default> From<&'a [A]> for HashSet<A, S> {
     fn from(slice: &'a [A]) -> Self {
         slice.into_iter().cloned().collect()
     }
 }
 
-impl<'a, A: Hash + Eq, S: SharedHasher> From<&'a [Arc<A>]> for HashSet<A, S> {
+impl<'a, A: Hash + Eq, S: BuildHasher + Default> From<&'a [Arc<A>]> for HashSet<A, S> {
     fn from(slice: &'a [Arc<A>]) -> Self {
         slice.into_iter().cloned().collect()
     }
 }
 
-impl<A: Hash + Eq, S: SharedHasher> From<Vec<A>> for HashSet<A, S> {
+impl<A: Hash + Eq, S: BuildHasher + Default> From<Vec<A>> for HashSet<A, S> {
     fn from(vec: Vec<A>) -> Self {
         vec.into_iter().collect()
     }
 }
 
-impl<'a, A: Hash + Eq + Clone, S: SharedHasher> From<&'a Vec<A>> for HashSet<A, S> {
+impl<'a, A: Hash + Eq + Clone, S: BuildHasher + Default> From<&'a Vec<A>> for HashSet<A, S> {
     fn from(vec: &Vec<A>) -> Self {
         vec.into_iter().cloned().collect()
     }
 }
 
-impl<'a, A: Hash + Eq, S: SharedHasher> From<&'a Vec<Arc<A>>> for HashSet<A, S> {
+impl<'a, A: Hash + Eq, S: BuildHasher + Default> From<&'a Vec<Arc<A>>> for HashSet<A, S> {
     fn from(vec: &Vec<Arc<A>>) -> Self {
         vec.into_iter().cloned().collect()
     }
 }
 
-impl<A: Eq + Hash, S: SharedHasher> From<collections::HashSet<A>> for HashSet<A, S> {
+impl<A: Eq + Hash, S: BuildHasher + Default> From<collections::HashSet<A>> for HashSet<A, S> {
     fn from(hash_set: collections::HashSet<A>) -> Self {
         hash_set.into_iter().collect()
     }
 }
 
-impl<'a, A: Eq + Hash + Clone, S: SharedHasher> From<&'a collections::HashSet<A>>
+impl<'a, A: Eq + Hash + Clone, S: BuildHasher + Default> From<&'a collections::HashSet<A>>
     for HashSet<A, S>
 {
     fn from(hash_set: &collections::HashSet<A>) -> Self {
@@ -448,37 +450,39 @@ impl<'a, A: Eq + Hash + Clone, S: SharedHasher> From<&'a collections::HashSet<A>
     }
 }
 
-impl<'a, A: Eq + Hash, S: SharedHasher> From<&'a collections::HashSet<Arc<A>>> for HashSet<A, S> {
+impl<'a, A: Eq + Hash, S: BuildHasher + Default> From<&'a collections::HashSet<Arc<A>>>
+    for HashSet<A, S>
+{
     fn from(hash_set: &collections::HashSet<Arc<A>>) -> Self {
         hash_set.into_iter().cloned().collect()
     }
 }
 
-impl<A: Hash + Eq, S: SharedHasher> From<BTreeSet<A>> for HashSet<A, S> {
+impl<A: Hash + Eq, S: BuildHasher + Default> From<BTreeSet<A>> for HashSet<A, S> {
     fn from(btree_set: BTreeSet<A>) -> Self {
         btree_set.into_iter().collect()
     }
 }
 
-impl<'a, A: Hash + Eq + Clone, S: SharedHasher> From<&'a BTreeSet<A>> for HashSet<A, S> {
+impl<'a, A: Hash + Eq + Clone, S: BuildHasher + Default> From<&'a BTreeSet<A>> for HashSet<A, S> {
     fn from(btree_set: &BTreeSet<A>) -> Self {
         btree_set.into_iter().cloned().collect()
     }
 }
 
-impl<'a, A: Hash + Eq, S: SharedHasher> From<&'a BTreeSet<Arc<A>>> for HashSet<A, S> {
+impl<'a, A: Hash + Eq, S: BuildHasher + Default> From<&'a BTreeSet<Arc<A>>> for HashSet<A, S> {
     fn from(btree_set: &BTreeSet<Arc<A>>) -> Self {
         btree_set.into_iter().cloned().collect()
     }
 }
 
-impl<A: Ord + Hash + Eq, S: SharedHasher> From<OrdSet<A>> for HashSet<A, S> {
+impl<A: Ord + Hash + Eq, S: BuildHasher + Default> From<OrdSet<A>> for HashSet<A, S> {
     fn from(ordset: OrdSet<A>) -> Self {
         ordset.into_iter().collect()
     }
 }
 
-impl<'a, A: Ord + Hash + Eq, S: SharedHasher> From<&'a OrdSet<A>> for HashSet<A, S> {
+impl<'a, A: Ord + Hash + Eq, S: BuildHasher + Default> From<&'a OrdSet<A>> for HashSet<A, S> {
     fn from(ordset: &OrdSet<A>) -> Self {
         ordset.into_iter().collect()
     }

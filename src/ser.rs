@@ -1,16 +1,16 @@
-use std::ops::Deref;
-use std::marker::PhantomData;
-use std::fmt;
-use std::hash::Hash;
-use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
-use hash::SharedHasher;
+use serde::ser::{Serialize, SerializeMap, SerializeSeq, Serializer};
+use std::fmt;
+use std::hash::{BuildHasher, Hash};
+use std::marker::PhantomData;
+use std::ops::Deref;
+
 use catlist::CatList;
 use conslist::ConsList;
-use ordset::OrdSet;
-use ordmap::OrdMap;
 use hashmap::HashMap;
 use hashset::HashSet;
+use ordmap::OrdMap;
+use ordset::OrdSet;
 use vector::Vector;
 
 struct SeqVisitor<'de, S, A>
@@ -216,8 +216,8 @@ impl<K: Serialize + Ord, V: Serialize> Serialize for OrdMap<K, V> {
 
 // HashMap
 
-impl<'de, K: Deserialize<'de> + Hash + Eq, V: Deserialize<'de>, S: SharedHasher> Deserialize<'de>
-    for HashMap<K, V, S>
+impl<'de, K: Deserialize<'de> + Hash + Eq, V: Deserialize<'de>, S: BuildHasher + Default>
+    Deserialize<'de> for HashMap<K, V, S>
 {
     fn deserialize<D>(des: D) -> Result<Self, D::Error>
     where
@@ -227,7 +227,9 @@ impl<'de, K: Deserialize<'de> + Hash + Eq, V: Deserialize<'de>, S: SharedHasher>
     }
 }
 
-impl<K: Serialize + Hash + Eq, V: Serialize, S: SharedHasher> Serialize for HashMap<K, V, S> {
+impl<K: Serialize + Hash + Eq, V: Serialize, S: BuildHasher + Default> Serialize
+    for HashMap<K, V, S>
+{
     fn serialize<Ser>(&self, ser: Ser) -> Result<Ser::Ok, Ser::Error>
     where
         Ser: Serializer,
@@ -242,7 +244,9 @@ impl<K: Serialize + Hash + Eq, V: Serialize, S: SharedHasher> Serialize for Hash
 
 // HashSet
 
-impl<'de, A: Deserialize<'de> + Hash + Eq, S: SharedHasher> Deserialize<'de> for HashSet<A, S> {
+impl<'de, A: Deserialize<'de> + Hash + Eq, S: BuildHasher + Default> Deserialize<'de>
+    for HashSet<A, S>
+{
     fn deserialize<D>(des: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -251,7 +255,7 @@ impl<'de, A: Deserialize<'de> + Hash + Eq, S: SharedHasher> Deserialize<'de> for
     }
 }
 
-impl<A: Serialize + Hash + Eq, S: SharedHasher> Serialize for HashSet<A, S> {
+impl<A: Serialize + Hash + Eq, S: BuildHasher + Default> Serialize for HashSet<A, S> {
     fn serialize<Ser>(&self, ser: Ser) -> Result<Ser::Ok, Ser::Error>
     where
         Ser: Serializer,
@@ -293,14 +297,14 @@ impl<A: Serialize> Serialize for Vector<A> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use serde_json::{from_str, to_string};
-    use proptest::num::i32;
     use catlist::proptest::catlist;
     use conslist::proptest::conslist;
     use hashmap::proptest::hash_map;
     use hashset::proptest::hash_set;
     use ordmap::proptest::ord_map;
     use ordset::proptest::ord_set;
+    use proptest::num::i32;
+    use serde_json::{from_str, to_string};
     use vector::proptest::vector;
 
     proptest! {
