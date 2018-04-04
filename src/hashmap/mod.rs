@@ -33,6 +33,7 @@ use std::collections::hash_map::RandomState;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::FromIterator;
+use std::ops::Add;
 use std::sync::Arc;
 
 use ordmap::OrdMap;
@@ -222,14 +223,15 @@ impl<K, V, S> HashMap<K, V, S> {
 
     /// Construct an empty hash map using the provided hasher.
     #[inline]
-    pub fn with_hasher(hasher: &Arc<S>) -> Self
+    pub fn with_hasher<RS>(hasher: RS) -> Self
     where
         K: Hash + Eq,
+        RS: Shared<S>,
     {
         HashMap {
             size: 0,
             root: Node::empty(),
-            hasher: hasher.clone(),
+            hasher: hasher.shared(),
         }
     }
 
@@ -252,7 +254,7 @@ impl<K, V, S> HashMap<K, V, S> {
 impl<K, V, S> HashMap<K, V, S>
 where
     K: Hash + Eq,
-    S: BuildHasher + Default,
+    S: BuildHasher,
 {
     /// Get the value for a key from a hash map.
     ///
@@ -622,7 +624,7 @@ where
     /// Time: O(log n)
     pub fn remove(&self, k: &K) -> Self {
         match self.root.remove(0, hash_key(&*self.hasher, k), k) {
-            (_, None) => HashMap::with_hasher(&self.hasher),
+            (_, None) => HashMap::with_hasher(self.hasher.clone()),
             (_, Some(new_root)) => HashMap {
                 root: new_root,
                 size: self.size - 1,
@@ -690,7 +692,7 @@ where
                 k,
                 v,
                 match map {
-                    None => HashMap::with_hasher(&self.hasher),
+                    None => HashMap::with_hasher(self.hasher.clone()),
                     Some(node) => HashMap {
                         size: self.size - 1,
                         root: node,
@@ -757,6 +759,7 @@ where
     /// of the leftmost when a key appears in more than one map.
     pub fn unions<I>(i: I) -> Self
     where
+        S: Default,
         I: IntoIterator<Item = Self>,
     {
         i.into_iter().fold(Default::default(), |a, b| a.union(&b))
@@ -767,6 +770,7 @@ where
     /// one map.
     pub fn unions_with<I, F>(i: I, f: F) -> Self
     where
+        S: Default,
         I: IntoIterator<Item = Self>,
         F: Fn(Arc<V>, Arc<V>) -> Arc<V>,
     {
@@ -779,6 +783,7 @@ where
     /// one map. The function receives the key as well as both values.
     pub fn unions_with_key<I, F>(i: I, f: F) -> Self
     where
+        S: Default,
         I: IntoIterator<Item = Self>,
         F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
     {
@@ -1005,7 +1010,7 @@ impl<K, V, S> PartialEq for HashMap<K, V, S>
 where
     K: Hash + Eq,
     V: PartialEq,
-    S: BuildHasher + Default,
+    S: BuildHasher,
 {
     default fn eq(&self, other: &Self) -> bool {
         if self.len() != other.len() {
@@ -1032,7 +1037,7 @@ impl<K, V, S> PartialEq for HashMap<K, V, S>
 where
     K: Hash + Eq,
     V: Eq,
-    S: BuildHasher + Default,
+    S: BuildHasher,
 {
     fn eq(&self, other: &Self) -> bool {
         if self.root.ptr_eq(&other.root) {
@@ -1057,13 +1062,13 @@ where
     }
 }
 
-impl<K: Hash + Eq, V: Eq, S: BuildHasher + Default> Eq for HashMap<K, V, S> {}
+impl<K: Hash + Eq, V: Eq, S: BuildHasher> Eq for HashMap<K, V, S> {}
 
 impl<K, V, S> PartialOrd for HashMap<K, V, S>
 where
     K: Hash + Eq + PartialOrd,
     V: PartialOrd,
-    S: BuildHasher + Default,
+    S: BuildHasher,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         if Arc::ptr_eq(&self.hasher, &other.hasher) {
@@ -1079,7 +1084,7 @@ impl<K, V, S> Ord for HashMap<K, V, S>
 where
     K: Hash + Eq + Ord,
     V: Ord,
-    S: BuildHasher + Default,
+    S: BuildHasher,
 {
     fn cmp(&self, other: &Self) -> Ordering {
         if Arc::ptr_eq(&self.hasher, &other.hasher) {
@@ -1121,16 +1126,17 @@ where
     }
 }
 
-// impl<'a, K, V, S> Add for &'a Map<K, V, S>
-// where
-//     K: Hash + Eq,
-// {
-//     type Output = Map<K, V, S>;
+impl<'a, K, V, S> Add for &'a HashMap<K, V, S>
+where
+    K: Hash + Eq,
+    S: BuildHasher,
+{
+    type Output = HashMap<K, V, S>;
 
-//     fn add(self, other: Self) -> Self::Output {
-//         self.union(other)
-//     }
-// }
+    fn add(self, other: Self) -> Self::Output {
+        self.union(other)
+    }
+}
 
 impl<K, V, S> Debug for HashMap<K, V, S>
 where
