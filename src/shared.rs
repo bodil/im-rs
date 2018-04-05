@@ -16,22 +16,37 @@ use std::sync::Arc;
 /// Because everything stored in `im`'s persistent data structures is
 /// wrapped in [`Arc`][std::sync::Arc]s, `Shared` makes you have to
 /// worry less about whether what you've got is an `A` or an `Arc<A>`
-/// - the compiler will just figure it out for you, which is as it
-/// should be.
+/// or a reference to such - the compiler will just figure it out for
+/// you, which is as it should be.
 ///
 /// [std::sync::Arc]: https://doc.rust-lang.org/std/sync/struct.Arc.html
-pub trait Shared<T> {
-    fn shared(self) -> Arc<T>;
+pub trait Shared<A> {
+    fn shared(self) -> Arc<A>;
 }
 
-impl<T> Shared<T> for T {
-    fn shared(self) -> Arc<T> {
-        Arc::from(self)
+impl<A> Shared<A> for A {
+    fn shared(self) -> Arc<A> {
+        Arc::new(self)
     }
 }
 
-impl<T> Shared<T> for Arc<T> {
-    fn shared(self) -> Arc<T> {
+impl<'a, A> Shared<A> for &'a A
+where
+    A: Clone,
+{
+    fn shared(self) -> Arc<A> {
+        Arc::new(self.clone())
+    }
+}
+
+impl<A> Shared<A> for Arc<A> {
+    fn shared(self) -> Arc<A> {
         self
+    }
+}
+
+impl<'a, A> Shared<A> for &'a Arc<A> {
+    fn shared(self) -> Arc<A> {
+        self.clone()
     }
 }

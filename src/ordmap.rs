@@ -1488,7 +1488,7 @@ mod test {
             let mut vec = input;
             vec.sort();
             vec.dedup();
-            let map = OrdMap::from_iter(vec.iter().map(|i| (i, i)));
+            let map: OrdMap<i32, i32> = OrdMap::from_iter(vec.iter().map(|i| (i, i)));
             vec.len() == map.len()
         }
 
@@ -1530,7 +1530,8 @@ mod test {
             let input: Vec<(usize, usize)> =
                 input_unbounded.into_iter().map(|(k, v)| (k % 64, v % 64)).collect();
             let mut map = OrdMap::from(input.clone());
-            let mut tree: collections::BTreeMap<usize, usize> = input.into_iter().collect();
+            let mut tree: collections::BTreeMap<usize, usize> =
+                input.into_iter().collect();
             for (ins, key, val) in ops {
                 if ins {
                     tree.insert(key, val);
@@ -1569,20 +1570,24 @@ mod test {
 
         #[test]
         fn iterate_over(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
-            let map: OrdMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+            let map: OrdMap<i16, i16> =
+                FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             assert_eq!(m.len(), map.iter().count());
         }
 
         #[test]
         fn equality(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..128)) {
-            let map1: OrdMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
-            let map2: OrdMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+            let map1: OrdMap<i16, i16> =
+                FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+            let map2: OrdMap<i16, i16> =
+                FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             assert_eq!(map1, map2);
         }
 
         #[test]
         fn lookup(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
-            let map: OrdMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+            let map: OrdMap<i16, i16> =
+                FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             for (k, v) in m {
                 assert_eq!(Some(*v), map.get(k).map(|v| *v));
             }
@@ -1625,12 +1630,11 @@ mod test {
             }
         }
 
-        // Failing: ([(7, 0), (3, 0), (8, 0), (9, 0), (0, 0), (4, 0), (0, 0), (1, 0),
-        //  (2, 0), (5, 0), (0, 0), (10, 0), (0, 0), (6, 0), (11, 0), (0, 0), (12, 0),
-        //  (13, 0), (14, 0), (15, 0)], 48)
         #[test]
-        fn delete_and_reinsert(ref input in collection::hash_map(i16::ANY, i16::ANY, 1..100),
-                               index_rand in usize::ANY) {
+        fn delete_and_reinsert(
+            ref input in collection::hash_map(i16::ANY, i16::ANY, 1..100),
+            index_rand in usize::ANY
+        ) {
             let index = *input.keys().nth(index_rand % input.len()).unwrap();
             let map1 = OrdMap::from_iter(input.clone());
             let (val, map2) = map1.pop(&index).unwrap();
