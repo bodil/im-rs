@@ -28,9 +28,8 @@ use std::sync::Arc;
 use hashmap::HashMap;
 use shared::Shared;
 
-mod nodes;
-pub use self::nodes::Iter;
-use self::nodes::{Insert, Node, Remove};
+pub use nodes::btree::Iter;
+use nodes::btree::{Insert, Node, Remove};
 
 /// Construct a map from a sequence of key/value pairs.
 ///

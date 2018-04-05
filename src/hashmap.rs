@@ -39,7 +39,7 @@ use std::sync::Arc;
 use bits::hash_key;
 use shared::Shared;
 
-use hashnodes::{Iter, Node};
+use nodes::hamt::{Iter, Node};
 
 /// Construct a hash map from a sequence of key/value pairs.
 ///
@@ -1476,7 +1476,8 @@ mod test {
         #[test]
         fn remove(ref pairs in collection::vec((i16::ANY, i16::ANY), 0..100)) {
             let hasher: BuildHasherDefault<LolHasher> = Default::default();
-            let mut m: collections::HashMap<i16, i16, _> = collections::HashMap::with_hasher(hasher.clone());
+            let mut m: collections::HashMap<i16, i16, _> =
+                collections::HashMap::with_hasher(hasher.clone());
             for &(ref k, ref v) in pairs {
                 m.insert(*k, *v);
             }
@@ -1509,7 +1510,8 @@ mod test {
         #[test]
         fn remove_mut(ref pairs in collection::vec((i16::ANY, i16::ANY), 0..100)) {
             let hasher: BuildHasherDefault<LolHasher> = Default::default();
-            let mut m: collections::HashMap<i16, i16, _> = collections::HashMap::with_hasher(hasher.clone());
+            let mut m: collections::HashMap<i16, i16, _> =
+                collections::HashMap::with_hasher(hasher.clone());
             for &(ref k, ref v) in pairs {
                 m.insert(*k, *v);
             }

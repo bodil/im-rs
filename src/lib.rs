@@ -236,7 +236,7 @@ extern crate serde;
 extern crate serde_json;
 
 mod bits;
-mod hashnodes;
+mod nodes;
 #[macro_use]
 pub mod conslist;
 #[macro_use]

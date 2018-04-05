@@ -25,7 +25,7 @@ use std::ops::{Add, Mul};
 use std::sync::Arc;
 
 use bits::hash_key;
-use hashnodes::{Iter, Node};
+use nodes::hamt::{Iter, Node};
 use ordset::OrdSet;
 use shared::Shared;
 

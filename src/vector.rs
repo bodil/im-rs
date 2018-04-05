@@ -38,9 +38,7 @@ use std::sync::Arc;
 use bits::{HASH_BITS, HASH_MASK, HASH_SIZE};
 use shared::Shared;
 
-mod nodes;
-
-use self::nodes::{Entry, Node};
+use nodes::vector::{Entry, Node};
 
 /// Construct a vector from a sequence of elements.
 ///
