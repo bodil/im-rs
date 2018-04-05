@@ -214,7 +214,6 @@
 #![cfg_attr(feature = "clippy", plugin(clippy))]
 #![cfg_attr(feature = "clippy", allow(type_complexity))]
 #![cfg_attr(feature = "clippy", allow(unreadable_literal))]
-
 #![cfg_attr(has_specialisation, feature(specialization))]
 
 #[cfg(any(test, feature = "quickcheck"))]
@@ -237,6 +236,7 @@ extern crate serde;
 extern crate serde_json;
 
 mod bits;
+mod hashnodes;
 #[macro_use]
 pub mod conslist;
 #[macro_use]

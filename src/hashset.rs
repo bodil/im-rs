@@ -4,7 +4,7 @@
 
 //! A hash set.
 //!
-//! An immutable hash set backed by a [`HashMap`][hashmap::HashMap].
+//! An immutable hash set.
 //!
 //! This is implemented as a [`HashMap`][hashmap::HashMap] with no
 //! values, so it shares the exact performance characteristics of
@@ -24,7 +24,8 @@ use std::iter::{FromIterator, IntoIterator};
 use std::ops::{Add, Mul};
 use std::sync::Arc;
 
-use hashmap::{self, HashMap};
+use bits::hash_key;
+use hashnodes::{Iter, Node};
 use ordset::OrdSet;
 use shared::Shared;
 
@@ -57,14 +58,18 @@ macro_rules! hashset {
 
 /// A hash set.
 ///
-/// An immutable hash set backed by a [`HashMap`][hashmap::HashMap].
+/// An immutable hash set.
 ///
 /// This is implemented as a [`HashMap`][hashmap::HashMap] with no
 /// values, so it shares the exact performance characteristics of
 /// [`HashMap`][hashmap::HashMap].
 ///
 /// [hashmap::HashMap]: ../hashmap/struct.HashMap.html
-pub struct HashSet<A, S = RandomState>(HashMap<A, (), S>);
+pub struct HashSet<A, S = RandomState> {
+    hasher: Arc<S>,
+    root: Arc<Node<Arc<A>>>,
+    size: usize,
+}
 
 impl<A> HashSet<A, RandomState>
 where
@@ -72,7 +77,7 @@ where
 {
     /// Construct an empty set.
     pub fn new() -> Self {
-        HashSet(HashMap::new())
+        Default::default()
     }
 
     /// Construct a set with a single value.
@@ -92,7 +97,7 @@ where
     where
         R: Shared<A>,
     {
-        HashSet(HashMap::<A, ()>::singleton(a, ()))
+        HashSet::new().insert(a)
     }
 }
 
@@ -116,7 +121,7 @@ impl<A, S> HashSet<A, S> {
     /// # }
     /// ```
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.len() == 0
     }
 
     /// Get the size of a set.
@@ -133,23 +138,64 @@ impl<A, S> HashSet<A, S> {
     /// # }
     /// ```
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.size
     }
 
-    pub fn iter(&self) -> Iter<A> {
-        Iter { it: self.0.iter() }
+    /// Get an iterator over the values in a hash set.
+    ///
+    /// Please note that the order is consistent between sets using
+    /// the same hasher, but no other ordering guarantee is offered.
+    /// Items will not come out in insertion order or sort order.
+    /// They will, however, come out in the same order every time for
+    /// the same set.
+    pub fn iter(&self) -> Iter<Arc<A>> {
+        Node::iter(self.root.clone(), self.size)
     }
 }
 
 impl<A, S> HashSet<A, S>
 where
     A: Hash + Eq,
-    S: BuildHasher + Default,
+    S: BuildHasher,
 {
+    fn match_key(key: &A, other: &Arc<A>) -> bool {
+        key == &**other
+    }
+
+    fn compare_keys(key: &Arc<A>, other: &Arc<A>) -> bool {
+        key == other
+    }
+
+    fn test_eq(&self, other: &Self) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+        let mut seen = collections::HashSet::new();
+        for value in self.iter() {
+            if !other.contains(&value) {
+                return false;
+            }
+            seen.insert(value);
+        }
+        for value in other.iter() {
+            if !seen.contains(&value) {
+                return false;
+            }
+        }
+        true
+    }
+
     /// Construct an empty hash set using the provided hasher.
     #[inline]
-    pub fn with_hasher(hasher: &Arc<S>) -> Self {
-        HashSet(HashMap::with_hasher(hasher))
+    pub fn with_hasher<RS>(hasher: RS) -> Self
+    where
+        RS: Shared<S>,
+    {
+        HashSet {
+            size: 0,
+            root: Arc::new(Node::new()),
+            hasher: hasher.shared(),
+        }
     }
 
     /// Construct an empty hash set using the same hasher as the current hash set.
@@ -158,7 +204,11 @@ where
     where
         A1: Hash + Eq,
     {
-        HashSet(self.0.new_from())
+        HashSet {
+            size: 0,
+            root: Arc::new(Node::new()),
+            hasher: self.hasher.clone(),
+        }
     }
 
     /// Insert a value into a set.
@@ -183,7 +233,26 @@ where
     where
         R: Shared<A>,
     {
-        HashSet(self.0.insert(a, ()))
+        self.insert_ref(a.shared())
+    }
+
+    fn insert_ref(&self, a: Arc<A>) -> Self {
+        let (added, new_node) = self.root.insert(
+            hash_key(&*self.hasher, &a),
+            0,
+            a,
+            &HashSet::<A, S>::compare_keys,
+            &|a| hash_key(&*self.hasher, a),
+        );
+        HashSet {
+            root: Arc::new(new_node),
+            size: if added {
+                self.size + 1
+            } else {
+                self.size
+            },
+            hasher: self.hasher.clone(),
+        }
     }
 
     /// Insert a value into a set.
@@ -198,21 +267,52 @@ where
     where
         R: Shared<A>,
     {
-        self.0.insert_mut(a, ())
+        self.insert_mut_ref(a.shared())
+    }
+
+    fn insert_mut_ref(&mut self, a: Arc<A>) {
+        let hasher = &*self.hasher;
+        let hash = hash_key(&*self.hasher, &a);
+        let root = Arc::make_mut(&mut self.root);
+        let added = root.insert_mut(hash, 0, a, &HashSet::<A, S>::compare_keys, &|a| {
+            hash_key(hasher, a)
+        });
+        if added {
+            self.size += 1
+        }
     }
 
     /// Test if a value is part of a set.
     ///
     /// Time: O(log n)
     pub fn contains(&self, a: &A) -> bool {
-        self.0.contains_key(a)
+        self.root
+            .get(
+                hash_key(&*self.hasher, a),
+                0,
+                a,
+                &HashSet::<A, S>::match_key,
+            )
+            .is_some()
     }
 
-    /// Remove a value from a set.
+    /// Remove a value from a set if it exists.
     ///
     /// Time: O(log n)
     pub fn remove(&self, a: &A) -> Self {
-        HashSet(self.0.remove(a))
+        self.root
+            .remove(
+                hash_key(&*self.hasher, a),
+                0,
+                a,
+                &HashSet::<A, S>::match_key,
+            )
+            .map(|(_, node)| HashSet {
+                hasher: self.hasher.clone(),
+                size: self.size - 1,
+                root: Arc::new(node),
+            })
+            .unwrap_or_else(|| self.clone())
     }
 
     /// Remove a value from a set if it exists.
@@ -223,7 +323,16 @@ where
     ///
     /// Time: O(log n)
     pub fn remove_mut(&mut self, a: &A) {
-        self.0.remove_mut(a)
+        let root = Arc::make_mut(&mut self.root);
+        let result = root.remove_mut(
+            hash_key(&*self.hasher, a),
+            0,
+            a,
+            &HashSet::<A, S>::match_key,
+        );
+        if result.is_some() {
+            self.size -= 1;
+        }
     }
 
     /// Construct the union of two sets.
@@ -231,13 +340,17 @@ where
     where
         RS: Borrow<Self>,
     {
-        HashSet(self.0.union(&other.borrow().0))
+        other
+            .borrow()
+            .iter()
+            .fold(self.clone(), |set, a| set.insert(a.clone()))
     }
 
     /// Construct the union of multiple sets.
     pub fn unions<I>(i: I) -> Self
     where
         I: IntoIterator<Item = Self>,
+        S: Default,
     {
         i.into_iter().fold(Default::default(), |a, b| a.union(&b))
     }
@@ -247,7 +360,10 @@ where
     where
         RS: Borrow<Self>,
     {
-        HashSet(self.0.difference(&other.borrow().0))
+        other
+            .borrow()
+            .iter()
+            .fold(self.clone(), |set, a| set.remove(&a))
     }
 
     /// Construct the intersection of two sets.
@@ -255,7 +371,13 @@ where
     where
         RS: Borrow<Self>,
     {
-        HashSet(self.0.intersection(&other.borrow().0))
+        other.borrow().iter().fold(self.new_from(), |set, a| {
+            if self.contains(&a) {
+                set.insert(a)
+            } else {
+                set
+            }
+        })
     }
 
     /// Test whether a set is a subset of another set, meaning that
@@ -264,7 +386,8 @@ where
     where
         RS: Borrow<Self>,
     {
-        self.0.is_submap(&other.borrow().0)
+        let o = other.borrow();
+        self.iter().all(|a| o.contains(&a))
     }
 
     /// Test whether a set is a proper subset of another set, meaning
@@ -274,7 +397,7 @@ where
     where
         RS: Borrow<Self>,
     {
-        self.0.is_proper_submap(&other.borrow().0)
+        self.len() != other.borrow().len() && self.is_subset(other)
     }
 }
 
@@ -282,13 +405,17 @@ where
 
 impl<A, S> Clone for HashSet<A, S> {
     fn clone(&self) -> Self {
-        HashSet(self.0.clone())
+        HashSet {
+            hasher: self.hasher.clone(),
+            root: self.root.clone(),
+            size: self.size,
+        }
     }
 }
 
 impl<A: Hash + Eq, S: BuildHasher + Default> PartialEq for HashSet<A, S> {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        self.test_eq(other)
     }
 }
 
@@ -296,13 +423,23 @@ impl<A: Hash + Eq, S: BuildHasher + Default> Eq for HashSet<A, S> {}
 
 impl<A: Hash + Eq + PartialOrd, S: BuildHasher + Default> PartialOrd for HashSet<A, S> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.0.partial_cmp(&other.0)
+        if Arc::ptr_eq(&self.hasher, &other.hasher) {
+            return self.iter().partial_cmp(other.iter());
+        }
+        let m1: ::std::collections::HashSet<Arc<A>> = self.iter().collect();
+        let m2: ::std::collections::HashSet<Arc<A>> = other.iter().collect();
+        m1.iter().partial_cmp(m2.iter())
     }
 }
 
 impl<A: Hash + Eq + Ord, S: BuildHasher + Default> Ord for HashSet<A, S> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.0.cmp(&other.0)
+        if Arc::ptr_eq(&self.hasher, &other.hasher) {
+            return self.iter().cmp(other.iter());
+        }
+        let m1: ::std::collections::HashSet<Arc<A>> = self.iter().collect();
+        let m2: ::std::collections::HashSet<Arc<A>> = other.iter().collect();
+        m1.iter().cmp(m2.iter())
     }
 }
 
@@ -319,7 +456,11 @@ impl<A: Hash + Eq, S: BuildHasher + Default> Hash for HashSet<A, S> {
 
 impl<A: Hash + Eq, S: BuildHasher + Default> Default for HashSet<A, S> {
     fn default() -> Self {
-        HashSet(Default::default())
+        HashSet {
+            hasher: Default::default(),
+            root: Arc::new(Node::new()),
+            size: 0,
+        }
     }
 }
 
@@ -361,18 +502,6 @@ impl<A: Hash + Eq + Debug, S: BuildHasher + Default> Debug for HashSet<A, S> {
 
 // Iterators
 
-pub struct Iter<A> {
-    it: hashmap::Iter<A, ()>,
-}
-
-impl<A> Iterator for Iter<A> {
-    type Item = Arc<A>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.it.next().map(|(a, _)| a)
-    }
-}
-
 impl<A: Hash + Eq, RA, S> FromIterator<RA> for HashSet<A, S>
 where
     RA: Shared<A>,
@@ -392,7 +521,7 @@ where
 
 impl<'a, A, S> IntoIterator for &'a HashSet<A, S> {
     type Item = Arc<A>;
-    type IntoIter = Iter<A>;
+    type IntoIter = Iter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -401,7 +530,7 @@ impl<'a, A, S> IntoIterator for &'a HashSet<A, S> {
 
 impl<A, S> IntoIterator for HashSet<A, S> {
     type Item = Arc<A>;
-    type IntoIter = Iter<A>;
+    type IntoIter = Iter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()

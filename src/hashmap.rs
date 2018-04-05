@@ -36,13 +36,10 @@ use std::iter::FromIterator;
 use std::ops::Add;
 use std::sync::Arc;
 
-use ordmap::OrdMap;
+use bits::hash_key;
 use shared::Shared;
 
-mod nodes;
-pub use self::nodes::Iter;
-use self::nodes::Node;
-use self::nodes::hash_key;
+use hashnodes::{Iter, Node};
 
 /// Construct a hash map from a sequence of key/value pairs.
 ///
@@ -99,7 +96,7 @@ macro_rules! hashmap {
 
 pub struct HashMap<K, V, S = RandomState> {
     size: usize,
-    root: Node<K, V>,
+    root: Arc<Node<(Arc<K>, Arc<V>)>>,
     hasher: Arc<S>,
 }
 
@@ -193,8 +190,8 @@ impl<K, V, S> HashMap<K, V, S> {
     /// They will, however, come out in the same order every time for
     /// the same map.
     #[inline]
-    pub fn iter(&self) -> Iter<K, V> {
-        self.root.iter(self.len())
+    pub fn iter(&self) -> Iter<(Arc<K>, Arc<V>)> {
+        Node::iter(self.root.clone(), self.size)
     }
 
     /// Get an iterator over a hash map's keys.
@@ -220,17 +217,52 @@ impl<K, V, S> HashMap<K, V, S> {
     pub fn values(&self) -> Values<K, V> {
         Values { it: self.iter() }
     }
+}
+
+impl<K, V, S> HashMap<K, V, S>
+where
+    K: Hash + Eq,
+    S: BuildHasher,
+{
+    fn match_key(key: &K, pair: &(Arc<K>, Arc<V>)) -> bool {
+        key == &*pair.0
+    }
+
+    fn compare_keys(pair1: &(Arc<K>, Arc<V>), pair2: &(Arc<K>, Arc<V>)) -> bool {
+        pair1.0 == pair2.0
+    }
+
+    fn test_eq(&self, other: &Self) -> bool
+    where
+        V: PartialEq,
+    {
+        if self.len() != other.len() {
+            return false;
+        }
+        let mut seen = collections::HashSet::new();
+        for (key, value) in self.iter() {
+            if Some(value) != other.get(&key) {
+                return false;
+            }
+            seen.insert(key);
+        }
+        for key in other.keys() {
+            if !seen.contains(&key) {
+                return false;
+            }
+        }
+        true
+    }
 
     /// Construct an empty hash map using the provided hasher.
     #[inline]
     pub fn with_hasher<RS>(hasher: RS) -> Self
     where
-        K: Hash + Eq,
         RS: Shared<S>,
     {
         HashMap {
             size: 0,
-            root: Node::empty(),
+            root: Arc::new(Node::new()),
             hasher: hasher.shared(),
         }
     }
@@ -240,22 +272,15 @@ impl<K, V, S> HashMap<K, V, S> {
     #[inline]
     pub fn new_from<K1, V1>(&self) -> HashMap<K1, V1, S>
     where
-        K: Hash + Eq,
         K1: Hash + Eq,
     {
         HashMap {
             size: 0,
-            root: Node::empty(),
+            root: Arc::new(Node::new()),
             hasher: self.hasher.clone(),
         }
     }
-}
 
-impl<K, V, S> HashMap<K, V, S>
-where
-    K: Hash + Eq,
-    S: BuildHasher,
-{
     /// Get the value for a key from a hash map.
     ///
     /// Time: O(log n)
@@ -275,7 +300,14 @@ where
     /// # }
     /// ```
     pub fn get(&self, k: &K) -> Option<Arc<V>> {
-        self.root.lookup(0, hash_key(&*self.hasher, k), k)
+        self.root
+            .get(
+                hash_key(&*self.hasher, k),
+                0,
+                k,
+                &HashMap::<K, V, S>::match_key,
+            )
+            .map(|&(_, ref v)| v.clone())
     }
 
     /// Get the value for a key from a hash map, or a default value if
@@ -360,15 +392,19 @@ where
         RK: Shared<K>,
         RV: Shared<V>,
     {
-        self.insert_ref(&k.shared(), &v.shared())
+        self.insert_ref(k.shared(), v.shared())
     }
 
-    fn insert_ref(&self, k: &Arc<K>, v: &Arc<V>) -> Self {
-        let (added, new_node) =
-            self.root
-                .insert(&*self.hasher, 0, hash_key(&*self.hasher, &k), k, v);
+    fn insert_ref(&self, k: Arc<K>, v: Arc<V>) -> Self {
+        let (added, new_node) = self.root.insert(
+            hash_key(&*self.hasher, &k),
+            0,
+            (k, v),
+            &HashMap::<K, V, S>::compare_keys,
+            &|&(ref k, _)| hash_key(&*self.hasher, k),
+        );
         HashMap {
-            root: new_node,
+            root: Arc::new(new_node),
             size: if added {
                 self.size + 1
             } else {
@@ -413,17 +449,20 @@ where
         RK: Shared<K>,
         RV: Shared<V>,
     {
-        self.insert_mut_ref(&k.shared(), &v.shared())
+        self.insert_mut_ref(k.shared(), v.shared())
     }
 
-    fn insert_mut_ref(&mut self, k: &Arc<K>, v: &Arc<V>) {
-        let (added, new_node) =
-            self.root
-                .insert_mut(&*self.hasher, 0, hash_key(&*self.hasher, &k), k, v);
-        match new_node {
-            None => (),
-            Some(new_root) => self.root = new_root,
-        }
+    fn insert_mut_ref(&mut self, k: Arc<K>, v: Arc<V>) {
+        let hasher = &*self.hasher;
+        let hash = hash_key(&*self.hasher, &k);
+        let root = Arc::make_mut(&mut self.root);
+        let added = root.insert_mut(
+            hash,
+            0,
+            (k, v),
+            &HashMap::<K, V, S>::compare_keys,
+            &|&(ref k, _)| hash_key(hasher, k),
+        );
         if added {
             self.size += 1
         }
@@ -480,8 +519,8 @@ where
         let ak = k.shared();
         let av = v.shared();
         match self.pop_with_key(&ak) {
-            None => self.insert_ref(&ak, &av),
-            Some((_, v2, m)) => m.insert_ref(&ak, &f(v2, av)),
+            None => self.insert_ref(ak, av),
+            Some((_, v2, m)) => m.insert_ref(ak, f(v2, av)),
         }
     }
 
@@ -502,8 +541,8 @@ where
         let ak = k.shared();
         let av = v.shared();
         match self.pop_with_key(&ak) {
-            None => self.insert_ref(&ak, &av),
-            Some((_, v2, m)) => m.insert_ref(&ak.clone(), &f(ak, v2, av)),
+            None => self.insert_ref(ak, av),
+            Some((_, v2, m)) => m.insert_ref(ak.clone(), f(ak, v2, av)),
         }
     }
 
@@ -525,8 +564,8 @@ where
         let ak = k.shared();
         let av = v.shared();
         match self.pop_with_key(&ak) {
-            None => (None, self.insert_ref(&ak, &av)),
-            Some((_, v2, m)) => (Some(v2.clone()), m.insert_ref(&ak.clone(), &f(ak, v2, av))),
+            None => (None, self.insert_ref(ak, av)),
+            Some((_, v2, m)) => (Some(v2.clone()), m.insert_ref(ak.clone(), f(ak, v2, av))),
         }
     }
 
@@ -613,9 +652,9 @@ where
         let pop = self.pop_with_key(&*ak);
         match (f(pop.as_ref().map(|&(_, ref v, _)| v.clone())), pop) {
             (None, None) => self.clone(),
-            (Some(v), None) => self.insert_ref(&ak, &v),
+            (Some(v), None) => self.insert_ref(ak, v),
             (None, Some((_, _, m))) => m,
-            (Some(v), Some((_, _, m))) => m.insert_ref(&ak, &v),
+            (Some(v), Some((_, _, m))) => m.insert_ref(ak, v),
         }
     }
 
@@ -623,13 +662,9 @@ where
     ///
     /// Time: O(log n)
     pub fn remove(&self, k: &K) -> Self {
-        match self.root.remove(0, hash_key(&*self.hasher, k), k) {
-            (_, None) => HashMap::with_hasher(self.hasher.clone()),
-            (_, Some(new_root)) => HashMap {
-                root: new_root,
-                size: self.size - 1,
-                hasher: self.hasher.clone(),
-            },
+        match self.pop_with_key(k) {
+            None => self.clone(),
+            Some((_, _, map)) => map,
         }
     }
 
@@ -686,21 +721,24 @@ where
     ///
     /// Time: O(log n)
     pub fn pop_with_key(&self, k: &K) -> Option<(Arc<K>, Arc<V>, Self)> {
-        let (pair, map) = self.root.remove(0, hash_key(&*self.hasher, k), k);
-        pair.map(|(k, v)| {
-            (
+        self.root
+            .remove(
+                hash_key(&*self.hasher, k),
+                0,
                 k,
-                v,
-                match map {
-                    None => HashMap::with_hasher(self.hasher.clone()),
-                    Some(node) => HashMap {
-                        size: self.size - 1,
-                        root: node,
-                        hasher: self.hasher.clone(),
-                    },
-                },
+                &HashMap::<K, V, S>::match_key,
             )
-        })
+            .map(|((k, v), node)| {
+                (
+                    k,
+                    v,
+                    HashMap {
+                        hasher: self.hasher.clone(),
+                        size: self.size - 1,
+                        root: Arc::new(node),
+                    },
+                )
+            })
     }
 
     /// Remove a key/value pair from a map, if it exists, and return
@@ -712,13 +750,17 @@ where
     ///
     /// Time: O(log n)
     pub fn pop_with_key_mut(&mut self, k: &K) -> Option<(Arc<K>, Arc<V>)> {
-        match self.root.remove_mut(0, hash_key(&*self.hasher, k), k) {
-            (None, _) => None,
-            (Some(r), _) => {
-                self.size -= 1;
-                Some(r)
-            }
+        let root = Arc::make_mut(&mut self.root);
+        let result = root.remove_mut(
+            hash_key(&*self.hasher, k),
+            0,
+            k,
+            &HashMap::<K, V, S>::match_key,
+        );
+        if result.is_some() {
+            self.size -= 1;
         }
+        result
     }
 
     /// Construct the union of two maps, keeping the values in the
@@ -986,22 +1028,7 @@ where
     S: BuildHasher,
 {
     fn eq(&self, other: &Self) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
-        let mut seen = collections::HashSet::new();
-        for key in self.keys() {
-            if self.get(&key) != other.get(&key) {
-                return false;
-            }
-            seen.insert(key);
-        }
-        for key in other.keys() {
-            if !seen.contains(&key) {
-                return false;
-            }
-        }
-        true
+        self.test_eq(other)
     }
 }
 
@@ -1013,22 +1040,7 @@ where
     S: BuildHasher,
 {
     default fn eq(&self, other: &Self) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
-        let mut seen = collections::HashSet::new();
-        for key in self.keys() {
-            if self.get(&key) != other.get(&key) {
-                return false;
-            }
-            seen.insert(key);
-        }
-        for key in other.keys() {
-            if !seen.contains(&key) {
-                return false;
-            }
-        }
-        true
+        self.test_eq(other)
     }
 }
 
@@ -1040,25 +1052,10 @@ where
     S: BuildHasher,
 {
     fn eq(&self, other: &Self) -> bool {
-        if self.root.ptr_eq(&other.root) {
+        if Arc::ptr_eq(&self.root, &other.root) {
             return true;
         }
-        if self.len() != other.len() {
-            return false;
-        }
-        let mut seen = collections::HashSet::new();
-        for key in self.keys() {
-            if self.get(&key) != other.get(&key) {
-                return false;
-            }
-            seen.insert(key);
-        }
-        for key in other.keys() {
-            if !seen.contains(&key) {
-                return false;
-            }
-        }
-        true
+        self.test_eq(other)
     }
 }
 
@@ -1120,7 +1117,7 @@ where
     fn default() -> Self {
         HashMap {
             size: 0,
-            root: Node::empty(),
+            root: Arc::new(Node::new()),
             hasher: Default::default(),
         }
     }
@@ -1162,37 +1159,53 @@ where
     }
 }
 
-// Iterators
+// // Iterators
 
 pub struct Keys<K, V> {
-    it: nodes::Iter<K, V>,
+    it: Iter<(Arc<K>, Arc<V>)>,
 }
 
 impl<K, V> Iterator for Keys<K, V> {
     type Item = Arc<K>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.it.next() {
-            None => None,
-            Some((k, _)) => Some(k.clone()),
-        }
+        self.it.next().map(|(k, _)| k)
     }
 }
 
 pub struct Values<K, V> {
-    it: nodes::Iter<K, V>,
+    it: Iter<(Arc<K>, Arc<V>)>,
 }
 
 impl<K, V> Iterator for Values<K, V> {
     type Item = Arc<V>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.it.next() {
-            None => None,
-            Some((_, v)) => Some(v.clone()),
-        }
+        self.it.next().map(|(_, v)| v)
     }
 }
+
+impl<'a, K, V, S> IntoIterator for &'a HashMap<K, V, S> {
+    type Item = (Arc<K>, Arc<V>);
+    type IntoIter = Iter<(Arc<K>, Arc<V>)>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<K, V, S> IntoIterator for HashMap<K, V, S> {
+    type Item = (Arc<K>, Arc<V>);
+    type IntoIter = Iter<(Arc<K>, Arc<V>)>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+// // Conversions
 
 impl<K, V, RK, RV, S> FromIterator<(RK, RV)> for HashMap<K, V, S>
 where
@@ -1207,33 +1220,11 @@ where
     {
         let mut map: Self = Default::default();
         for (k, v) in i {
-            map.insert_mut(k, v)
+            map.insert_mut(k, v);
         }
         map
     }
 }
-
-impl<'a, K, V, S> IntoIterator for &'a HashMap<K, V, S> {
-    type Item = (Arc<K>, Arc<V>);
-    type IntoIter = nodes::Iter<K, V>;
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
-impl<K, V, S> IntoIterator for HashMap<K, V, S> {
-    type Item = (Arc<K>, Arc<V>);
-    type IntoIter = nodes::Iter<K, V>;
-
-    #[inline]
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
-// Conversions
 
 impl<K, V, S> AsRef<HashMap<K, V, S>> for HashMap<K, V, S> {
     #[inline]
@@ -1334,23 +1325,23 @@ where
     }
 }
 
-impl<K: Ord + Hash + Eq, V, S> From<OrdMap<K, V>> for HashMap<K, V, S>
-where
-    S: BuildHasher + Default,
-{
-    fn from(m: OrdMap<K, V>) -> Self {
-        m.into_iter().collect()
-    }
-}
+// impl<K: Ord + Hash + Eq, V, S> From<OrdMap<K, V>> for HashMap<K, V, S>
+// where
+//     S: BuildHasher + Default,
+// {
+//     fn from(m: OrdMap<K, V>) -> Self {
+//         m.into_iter().collect()
+//     }
+// }
 
-impl<'a, K: Ord + Hash + Eq, V, S> From<&'a OrdMap<K, V>> for HashMap<K, V, S>
-where
-    S: BuildHasher + Default,
-{
-    fn from(m: &'a OrdMap<K, V>) -> Self {
-        m.into_iter().collect()
-    }
-}
+// impl<'a, K: Ord + Hash + Eq, V, S> From<&'a OrdMap<K, V>> for HashMap<K, V, S>
+// where
+//     S: BuildHasher + Default,
+// {
+//     fn from(m: &'a OrdMap<K, V>) -> Self {
+//         m.into_iter().collect()
+//     }
+// }
 
 // QuickCheck
 
@@ -1409,52 +1400,73 @@ mod test {
     use super::*;
     use proptest::collection;
     use proptest::num::{usize, i16};
+    use std::hash::BuildHasherDefault;
+    use test::LolHasher;
+
+    #[test]
+    fn safe_mutation() {
+        let v1: HashMap<usize, usize> = HashMap::from_iter((0..131072).into_iter().map(|i| (i, i)));
+        let mut v2 = v1.clone();
+        v2.set_mut(131000, 23);
+        assert_eq!(Some(Arc::new(23)), v2.get(&131000));
+        assert_eq!(Some(Arc::new(131000)), v1.get(&131000));
+    }
+
+    #[test]
+    fn remove_failing() {
+        let pairs = [(1469, 0), (-67, 0)];
+        let hasher: BuildHasherDefault<LolHasher> = Default::default();
+        let mut m: collections::HashMap<i16, i16, _> =
+            collections::HashMap::with_hasher(hasher.clone());
+        for &(ref k, ref v) in &pairs {
+            m.insert(*k, *v);
+        }
+        let mut map: HashMap<i16, i16, _> = HashMap::with_hasher(hasher);
+        for (k, v) in &m {
+            map = map.insert(*k, *v);
+        }
+        for k in m.keys() {
+            let l = map.len();
+            assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
+            map = map.remove(k);
+            assert_eq!(None, map.get(k));
+            assert_eq!(l - 1, map.len());
+        }
+    }
 
     proptest! {
         #[test]
-        fn insert_and_length(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
-            let mut map: HashMap<i16, i16> = HashMap::new();
-            for (k, v) in m.iter() {
-                map = map.insert(*k, *v)
+        fn insert_and_length(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..100)) {
+            let mut map: HashMap<i16, i16, BuildHasherDefault<LolHasher>> = Default::default();
+            for (index, (k, v)) in m.iter().enumerate() {
+                map = map.insert(*k, *v);
+                assert_eq!(Some(Arc::new(*v)), map.get(k));
+                assert_eq!(index + 1, map.len());
             }
-            assert_eq!(m.len(), map.len());
         }
 
         #[test]
-        fn from_iterator(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+        fn from_iterator(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..100)) {
             let map: HashMap<i16, i16> =
                 FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             assert_eq!(m.len(), map.len());
         }
 
         #[test]
-        fn iterate_over(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+        fn iterate_over(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..100)) {
             let map: HashMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             assert_eq!(m.len(), map.iter().count());
         }
 
         #[test]
-        fn equality(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+        fn equality(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..100)) {
             let map1: HashMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             let map2: HashMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             assert_eq!(map1, map2);
         }
 
         #[test]
-        fn equality_with_distinct_hashers(
-            ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)
-        ) {
-            let map1: HashMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
-            let hasher = Arc::new(RandomState::new());
-            let mut map2: HashMap<i16, i16> = HashMap::with_hasher(&hasher);
-            for (k, v) in m.iter() {
-                map2 = map2.insert(*k, *v)
-            }
-            assert_eq!(map1, map2);
-        }
-
-        #[test]
-        fn lookup(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+        fn lookup(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..100)) {
             let map: HashMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             for (k, v) in m {
                 assert_eq!(Some(*v), map.get(k).map(|v| *v));
@@ -1462,9 +1474,16 @@ mod test {
         }
 
         #[test]
-        fn remove(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
-            let mut map: HashMap<i16, i16> =
-                FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+        fn remove(ref pairs in collection::vec((i16::ANY, i16::ANY), 0..100)) {
+            let hasher: BuildHasherDefault<LolHasher> = Default::default();
+            let mut m: collections::HashMap<i16, i16, _> = collections::HashMap::with_hasher(hasher.clone());
+            for &(ref k, ref v) in pairs {
+                m.insert(*k, *v);
+            }
+            let mut map: HashMap<i16, i16, _> = HashMap::with_hasher(hasher);
+            for (k, v) in &m {
+                map = map.insert(*k, *v);
+            }
             for k in m.keys() {
                 let l = map.len();
                 assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
@@ -1475,20 +1494,29 @@ mod test {
         }
 
         #[test]
-        fn insert_mut(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
-            let mut mut_map = HashMap::new();
-            let mut map = HashMap::new();
-            for (k, v) in m.iter() {
+        fn insert_mut(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..100)) {
+            let mut mut_map: HashMap<i16, i16, BuildHasherDefault<LolHasher>> = Default::default();
+            let mut map: HashMap<i16, i16, BuildHasherDefault<LolHasher>> = Default::default();
+            for (count, (k, v)) in m.iter().enumerate() {
                 map = map.insert(*k, *v);
                 mut_map.insert_mut(*k, *v);
+                assert_eq!(count + 1, map.len());
+                assert_eq!(count + 1, mut_map.len());
             }
             assert_eq!(map, mut_map);
         }
 
         #[test]
-        fn remove_mut(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
-            let mut map: HashMap<i16, i16> =
-                FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
+        fn remove_mut(ref pairs in collection::vec((i16::ANY, i16::ANY), 0..100)) {
+            let hasher: BuildHasherDefault<LolHasher> = Default::default();
+            let mut m: collections::HashMap<i16, i16, _> = collections::HashMap::with_hasher(hasher.clone());
+            for &(ref k, ref v) in pairs {
+                m.insert(*k, *v);
+            }
+            let mut map: HashMap<i16, i16, _> = HashMap::with_hasher(hasher);
+            for (k, v) in &m {
+                map.insert_mut(*k, *v);
+            }
             for k in m.keys() {
                 let l = map.len();
                 assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
@@ -1519,7 +1547,7 @@ mod test {
         }
 
         #[test]
-        fn exact_size_iterator(ref m in proptest::hash_map(i16::ANY, i16::ANY, 1..100)) {
+        fn exact_size_iterator(ref m in proptest::hash_map(i16::ANY, i16::ANY, 0..100)) {
             let mut should_be = m.len();
             let mut it = m.iter();
             loop {
