@@ -140,7 +140,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "im"
-version = "10.0.0"
+version = "10.0.1-alpha.0"
 dependencies = [
  "clippy 0.0.192 (registry+https://github.com/rust-lang/crates.io-index)",
  "proptest 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
