@@ -21,7 +21,7 @@ use std::cmp::Ordering;
 use std::collections;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{Hash, Hasher};
-use std::iter::{FromIterator, Iterator};
+use std::iter::{FromIterator, Iterator, Sum};
 use std::ops::Add;
 use std::sync::Arc;
 
@@ -1041,6 +1041,42 @@ impl<'a, K: Ord, V> Add for &'a OrdMap<K, V> {
 
     fn add(self, other: Self) -> Self::Output {
         self.union(other)
+    }
+}
+
+impl<K: Ord, V> Add for OrdMap<K, V> {
+    type Output = OrdMap<K, V>;
+
+    fn add(self, other: Self) -> Self::Output {
+        self.union(&other)
+    }
+}
+
+impl<K, V> Sum for OrdMap<K, V>
+where
+    K: Ord,
+{
+    fn sum<I>(it: I) -> Self
+    where
+        I: Iterator<Item = Self>,
+    {
+        it.fold(Default::default(), |a, b| a + b)
+    }
+}
+
+impl<K, V, RK, RV> Extend<(RK, RV)> for OrdMap<K, V>
+where
+    K: Ord,
+    RK: Shared<K>,
+    RV: Shared<V>,
+{
+    fn extend<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = (RK, RV)>,
+    {
+        for (key, value) in iter {
+            self.insert_mut(key, value);
+        }
     }
 }
 

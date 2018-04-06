@@ -825,6 +825,29 @@ impl<A> Add for CatList<A> {
     }
 }
 
+impl<'a, A> Add for &'a CatList<A> {
+    type Output = CatList<A>;
+
+    fn add(self, other: Self) -> Self::Output {
+        self.append(other)
+    }
+}
+
+impl<A, R> Extend<R> for CatList<A>
+where
+    A: Ord,
+    R: Shared<A>,
+{
+    fn extend<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = R>,
+    {
+        for value in iter {
+            self.push_back_mut(value);
+        }
+    }
+}
+
 #[cfg(not(has_specialisation))]
 impl<A: PartialEq> PartialEq for CatList<A> {
     fn eq(&self, other: &Self) -> bool {

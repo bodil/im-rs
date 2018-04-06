@@ -15,7 +15,7 @@ use std::cmp::Ordering;
 use std::collections;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{Hash, Hasher};
-use std::iter::{FromIterator, IntoIterator};
+use std::iter::{FromIterator, IntoIterator, Sum};
 use std::ops::{Add, Mul};
 use std::sync::Arc;
 
@@ -386,6 +386,14 @@ impl<A> Default for OrdSet<A> {
     }
 }
 
+impl<A: Ord> Add for OrdSet<A> {
+    type Output = OrdSet<A>;
+
+    fn add(self, other: Self) -> Self::Output {
+        self.union(&other)
+    }
+}
+
 impl<'a, A: Ord> Add for &'a OrdSet<A> {
     type Output = OrdSet<A>;
 
@@ -394,11 +402,43 @@ impl<'a, A: Ord> Add for &'a OrdSet<A> {
     }
 }
 
+impl<A: Ord> Mul for OrdSet<A> {
+    type Output = OrdSet<A>;
+
+    fn mul(self, other: Self) -> Self::Output {
+        self.intersection(&other)
+    }
+}
+
 impl<'a, A: Ord> Mul for &'a OrdSet<A> {
     type Output = OrdSet<A>;
 
     fn mul(self, other: Self) -> Self::Output {
         self.intersection(other)
+    }
+}
+
+impl<A: Ord> Sum for OrdSet<A> {
+    fn sum<I>(it: I) -> Self
+    where
+        I: Iterator<Item = Self>,
+    {
+        it.fold(Self::new(), |a, b| a + b)
+    }
+}
+
+impl<A, R> Extend<R> for OrdSet<A>
+where
+    A: Ord,
+    R: Shared<A>,
+{
+    fn extend<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = R>,
+    {
+        for value in iter {
+            self.insert_mut(value);
+        }
     }
 }
 

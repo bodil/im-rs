@@ -20,7 +20,7 @@ use std::collections::hash_map::RandomState;
 use std::collections::{self, BTreeSet};
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{BuildHasher, Hash, Hasher};
-use std::iter::{FromIterator, IntoIterator};
+use std::iter::{FromIterator, IntoIterator, Sum};
 use std::ops::{Add, Mul};
 use std::sync::Arc;
 
@@ -460,7 +460,23 @@ impl<A: Hash + Eq, S: BuildHasher + Default> Default for HashSet<A, S> {
     }
 }
 
-impl<'a, A: Hash + Eq, S: BuildHasher + Default> Add for &'a HashSet<A, S> {
+impl<A: Hash + Eq, S: BuildHasher> Add for HashSet<A, S> {
+    type Output = HashSet<A, S>;
+
+    fn add(self, other: Self) -> Self::Output {
+        self.union(&other)
+    }
+}
+
+impl<A: Hash + Eq, S: BuildHasher> Mul for HashSet<A, S> {
+    type Output = HashSet<A, S>;
+
+    fn mul(self, other: Self) -> Self::Output {
+        self.intersection(&other)
+    }
+}
+
+impl<'a, A: Hash + Eq, S: BuildHasher> Add for &'a HashSet<A, S> {
     type Output = HashSet<A, S>;
 
     fn add(self, other: Self) -> Self::Output {
@@ -468,11 +484,40 @@ impl<'a, A: Hash + Eq, S: BuildHasher + Default> Add for &'a HashSet<A, S> {
     }
 }
 
-impl<'a, A: Hash + Eq, S: BuildHasher + Default> Mul for &'a HashSet<A, S> {
+impl<'a, A: Hash + Eq, S: BuildHasher> Mul for &'a HashSet<A, S> {
     type Output = HashSet<A, S>;
 
     fn mul(self, other: Self) -> Self::Output {
         self.intersection(other)
+    }
+}
+
+impl<A, S> Sum for HashSet<A, S>
+where
+    A: Hash + Eq,
+    S: BuildHasher + Default,
+{
+    fn sum<I>(it: I) -> Self
+    where
+        I: Iterator<Item = Self>,
+    {
+        it.fold(Default::default(), |a, b| a + b)
+    }
+}
+
+impl<A, S, R> Extend<R> for HashSet<A, S>
+where
+    A: Hash + Eq,
+    S: BuildHasher,
+    R: Shared<A>,
+{
+    fn extend<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = R>,
+    {
+        for value in iter {
+            self.insert_mut(value);
+        }
     }
 }
 

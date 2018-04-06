@@ -32,7 +32,7 @@ use std::collections;
 use std::collections::hash_map::RandomState;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{BuildHasher, Hash, Hasher};
-use std::iter::FromIterator;
+use std::iter::{FromIterator, Sum};
 use std::ops::Add;
 use std::sync::Arc;
 
@@ -1115,6 +1115,18 @@ where
     }
 }
 
+impl<K, V, S> Add for HashMap<K, V, S>
+where
+    K: Hash + Eq,
+    S: BuildHasher,
+{
+    type Output = HashMap<K, V, S>;
+
+    fn add(self, other: Self) -> Self::Output {
+        self.union(&other)
+    }
+}
+
 impl<'a, K, V, S> Add for &'a HashMap<K, V, S>
 where
     K: Hash + Eq,
@@ -1124,6 +1136,36 @@ where
 
     fn add(self, other: Self) -> Self::Output {
         self.union(other)
+    }
+}
+
+impl<K, V, S> Sum for HashMap<K, V, S>
+where
+    K: Hash + Eq,
+    S: BuildHasher + Default,
+{
+    fn sum<I>(it: I) -> Self
+    where
+        I: Iterator<Item = Self>,
+    {
+        it.fold(Default::default(), |a, b| a + b)
+    }
+}
+
+impl<K, V, S, RK, RV> Extend<(RK, RV)> for HashMap<K, V, S>
+where
+    K: Hash + Eq,
+    S: BuildHasher,
+    RK: Shared<K>,
+    RV: Shared<V>,
+{
+    fn extend<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = (RK, RV)>,
+    {
+        for (key, value) in iter {
+            self.insert_mut(key, value);
+        }
     }
 }
 

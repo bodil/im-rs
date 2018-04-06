@@ -31,7 +31,7 @@ use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{Hash, Hasher};
 use std::iter::{FromIterator, Iterator, Sum};
-use std::ops::Deref;
+use std::ops::{Add, Deref};
 use std::sync::Arc;
 
 use self::ConsListNode::{Cons, Nil};
@@ -615,6 +615,22 @@ where
         for i in self.iter() {
             i.hash(state);
         }
+    }
+}
+
+impl<'a, A> Add for &'a ConsList<A> {
+    type Output = ConsList<A>;
+
+    fn add(self, other: Self) -> Self::Output {
+        self.append(other)
+    }
+}
+
+impl<A> Add for ConsList<A> {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self::Output {
+        self.append(&other)
     }
 }
 
