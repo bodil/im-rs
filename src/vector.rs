@@ -323,6 +323,27 @@ impl<A> Vector<A> {
         v
     }
 
+    /// Construct a vector with a new value prepended to the end of
+    /// the current vector.
+    ///
+    /// `snoc`, for the curious, is [`cons`][cons] spelled backwards,
+    /// to denote that it works on the back of the list rather than
+    /// the front. If you don't find that as clever as whoever coined
+    /// the term no doubt did, this method is also available as
+    /// [`push_back()`][push_back].
+    ///
+    /// Time: O(log n)
+    ///
+    /// [push_back]: #method.push_back
+    /// [cons]: #method.cons
+    #[inline]
+    pub fn snoc<RA>(&self, a: RA) -> Self
+    where
+        RA: Shared<A>,
+    {
+        self.push_back(a)
+    }
+
     /// Update a vector in place with a new value prepended to the end
     /// of it.
     ///
@@ -352,6 +373,23 @@ impl<A> Vector<A> {
         v.resize(-1, self.len() as isize);
         v.set_mut(0, value.shared());
         v
+    }
+
+    /// Construct a vector with a new value prepended to the front of
+    /// the current vector.
+    ///
+    /// This is an alias for [push_front], for the Lispers in the
+    /// house.
+    ///
+    /// Time: O(log n)
+    ///
+    /// [push_front]: #method.push_front
+    #[inline]
+    pub fn cons<RA>(&self, a: RA) -> Self
+    where
+        RA: Shared<A>,
+    {
+        self.push_front(a)
     }
 
     /// Update a vector in place with a new value prepended to the
@@ -421,6 +459,18 @@ impl<A> Vector<A> {
         let mut v = self.clone();
         v.resize(1, self.len() as isize);
         Some((val, v))
+    }
+
+    /// Get the head and the tail of a vector.
+    ///
+    /// This is an alias for [`pop_front`][pop_front].
+    ///
+    /// Time: O(log n)
+    ///
+    /// [pop_front]: #method.pop_front
+    #[inline]
+    pub fn uncons(&self) -> Option<(Arc<A>, Self)> {
+        self.pop_front()
     }
 
     /// Remove the first element of a vector in place and return it.

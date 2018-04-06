@@ -45,7 +45,7 @@
 //! the Haskell isn't too confusing, or, when it is, we provide more
 //! readily understandable aliases (because we wouldn't want to
 //! deprive the user of their enjoyment of the word
-//! '[`snoc`][conslist::ConsList::snoc],' even though it's reportedly
+//! '[`snoc`][vector::Vector::snoc],' even though it's reportedly
 //! not an obviously intuitive term).
 //!
 //! ## Why Immutable Data Structures
@@ -203,7 +203,7 @@
 //! [conslist::ConsList]: ./conslist/struct.ConsList.html
 //! [catlist::CatList]: ./catlist/struct.CatList.html
 //! [vector::Vector]: ./vector/struct.Vector.html
-//! [conslist::ConsList::snoc]: ./conlist/struct.ConsList.html#method.snoc
+//! [vector::Vector::snoc]: ./vector/struct.Vector.html#method.snoc
 
 // Get some clippy feedback: `cargo +nightly build --features "clippy"`
 #![cfg_attr(feature = "clippy", feature(plugin))]

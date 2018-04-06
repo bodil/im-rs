@@ -582,6 +582,7 @@ impl<A> CatList<A> {
     /// Time: O(1)
     ///
     /// [push_front]: #method.push_front
+    #[inline]
     pub fn cons<R>(&self, a: R) -> Self
     where
         R: Shared<A>,
