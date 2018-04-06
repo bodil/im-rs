@@ -3,15 +3,15 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #![feature(test)]
-#![cfg_attr(feature="cargo-clippy", allow(unreadable_literal))]
+#![cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
 
 extern crate im;
 extern crate rand;
 extern crate test;
 
+use rand::{weak_rng, Rng};
 use std::iter::FromIterator;
 use test::Bencher;
-use rand::{weak_rng, Rng};
 
 use im::ordmap::OrdMap;
 
@@ -39,7 +39,7 @@ fn reorder<A: Copy>(vec: &[A]) -> Vec<A> {
     out
 }
 
-fn map_lookup_n(size: usize, b: &mut Bencher) {
+fn ordmap_lookup_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size);
     let order = reorder(&keys);
     let m = OrdMap::from_iter(keys.into_iter().map(|i| (i, 1)));
@@ -51,21 +51,21 @@ fn map_lookup_n(size: usize, b: &mut Bencher) {
 }
 
 #[bench]
-fn map_lookup_10(b: &mut Bencher) {
-    map_lookup_n(10, b)
+fn ordmap_lookup_10(b: &mut Bencher) {
+    ordmap_lookup_n(10, b)
 }
 
 #[bench]
-fn map_lookup_100(b: &mut Bencher) {
-    map_lookup_n(100, b)
+fn ordmap_lookup_100(b: &mut Bencher) {
+    ordmap_lookup_n(100, b)
 }
 
 #[bench]
-fn map_lookup_1000(b: &mut Bencher) {
-    map_lookup_n(1000, b)
+fn ordmap_lookup_1000(b: &mut Bencher) {
+    ordmap_lookup_n(1000, b)
 }
 
-fn map_insert_n(size: usize, b: &mut Bencher) {
+fn ordmap_insert_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size);
     b.iter(|| {
         let mut m = OrdMap::new();
@@ -76,21 +76,21 @@ fn map_insert_n(size: usize, b: &mut Bencher) {
 }
 
 #[bench]
-fn map_insert_10(b: &mut Bencher) {
-    map_insert_n(10, b)
+fn ordmap_insert_10(b: &mut Bencher) {
+    ordmap_insert_n(10, b)
 }
 
 #[bench]
-fn map_insert_100(b: &mut Bencher) {
-    map_insert_n(100, b)
+fn ordmap_insert_100(b: &mut Bencher) {
+    ordmap_insert_n(100, b)
 }
 
 #[bench]
-fn map_insert_1000(b: &mut Bencher) {
-    map_insert_n(1000, b)
+fn ordmap_insert_1000(b: &mut Bencher) {
+    ordmap_insert_n(1000, b)
 }
 
-fn map_insert_mut_n(size: usize, b: &mut Bencher) {
+fn ordmap_insert_mut_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size);
     b.iter(|| {
         let mut m = OrdMap::new();
@@ -101,21 +101,21 @@ fn map_insert_mut_n(size: usize, b: &mut Bencher) {
 }
 
 #[bench]
-fn map_insert_mut_10(b: &mut Bencher) {
-    map_insert_mut_n(10, b)
+fn ordmap_insert_mut_10(b: &mut Bencher) {
+    ordmap_insert_mut_n(10, b)
 }
 
 #[bench]
-fn map_insert_mut_100(b: &mut Bencher) {
-    map_insert_mut_n(100, b)
+fn ordmap_insert_mut_100(b: &mut Bencher) {
+    ordmap_insert_mut_n(100, b)
 }
 
 #[bench]
-fn map_insert_mut_1000(b: &mut Bencher) {
-    map_insert_mut_n(1000, b)
+fn ordmap_insert_mut_1000(b: &mut Bencher) {
+    ordmap_insert_mut_n(1000, b)
 }
 
-fn map_remove_n(size: usize, b: &mut Bencher) {
+fn ordmap_remove_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size);
     let order = reorder(&keys);
     let map = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
@@ -128,21 +128,21 @@ fn map_remove_n(size: usize, b: &mut Bencher) {
 }
 
 #[bench]
-fn map_remove_10(b: &mut Bencher) {
-    map_remove_n(10, b)
+fn ordmap_remove_10(b: &mut Bencher) {
+    ordmap_remove_n(10, b)
 }
 
 #[bench]
-fn map_remove_100(b: &mut Bencher) {
-    map_remove_n(100, b)
+fn ordmap_remove_100(b: &mut Bencher) {
+    ordmap_remove_n(100, b)
 }
 
 #[bench]
-fn map_remove_1000(b: &mut Bencher) {
-    map_remove_n(1000, b)
+fn ordmap_remove_1000(b: &mut Bencher) {
+    ordmap_remove_n(1000, b)
 }
 
-fn map_remove_mut_n(size: usize, b: &mut Bencher) {
+fn ordmap_remove_mut_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size);
     let order = reorder(&keys);
     let map: OrdMap<i64, i64> = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
@@ -155,22 +155,22 @@ fn map_remove_mut_n(size: usize, b: &mut Bencher) {
 }
 
 #[bench]
-fn map_remove_mut_10(b: &mut Bencher) {
-    map_remove_mut_n(10, b)
+fn ordmap_remove_mut_10(b: &mut Bencher) {
+    ordmap_remove_mut_n(10, b)
 }
 
 #[bench]
-fn map_remove_mut_100(b: &mut Bencher) {
-    map_remove_mut_n(100, b)
+fn ordmap_remove_mut_100(b: &mut Bencher) {
+    ordmap_remove_mut_n(100, b)
 }
 
 #[bench]
-fn map_remove_mut_1000(b: &mut Bencher) {
-    map_remove_mut_n(1000, b)
+fn ordmap_remove_mut_1000(b: &mut Bencher) {
+    ordmap_remove_mut_n(1000, b)
 }
 
 #[bench]
-fn map_remove_min(b: &mut Bencher) {
+fn ordmap_remove_min(b: &mut Bencher) {
     let map = OrdMap::from_iter((0..1000).into_iter().map(|i| (i, i)));
     b.iter(|| {
         let mut m = map.clone();
@@ -183,7 +183,7 @@ fn map_remove_min(b: &mut Bencher) {
 }
 
 #[bench]
-fn map_remove_max(b: &mut Bencher) {
+fn ordmap_remove_max(b: &mut Bencher) {
     let map = OrdMap::from_iter((0..1000).into_iter().map(|i| (i, i)));
     b.iter(|| {
         let mut m = map.clone();
@@ -195,7 +195,7 @@ fn map_remove_max(b: &mut Bencher) {
     })
 }
 
-fn map_insert_once_n(size: usize, b: &mut Bencher) {
+fn ordmap_insert_once_n(size: usize, b: &mut Bencher) {
     let mut keys = random_keys(size + 1);
     let key = keys.pop().unwrap();
     let map = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
@@ -203,26 +203,26 @@ fn map_insert_once_n(size: usize, b: &mut Bencher) {
 }
 
 #[bench]
-fn map_insert_once_10(b: &mut Bencher) {
-    map_insert_once_n(10, b)
+fn ordmap_insert_once_10(b: &mut Bencher) {
+    ordmap_insert_once_n(10, b)
 }
 
 #[bench]
-fn map_insert_once_100(b: &mut Bencher) {
-    map_insert_once_n(100, b)
+fn ordmap_insert_once_100(b: &mut Bencher) {
+    ordmap_insert_once_n(100, b)
 }
 
 #[bench]
-fn map_insert_once_1000(b: &mut Bencher) {
-    map_insert_once_n(1000, b)
+fn ordmap_insert_once_1000(b: &mut Bencher) {
+    ordmap_insert_once_n(1000, b)
 }
 
 #[bench]
-fn map_insert_once_10000(b: &mut Bencher) {
-    map_insert_once_n(10000, b)
+fn ordmap_insert_once_10000(b: &mut Bencher) {
+    ordmap_insert_once_n(10000, b)
 }
 
-fn map_remove_once_n(size: usize, b: &mut Bencher) {
+fn ordmap_remove_once_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size + 1);
     let key = keys[0];
     let map = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
@@ -230,26 +230,26 @@ fn map_remove_once_n(size: usize, b: &mut Bencher) {
 }
 
 #[bench]
-fn map_remove_once_10(b: &mut Bencher) {
-    map_remove_once_n(10, b)
+fn ordmap_remove_once_10(b: &mut Bencher) {
+    ordmap_remove_once_n(10, b)
 }
 
 #[bench]
-fn map_remove_once_100(b: &mut Bencher) {
-    map_remove_once_n(100, b)
+fn ordmap_remove_once_100(b: &mut Bencher) {
+    ordmap_remove_once_n(100, b)
 }
 
 #[bench]
-fn map_remove_once_1000(b: &mut Bencher) {
-    map_remove_once_n(1000, b)
+fn ordmap_remove_once_1000(b: &mut Bencher) {
+    ordmap_remove_once_n(1000, b)
 }
 
 #[bench]
-fn map_remove_once_10000(b: &mut Bencher) {
-    map_remove_once_n(10000, b)
+fn ordmap_remove_once_10000(b: &mut Bencher) {
+    ordmap_remove_once_n(10000, b)
 }
 
-fn map_lookup_once_n(size: usize, b: &mut Bencher) {
+fn ordmap_lookup_once_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size + 1);
     let key = keys[0];
     let map = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
@@ -257,21 +257,21 @@ fn map_lookup_once_n(size: usize, b: &mut Bencher) {
 }
 
 #[bench]
-fn map_lookup_once_10(b: &mut Bencher) {
-    map_lookup_once_n(10, b)
+fn ordmap_lookup_once_10(b: &mut Bencher) {
+    ordmap_lookup_once_n(10, b)
 }
 
 #[bench]
-fn map_lookup_once_100(b: &mut Bencher) {
-    map_lookup_once_n(100, b)
+fn ordmap_lookup_once_100(b: &mut Bencher) {
+    ordmap_lookup_once_n(100, b)
 }
 
 #[bench]
-fn map_lookup_once_1000(b: &mut Bencher) {
-    map_lookup_once_n(1000, b)
+fn ordmap_lookup_once_1000(b: &mut Bencher) {
+    ordmap_lookup_once_n(1000, b)
 }
 
 #[bench]
-fn map_lookup_once_10000(b: &mut Bencher) {
-    map_lookup_once_n(10000, b)
+fn ordmap_lookup_once_10000(b: &mut Bencher) {
+    ordmap_lookup_once_n(10000, b)
 }
