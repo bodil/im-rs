@@ -609,9 +609,7 @@ impl<A> CatList<A> {
     /// Get an iterator over a list.
     #[inline]
     pub fn iter(&self) -> Iter<A> {
-        Iter {
-            current: self.clone(),
-        }
+        Iter::new(self)
     }
 
     /// Construct a list which is the reverse of the current list.
@@ -904,38 +902,108 @@ impl<A: Debug> Debug for CatList<A> {
 
 /// An iterator over lists with values of type `A`.
 pub struct Iter<A> {
-    current: CatList<A>,
+    fwd_stack: Vec<(Arc<CatList<A>>, usize)>,
+    fwd_current: Arc<CatList<A>>,
+    fwd_head_index: usize,
+    fwd_tail_index: usize,
+    rev_stack: Vec<(Arc<CatList<A>>, usize)>,
+    rev_current: Arc<CatList<A>>,
+    rev_head_index: usize,
+    rev_tail_index: usize,
+    remaining: usize,
+}
+
+impl<A> Iter<A> {
+    fn new<RL>(list: RL) -> Self
+    where
+        RL: Shared<CatList<A>>,
+    {
+        let l = list.shared();
+        let mut stack = Vec::new();
+        let mut item = l.clone();
+        while let Some(last) = item.tail.last() {
+            stack.push((item, 1));
+            item = last;
+        }
+        assert!(item.tail.is_empty());
+        Iter {
+            remaining: l.len(),
+            fwd_current: l.clone(),
+            fwd_stack: Vec::new(),
+            fwd_head_index: 0,
+            fwd_tail_index: 0,
+            rev_current: item,
+            rev_stack: stack,
+            rev_head_index: 0,
+            rev_tail_index: 0,
+        }
+    }
 }
 
 impl<A> Iterator for Iter<A> {
     type Item = Arc<A>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // FIXME immutable ops are slower than necessary here,
-        // how about a good old fashioned incrementing pointer?
-        match self.current.pop_front() {
-            None => None,
-            Some((a, d)) => {
-                self.current = d;
-                Some(a)
-            }
+        if self.remaining == 0 {
+            None
+        } else if self.fwd_current.head.len() > self.fwd_head_index {
+            let item =
+                &self.fwd_current.head[(self.fwd_current.head.len() - 1) - self.fwd_head_index];
+            self.fwd_head_index += 1;
+            self.remaining -= 1;
+            Some(item.clone())
+        } else if let Some(list) = self.fwd_current.tail.get(self.fwd_tail_index) {
+            self.fwd_stack
+                .push((self.fwd_current.clone(), self.fwd_tail_index + 1));
+            self.fwd_current = list;
+            self.fwd_head_index = 0;
+            self.fwd_tail_index = 0;
+            self.next()
+        } else if let Some((list, index)) = self.fwd_stack.pop() {
+            self.fwd_head_index = list.head.len();
+            self.fwd_tail_index = index;
+            self.fwd_current = list;
+            self.next()
+        } else {
+            None
         }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let l = self.current.len();
-        (l, Some(l))
+        (self.remaining, Some(self.remaining))
     }
 }
 
 impl<A> DoubleEndedIterator for Iter<A> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        match self.current.pop_back() {
-            None => None,
-            Some((a, q)) => {
-                self.current = q;
-                Some(a)
-            }
+        if self.remaining == 0 {
+            None
+        } else if self.rev_current.tail.len() > self.rev_tail_index {
+            println!("pushing from tail");
+            let list = self.rev_current
+                .tail
+                .get((self.rev_current.tail.len() - 1) - self.rev_tail_index)
+                .unwrap();
+            self.rev_stack
+                .push((self.rev_current.clone(), self.rev_tail_index + 1));
+            self.rev_current = list;
+            self.rev_head_index = 0;
+            self.rev_tail_index = 0;
+            self.next_back()
+        } else if self.rev_current.head.len() > self.rev_head_index {
+            println!("yielding from head");
+            let item = &self.rev_current.head[self.rev_head_index];
+            self.rev_head_index += 1;
+            self.remaining -= 1;
+            Some(item.clone())
+        } else if let Some((list, index)) = self.rev_stack.pop() {
+            println!("popping from stack");
+            self.rev_head_index = 0;
+            self.rev_tail_index = index;
+            self.rev_current = list;
+            self.next_back()
+        } else {
+            None
         }
     }
 }
@@ -947,7 +1015,7 @@ impl<A> IntoIterator for CatList<A> {
     type IntoIter = Iter<A>;
 
     fn into_iter(self) -> Self::IntoIter {
-        Iter { current: self }
+        Iter::new(self)
     }
 }
 
