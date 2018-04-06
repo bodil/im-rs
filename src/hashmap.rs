@@ -401,7 +401,6 @@ where
             0,
             (k, v),
             &HashMap::<K, V, S>::compare_keys,
-            &|&(ref k, _)| hash_key(&*self.hasher, k),
         );
         HashMap {
             root: Arc::new(new_node),
@@ -453,16 +452,9 @@ where
     }
 
     fn insert_mut_ref(&mut self, k: Arc<K>, v: Arc<V>) {
-        let hasher = &*self.hasher;
         let hash = hash_key(&*self.hasher, &k);
         let root = Arc::make_mut(&mut self.root);
-        let added = root.insert_mut(
-            hash,
-            0,
-            (k, v),
-            &HashMap::<K, V, S>::compare_keys,
-            &|&(ref k, _)| hash_key(hasher, k),
-        );
+        let added = root.insert_mut(hash, 0, (k, v), &HashMap::<K, V, S>::compare_keys);
         if added {
             self.size += 1
         }

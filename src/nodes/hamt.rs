@@ -23,7 +23,7 @@ pub struct CollisionNode<A> {
 
 #[derive(PartialEq, Eq, Clone)]
 pub enum Entry<A> {
-    Value(A),
+    Value(A, Bitmap),
     Collision(Arc<CollisionNode<A>>),
 }
 
@@ -290,7 +290,7 @@ impl<A: Clone> Node<A> {
         let bitpos = bitpos(hash, shift);
         if self.datamap & bitpos != 0 {
             match self.data[self.data_index(bitpos)] {
-                Entry::Value(ref value) => if (pred)(key, value) {
+                Entry::Value(ref value, _) => if (pred)(key, value) {
                     Some(value)
                 } else {
                     None
@@ -304,17 +304,9 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn insert<F, H>(
-        &self,
-        hash: Bitmap,
-        shift: usize,
-        value: A,
-        compare: &F,
-        hasher: &H,
-    ) -> (bool, Self)
+    pub fn insert<F>(&self, hash: Bitmap, shift: usize, value: A, compare: &F) -> (bool, Self)
     where
         F: Fn(&A, &A) -> bool,
-        H: Fn(&A) -> Bitmap,
     {
         let bitpos = bitpos(hash, shift);
         if self.datamap & bitpos != 0 {
@@ -322,24 +314,26 @@ impl<A: Clone> Node<A> {
             let index = self.data_index(bitpos);
             match self.data[index] {
                 // Update value or create a subtree
-                Entry::Value(ref current) => {
+                Entry::Value(ref current, hash2) => {
                     if (compare)(&value, current) {
-                        (false, self.update_value(bitpos, Entry::Value(value)))
+                        (false, self.update_value(bitpos, Entry::Value(value, hash)))
                     } else {
                         let value2 = current.clone();
                         if shift + HASH_BITS >= HASH_SIZE {
                             // Need to set up a collision
-                            let coll =
-                                CollisionNode::new(hash, Entry::Value(value), Entry::Value(value2));
+                            let coll = CollisionNode::new(
+                                hash,
+                                Entry::Value(value, hash),
+                                Entry::Value(value2, hash),
+                            );
                             (
                                 true,
                                 self.update_value(bitpos, Entry::Collision(Arc::new(coll))),
                             )
                         } else {
-                            let hash2 = (hasher)(&value2);
                             let node = Node::merge_values(
-                                Entry::Value(value),
-                                Entry::Value(value2),
+                                Entry::Value(value, hash),
+                                Entry::Value(value2, hash2),
                                 hash,
                                 hash2,
                                 shift + HASH_BITS,
@@ -361,25 +355,17 @@ impl<A: Clone> Node<A> {
             // Child node
             let index = self.node_index(bitpos);
             let child = &self.nodes[index];
-            let (added, new_child) = child.insert(hash, shift + HASH_BITS, value, compare, hasher);
+            let (added, new_child) = child.insert(hash, shift + HASH_BITS, value, compare);
             (added, self.update_node(bitpos, Arc::new(new_child)))
         } else {
             // New value
-            (true, self.insert_value(bitpos, Entry::Value(value)))
+            (true, self.insert_value(bitpos, Entry::Value(value, hash)))
         }
     }
 
-    pub fn insert_mut<F, H>(
-        &mut self,
-        hash: Bitmap,
-        shift: usize,
-        value: A,
-        compare: &F,
-        hasher: &H,
-    ) -> bool
+    pub fn insert_mut<F>(&mut self, hash: Bitmap, shift: usize, value: A, compare: &F) -> bool
     where
         F: Fn(&A, &A) -> bool,
-        H: Fn(&A) -> Bitmap,
     {
         let bitpos = bitpos(hash, shift);
         if self.datamap & bitpos != 0 {
@@ -389,11 +375,11 @@ impl<A: Clone> Node<A> {
             let mut merge = None;
             match self.data[index] {
                 // Update value or create a subtree
-                Entry::Value(ref current) => {
+                Entry::Value(ref current, hash2) => {
                     if (compare)(&value, current) {
                         insert = true;
                     } else {
-                        merge = Some(current.clone());
+                        merge = Some((current.clone(), hash2));
                     }
                 }
                 // There's already a collision here.
@@ -403,20 +389,23 @@ impl<A: Clone> Node<A> {
                 }
             }
             if insert {
-                self.update_value_mut(bitpos, Entry::Value(value));
+                self.update_value_mut(bitpos, Entry::Value(value, hash));
                 return false;
             }
-            if let Some(value2) = merge {
+            if let Some((value2, hash2)) = merge {
                 if shift + HASH_BITS >= HASH_SIZE {
                     // Need to set up a collision
-                    let coll = CollisionNode::new(hash, Entry::Value(value), Entry::Value(value2));
+                    let coll = CollisionNode::new(
+                        hash,
+                        Entry::Value(value, hash),
+                        Entry::Value(value2, hash2),
+                    );
                     self.update_value_mut(bitpos, Entry::Collision(Arc::new(coll)));
                     return true;
                 } else {
-                    let hash2 = (hasher)(&value2);
                     let node = Node::merge_values(
-                        Entry::Value(value),
-                        Entry::Value(value2),
+                        Entry::Value(value, hash),
+                        Entry::Value(value2, hash2),
                         hash,
                         hash2,
                         shift + HASH_BITS,
@@ -430,10 +419,10 @@ impl<A: Clone> Node<A> {
             // Child node
             let index = self.node_index(bitpos);
             let child = Arc::make_mut(&mut self.nodes[index]);
-            child.insert_mut(hash, shift + HASH_BITS, value, compare, hasher)
+            child.insert_mut(hash, shift + HASH_BITS, value, compare)
         } else {
             // New value
-            self.insert_value_mut(bitpos, Entry::Value(value));
+            self.insert_value_mut(bitpos, Entry::Value(value, hash));
             true
         }
     }
@@ -447,7 +436,7 @@ impl<A: Clone> Node<A> {
             // Key is (or would be) in this node.
             let index = self.data_index(pos);
             match self.data[index] {
-                Entry::Value(ref value) => if (pred)(key, value) {
+                Entry::Value(ref value, _) => if (pred)(key, value) {
                     Some((value.clone(), self.remove_value(pos)))
                 // }
                 } else {
@@ -496,7 +485,7 @@ impl<A: Clone> Node<A> {
             let index = self.data_index(pos);
             let removed;
             match self.data[index] {
-                Entry::Value(ref value) => if (pred)(key, value) {
+                Entry::Value(ref value, _) => if (pred)(key, value) {
                     removed = value.clone();
                 } else {
                     return None;
@@ -543,11 +532,11 @@ impl<A: Clone> CollisionNode<A> {
     fn new(hash: Bitmap, value1: Entry<A>, value2: Entry<A>) -> Self {
         let mut data = Vec::new();
         match value1 {
-            Entry::Value(value) => data.push(value),
+            Entry::Value(value, _) => data.push(value),
             Entry::Collision(ref node) => data.extend(node.data.iter().cloned()),
         }
         match value2 {
-            Entry::Value(value) => data.push(value),
+            Entry::Value(value, _) => data.push(value),
             Entry::Collision(ref node) => data.extend(node.data.iter().cloned()),
         }
         CollisionNode { hash, data }
@@ -685,7 +674,7 @@ impl<A: Clone> Iterator for Iter<A> {
         if !self.nodes {
             if self.node.data.len() > self.index {
                 match self.node.data[self.index] {
-                    Entry::Value(ref value) => {
+                    Entry::Value(ref value, _) => {
                         self.index += 1;
                         self.count -= 1;
                         return Some(value.clone());

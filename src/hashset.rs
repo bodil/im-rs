@@ -242,7 +242,6 @@ where
             0,
             a,
             &HashSet::<A, S>::compare_keys,
-            &|a| hash_key(&*self.hasher, a),
         );
         HashSet {
             root: Arc::new(new_node),
@@ -271,12 +270,9 @@ where
     }
 
     fn insert_mut_ref(&mut self, a: Arc<A>) {
-        let hasher = &*self.hasher;
         let hash = hash_key(&*self.hasher, &a);
         let root = Arc::make_mut(&mut self.root);
-        let added = root.insert_mut(hash, 0, a, &HashSet::<A, S>::compare_keys, &|a| {
-            hash_key(hasher, a)
-        });
+        let added = root.insert_mut(hash, 0, a, &HashSet::<A, S>::compare_keys);
         if added {
             self.size += 1
         }
