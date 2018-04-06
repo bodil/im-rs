@@ -167,10 +167,6 @@
 //! defined order. Their crucial property is that any given value can
 //! only exist once in a given set.
 //!
-//! Values in sets, in practice, behave exactly like keys in maps, and
-//! are therefore normally implemented as maps from type `A` to type
-//! `()`.
-//!
 //! | Type | Constraints | Order | Insert | Remove | Lookup |
 //! | --- | --- | --- | --- | --- | --- |
 //! | [`HashSet<A>`][hashset::HashSet] | [`Hash`][std::hash::Hash] + [`Eq`][std::cmp::Eq] | undefined | O(log n) | O(log n) | O(log n) |
