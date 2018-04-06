@@ -206,7 +206,11 @@ impl<A> Vector<A> {
     ///
     /// Time: O(log n)
     pub fn last(&self) -> Option<Arc<A>> {
-        self.get(self.len() - 1)
+        if self.is_empty() {
+            None
+        } else {
+            self.get(self.len() - 1)
+        }
     }
 
     /// Get the vector without the last element.
