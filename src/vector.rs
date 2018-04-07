@@ -89,9 +89,8 @@ impl Default for Meta {
 /// A persistent vector of elements of type `A`.
 ///
 /// This is an implementation of [bitmapped vector tries][bmvt], which
-/// offers highly efficient (amortised linear time) index lookups as
-/// well as appending elements to, or popping elements off, either
-/// side of the vector.
+/// offers highly efficient index lookups as well as appending
+/// elements to, or popping elements off, either side of the vector.
 ///
 /// This is generally the best data structure if you're looking for
 /// something list like. If you don't need lookups or updates by
