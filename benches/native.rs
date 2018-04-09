@@ -26,7 +26,7 @@ fn random_keys(size: usize) -> Vec<i64> {
     set
 }
 
-fn hashmap_insert_n(size: usize, b: &mut Bencher) {
+fn native_hashmap_insert_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size);
     b.iter(|| {
         let mut m = HashMap::new();
@@ -37,21 +37,21 @@ fn hashmap_insert_n(size: usize, b: &mut Bencher) {
 }
 
 #[bench]
-fn hashmap_insert_10(b: &mut Bencher) {
-    hashmap_insert_n(10, b)
+fn native_hashmap_insert_10(b: &mut Bencher) {
+    native_hashmap_insert_n(10, b)
 }
 
 #[bench]
-fn hashmap_insert_100(b: &mut Bencher) {
-    hashmap_insert_n(100, b)
+fn native_hashmap_insert_100(b: &mut Bencher) {
+    native_hashmap_insert_n(100, b)
 }
 
 #[bench]
-fn hashmap_insert_1000(b: &mut Bencher) {
-    hashmap_insert_n(1000, b)
+fn native_hashmap_insert_1000(b: &mut Bencher) {
+    native_hashmap_insert_n(1000, b)
 }
 
-fn btreemap_insert_n(size: usize, b: &mut Bencher) {
+fn native_btreemap_insert_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size);
     b.iter(|| {
         let mut m = BTreeMap::new();
@@ -62,21 +62,21 @@ fn btreemap_insert_n(size: usize, b: &mut Bencher) {
 }
 
 #[bench]
-fn btreemap_insert_10(b: &mut Bencher) {
-    btreemap_insert_n(10, b)
+fn native_btreemap_insert_10(b: &mut Bencher) {
+    native_btreemap_insert_n(10, b)
 }
 
 #[bench]
-fn btreemap_insert_100(b: &mut Bencher) {
-    btreemap_insert_n(100, b)
+fn native_btreemap_insert_100(b: &mut Bencher) {
+    native_btreemap_insert_n(100, b)
 }
 
 #[bench]
-fn btreemap_insert_1000(b: &mut Bencher) {
-    btreemap_insert_n(1000, b)
+fn native_btreemap_insert_1000(b: &mut Bencher) {
+    native_btreemap_insert_n(1000, b)
 }
 
-fn btreemap_insert_clone_n(size: usize, b: &mut Bencher) {
+fn native_btreemap_insert_clone_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size);
     b.iter(|| {
         let mut m = BTreeMap::new();
@@ -88,22 +88,22 @@ fn btreemap_insert_clone_n(size: usize, b: &mut Bencher) {
 }
 
 #[bench]
-fn btreemap_insert_clone_10(b: &mut Bencher) {
-    btreemap_insert_clone_n(10, b)
+fn native_btreemap_insert_clone_10(b: &mut Bencher) {
+    native_btreemap_insert_clone_n(10, b)
 }
 
 #[bench]
-fn btreemap_insert_clone_100(b: &mut Bencher) {
-    btreemap_insert_clone_n(100, b)
+fn native_btreemap_insert_clone_100(b: &mut Bencher) {
+    native_btreemap_insert_clone_n(100, b)
 }
 
 #[bench]
-fn btreemap_insert_clone_1000(b: &mut Bencher) {
-    btreemap_insert_clone_n(1000, b)
+fn native_btreemap_insert_clone_1000(b: &mut Bencher) {
+    native_btreemap_insert_clone_n(1000, b)
 }
 
 #[bench]
-fn vec_snoc(b: &mut Bencher) {
+fn native_vec_push_back_clone_1000(b: &mut Bencher) {
     b.iter(|| {
         let mut l = Vec::new();
         for i in 0..1000 {
@@ -114,7 +114,7 @@ fn vec_snoc(b: &mut Bencher) {
 }
 
 #[bench]
-fn vec_uncons(b: &mut Bencher) {
+fn native_vec_pop_back(b: &mut Bencher) {
     let l = Vec::from_iter(0..1001);
     b.iter(|| {
         let mut p = l.clone();
