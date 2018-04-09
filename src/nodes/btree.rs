@@ -3,7 +3,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::cmp::Ordering;
-use std::fmt::{self, Debug};
 use std::ops::IndexMut;
 use std::sync::Arc;
 
@@ -13,43 +12,48 @@ use self::InsertAction::*;
 const NODE_SIZE: usize = 16; // Must be an even number!
 const MEDIAN: usize = (NODE_SIZE + 1) >> 1;
 
-pub struct Node<K, V>(Arc<NodeData<K, V>>);
+pub trait OrdValue: Clone {
+    type Key: Ord;
 
-#[derive(PartialEq, Eq)]
-pub struct Pair<K, V> {
-    pub key: Arc<K>,
-    pub value: Arc<V>,
+    fn extract_key(&self) -> &Self::Key;
+    fn ptr_eq(&self, other: &Self) -> bool;
+
+    fn cmp_with(&self, right: &Self) -> Ordering {
+        self.extract_key().cmp(right.extract_key())
+    }
 }
 
-struct NodeData<K, V> {
+pub struct Node<A>(Arc<NodeData<A>>);
+
+struct NodeData<A> {
     count: usize,
-    keys: Vec<Pair<K, V>>,
-    children: Vec<Option<Node<K, V>>>,
+    keys: Vec<A>,
+    children: Vec<Option<Node<A>>>,
 }
 
-pub enum Insert<K, V> {
+pub enum Insert<A> {
     NoChange,
     JustInc,
-    Update(Node<K, V>),
-    Split(Node<K, V>, Pair<K, V>, Node<K, V>),
+    Update(Node<A>),
+    Split(Node<A>, A, Node<A>),
 }
 
-enum InsertAction<K, V> {
+enum InsertAction<A> {
     NoAction,
     IncAction,
     InsertAt,
-    InsertSplit(Node<K, V>, Pair<K, V>, Node<K, V>),
+    InsertSplit(Node<A>, A, Node<A>),
 }
 
-pub enum Remove<K, V> {
+pub enum Remove<A> {
     NoChange,
-    Removed(Pair<K, V>),
-    Update(Pair<K, V>, Node<K, V>),
+    Removed(A),
+    Update(A, Node<A>),
 }
 
-enum RemoveAction<K> {
+enum RemoveAction<A> {
     DeleteAt(usize),
-    PullUp(Arc<K>, usize, usize),
+    PullUp(A, usize, usize),
     Merge(usize),
     StealFromLeft(usize),
     StealFromRight(usize),
@@ -57,22 +61,13 @@ enum RemoveAction<K> {
     ContinueDown(usize),
 }
 
-impl<K, V> Clone for Node<K, V> {
+impl<A> Clone for Node<A> {
     fn clone(&self) -> Self {
         Node(self.0.clone())
     }
 }
 
-impl<K, V> Clone for Pair<K, V> {
-    fn clone(&self) -> Self {
-        Pair {
-            key: self.key.clone(),
-            value: self.value.clone(),
-        }
-    }
-}
-
-impl<K, V> Clone for NodeData<K, V> {
+impl<A: Clone> Clone for NodeData<A> {
     fn clone(&self) -> Self {
         NodeData {
             count: self.count,
@@ -82,7 +77,7 @@ impl<K, V> Clone for NodeData<K, V> {
     }
 }
 
-impl<K, V> NodeData<K, V> {
+impl<A> NodeData<A> {
     #[inline]
     fn has_room(&self) -> bool {
         self.keys.len() < NODE_SIZE
@@ -105,7 +100,7 @@ impl<K, V> NodeData<K, V> {
     }
 }
 
-impl<K, V> Default for Node<K, V> {
+impl<A> Default for Node<A> {
     fn default() -> Self {
         let mut children = Vec::with_capacity(NODE_SIZE + 1);
         children.push(None);
@@ -117,14 +112,14 @@ impl<K, V> Default for Node<K, V> {
     }
 }
 
-impl<K, V> Node<K, V> {
+impl<A> Node<A> {
     #[inline]
     pub fn len(&self) -> usize {
         self.0.count
     }
 
     #[inline]
-    fn maybe_len(node_or: &Option<Node<K, V>>) -> usize {
+    fn maybe_len(node_or: &Option<Node<A>>) -> usize {
         match *node_or {
             None => 0,
             Some(ref node) => node.len(),
@@ -147,9 +142,9 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline]
-    pub fn singleton(key: Arc<K>, value: Arc<V>) -> Self {
+    pub fn singleton(value: A) -> Self {
         let mut keys = Vec::with_capacity(NODE_SIZE);
-        keys.push(Pair { key, value });
+        keys.push(value);
         let mut children = Vec::with_capacity(NODE_SIZE + 1);
         children.push(None);
         children.push(None);
@@ -161,7 +156,7 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline]
-    pub fn from_split(left: Node<K, V>, median: Pair<K, V>, right: Node<K, V>) -> Self {
+    pub fn from_split(left: Node<A>, median: A, right: Node<A>) -> Self {
         let count = left.len() + right.len() + 1;
         let mut keys = Vec::with_capacity(NODE_SIZE);
         keys.push(median);
@@ -176,7 +171,7 @@ impl<K, V> Node<K, V> {
     }
 
     #[inline]
-    fn wrap(data: NodeData<K, V>) -> Self {
+    fn wrap(data: NodeData<A>) -> Self {
         Node(Arc::new(data))
     }
 
@@ -185,14 +180,14 @@ impl<K, V> Node<K, V> {
         Arc::ptr_eq(&self.0, &other.0)
     }
 
-    pub fn min(&self) -> Option<&Pair<K, V>> {
+    pub fn min(&self) -> Option<&A> {
         match *self.0.children.first().unwrap() {
             None => self.0.keys.first(),
             Some(ref child) => child.min(),
         }
     }
 
-    pub fn max(&self) -> Option<&Pair<K, V>> {
+    pub fn max(&self) -> Option<&A> {
         match *self.0.children.last().unwrap() {
             None => self.0.keys.last(),
             Some(ref child) => child.max(),
@@ -200,18 +195,15 @@ impl<K, V> Node<K, V> {
     }
 }
 
-impl<K, V> Node<K, V>
-where
-    K: Ord,
-{
+impl<A: OrdValue> Node<A> {
     #[cfg_attr(feature = "clippy", allow(op_ref))]
-    pub fn lookup(&self, key: &K) -> Option<Arc<V>> {
+    pub fn lookup(&self, key: &A::Key) -> Option<A> {
         if self.0.keys.is_empty() {
             return None;
         }
         // Start by checking if the key is greater than the node's max,
         // and search the rightmost child if so.
-        if key > &self.0.keys[self.0.keys.len() - 1].key {
+        if key > self.0.keys[self.0.keys.len() - 1].extract_key() {
             match self.0.children[self.0.keys.len()] {
                 None => return None,
                 Some(ref node) => return node.lookup(key),
@@ -220,8 +212,11 @@ where
         // Perform a binary search, resulting in either a match or
         // the index of the first higher key, meaning we search the
         // child to the left of it.
-        match self.0.keys.binary_search_by_key(&key, |pair| &*pair.key) {
-            Ok(index) => Some(self.0.keys[index].value.clone()),
+        match self.0
+            .keys
+            .binary_search_by(|value| value.extract_key().cmp(key))
+        {
+            Ok(index) => Some(self.0.keys[index].clone()),
             Err(index) => match self.0.children[index] {
                 None => None,
                 Some(ref node) => node.lookup(key),
@@ -229,19 +224,15 @@ where
         }
     }
 
-    fn split(
-        &self,
-        pair: Pair<K, V>,
-        ins_left: Option<Node<K, V>>,
-        ins_right: Option<Node<K, V>>,
-    ) -> Insert<K, V> {
+    fn split(&self, value: A, ins_left: Option<Node<A>>, ins_right: Option<Node<A>>) -> Insert<A> {
         let mut new_keys = self.0.keys.clone();
         let mut new_children = self.0.children.clone();
-        match new_keys.binary_search_by_key(&&*pair.key, |pair| &*pair.key) {
+
+        match new_keys.binary_search_by(|item| item.extract_key().cmp(value.extract_key())) {
             Ok(_) => unreachable!(),
             Err(index) => {
                 new_children[index] = ins_left;
-                new_keys.insert(index, pair);
+                new_keys.insert(index, value);
                 new_children.insert(index + 1, ins_right);
             }
         }
@@ -260,18 +251,18 @@ where
         Split(Node::wrap(left), new_keys.pop().unwrap(), Node::wrap(right))
     }
 
-    pub fn insert(&self, key: Arc<K>, value: Arc<V>) -> Insert<K, V> {
+    pub fn insert(&self, value: A) -> Insert<A> {
         if self.0.keys.is_empty() {
-            return Insert::Update(Node::singleton(key, value));
+            return Insert::Update(Node::singleton(value));
         }
-        match self.0.keys.binary_search_by_key(&&*key, |pair| &*pair.key) {
+        match self.0.keys.binary_search_by(|item| item.extract_key().cmp(value.extract_key())) {
             // Key exists in node
             Ok(index) => {
-                if Arc::ptr_eq(&value, &self.0.keys[index].value) {
+                if value.ptr_eq(&self.0.keys[index]) {
                     Insert::NoChange
                 } else {
                     let mut new_data = (&*self.0).clone();
-                    new_data.keys[index] = Pair { key, value };
+                    new_data.keys[index] = value;
                     Insert::Update(Node::wrap(new_data))
                 }
             }
@@ -281,16 +272,16 @@ where
                 None => {
                     if self.has_room() {
                         let mut new_data = (&*self.0).clone();
-                        new_data.keys.insert(index, Pair { key, value });
+                        new_data.keys.insert(index, value);
                         new_data.children.insert(index + 1, None);
                         new_data.count += 1;
                         Insert::Update(Node::wrap(new_data))
                     } else {
-                        self.split(Pair { key, value }, None, None)
+                        self.split(value, None, None)
                     }
                 }
                 // Child at location, pass it on.
-                Some(ref node) => match node.insert(key, value) {
+                Some(ref node) => match node.insert(value) {
                     Insert::NoChange => Insert::NoChange,
                     Insert::JustInc => unreachable!(),
                     Insert::Update(new_node) => {
@@ -318,7 +309,7 @@ where
         }
     }
 
-    fn merge(pair: Pair<K, V>, left: &Node<K, V>, right: &Node<K, V>) -> Node<K, V> {
+    fn merge(pair: A, left: &Node<A>, right: &Node<A>) -> Node<A> {
         let mut keys = Vec::with_capacity(NODE_SIZE);
         keys.extend(left.0.keys.iter().cloned());
         keys.push(pair);
@@ -333,7 +324,7 @@ where
         })
     }
 
-    fn pop_min(&self) -> (Node<K, V>, Pair<K, V>, Option<Node<K, V>>) {
+    fn pop_min(&self) -> (Node<A>, A, Option<Node<A>>) {
         let mut new_data = (&*self.0).clone();
         let pair = new_data.keys.remove(0);
         let child = new_data.children.remove(0);
@@ -341,7 +332,7 @@ where
         (Node::wrap(new_data), pair, child)
     }
 
-    fn pop_min_mut(&mut self) -> (Pair<K, V>, Option<Node<K, V>>) {
+    fn pop_min_mut(&mut self) -> (A, Option<Node<A>>) {
         let node = Arc::make_mut(&mut self.0);
         let pair = node.keys.remove(0);
         let child = node.children.remove(0);
@@ -349,7 +340,7 @@ where
         (pair, child)
     }
 
-    fn pop_max(&self) -> (Node<K, V>, Pair<K, V>, Option<Node<K, V>>) {
+    fn pop_max(&self) -> (Node<A>, A, Option<Node<A>>) {
         let mut new_data = (&*self.0).clone();
         let pair = new_data.keys.pop().unwrap();
         let child = new_data.children.pop().unwrap();
@@ -357,7 +348,7 @@ where
         (Node::wrap(new_data), pair, child)
     }
 
-    fn pop_max_mut(&mut self) -> (Pair<K, V>, Option<Node<K, V>>) {
+    fn pop_max_mut(&mut self) -> (A, Option<Node<A>>) {
         let node = Arc::make_mut(&mut self.0);
         let pair = node.keys.pop().unwrap();
         let child = node.children.pop().unwrap();
@@ -365,7 +356,7 @@ where
         (pair, child)
     }
 
-    fn push_min(&self, child: Option<Node<K, V>>, pair: Pair<K, V>) -> Node<K, V> {
+    fn push_min(&self, child: Option<Node<A>>, pair: A) -> Node<A> {
         let mut new_data = (&*self.0).clone();
         new_data.count += 1 + Node::maybe_len(&child);
         new_data.keys.insert(0, pair);
@@ -373,14 +364,14 @@ where
         Node::wrap(new_data)
     }
 
-    fn push_min_mut(&mut self, child: Option<Node<K, V>>, pair: Pair<K, V>) {
+    fn push_min_mut(&mut self, child: Option<Node<A>>, pair: A) {
         let node = Arc::make_mut(&mut self.0);
         node.count += 1 + Node::maybe_len(&child);
         node.keys.insert(0, pair);
         node.children.insert(0, child);
     }
 
-    fn push_max(&self, child: Option<Node<K, V>>, pair: Pair<K, V>) -> Node<K, V> {
+    fn push_max(&self, child: Option<Node<A>>, pair: A) -> Node<A> {
         let mut new_data = (&*self.0).clone();
         new_data.count += 1 + Node::maybe_len(&child);
         new_data.keys.push(pair);
@@ -388,7 +379,7 @@ where
         Node::wrap(new_data)
     }
 
-    fn push_max_mut(&mut self, child: Option<Node<K, V>>, pair: Pair<K, V>) {
+    fn push_max_mut(&mut self, child: Option<Node<A>>, pair: A) {
         let node = Arc::make_mut(&mut self.0);
         node.count += 1 + Node::maybe_len(&child);
         node.keys.push(pair);
@@ -397,11 +388,11 @@ where
 
     fn pull_up(
         &self,
-        key: &K,
-        from_child: &Node<K, V>,
+        key: &A::Key,
+        from_child: &Node<A>,
         pull_to: usize,
         child_index: usize,
-    ) -> Remove<K, V> {
+    ) -> Remove<A> {
         match from_child.remove(key) {
             Remove::NoChange => unreachable!(),
             Remove::Removed(_) => unreachable!(),
@@ -416,8 +407,8 @@ where
         }
     }
 
-    pub fn remove(&self, key: &K) -> Remove<K, V> {
-        match self.0.keys.binary_search_by_key(&&*key, |pair| &*pair.key) {
+    pub fn remove(&self, key: &A::Key) -> Remove<A> {
+        match self.0.keys.binary_search_by(|value| value.extract_key().cmp(key)) {
             // Key exists in node, remove it.
             Ok(index) => {
                 match (&self.0.children[index], &self.0.children[index + 1]) {
@@ -431,11 +422,11 @@ where
                     }
                     // If the left hand child has capacity, pull the predecessor up.
                     (&Some(ref left), _) if !left.too_small() => {
-                        self.pull_up(&left.max().unwrap().key, left, index, index)
+                        self.pull_up(left.max().unwrap().extract_key(), left, index, index)
                     }
                     // If the right hand child has capacity, pull the successor up.
                     (_, &Some(ref right)) if !right.too_small() => {
-                        self.pull_up(&right.min().unwrap().key, right, index, index + 1)
+                        self.pull_up(right.min().unwrap().extract_key(), right, index, index + 1)
                     }
                     // If neither child has capacity, we'll have to merge them.
                     (&Some(ref left), &Some(ref right)) => {
@@ -584,76 +575,75 @@ where
         }
     }
 
-    pub fn insert_mut(&mut self, key: Arc<K>, value: Arc<V>) -> Insert<K, V> {
+    pub fn insert_mut(&mut self, value: A) -> Insert<A> {
         if self.0.keys.is_empty() {
             let node = Arc::make_mut(&mut self.0);
-            node.keys.push(Pair { key, value });
+            node.keys.push(value);
             node.children.push(None);
             node.count += 1;
             return Insert::JustInc;
         }
-        let (median, left, right) =
-            match self.0.keys.binary_search_by_key(&&*key, |pair| &*pair.key) {
-                // Key exists in node
-                Ok(index) => {
-                    if Arc::ptr_eq(&value, &self.0.keys[index].value) {
-                        return Insert::NoChange;
-                    } else {
-                        let mut node = Arc::make_mut(&mut self.0);
-                        node.keys[index] = Pair { key, value };
+        let (median, left, right) = match self.0.keys.binary_search_by(|item| item.extract_key().cmp(value.extract_key())) {
+            // Key exists in node
+            Ok(index) => {
+                if value.ptr_eq(&self.0.keys[index]) {
+                    return Insert::NoChange;
+                } else {
+                    let mut node = Arc::make_mut(&mut self.0);
+                    node.keys[index] = value;
+                    return Insert::JustInc;
+                }
+            }
+            // Key is adjacent to some key in node
+            Err(index) => {
+                let mut has_room = self.has_room();
+                let mut node = Arc::make_mut(&mut self.0);
+                let action = match node.children[index] {
+                    // No child at location, this is the target node.
+                    None => InsertAt,
+                    // Child at location, pass it on.
+                    Some(ref mut child) => match child.insert_mut(value.clone()) {
+                        Insert::NoChange => NoAction,
+                        Insert::JustInc => IncAction,
+                        Insert::Update(_) => unreachable!(),
+                        Insert::Split(left, median, right) => InsertSplit(left, median, right),
+                    },
+                };
+                match action {
+                    NoAction => return Insert::NoChange,
+                    IncAction => {
+                        node.count += 1;
                         return Insert::JustInc;
                     }
-                }
-                // Key is adjacent to some key in node
-                Err(index) => {
-                    let mut has_room = self.has_room();
-                    let mut node = Arc::make_mut(&mut self.0);
-                    let action = match node.children[index] {
-                        // No child at location, this is the target node.
-                        None => InsertAt,
-                        // Child at location, pass it on.
-                        Some(ref mut child) => match child.insert_mut(key.clone(), value.clone()) {
-                            Insert::NoChange => NoAction,
-                            Insert::JustInc => IncAction,
-                            Insert::Update(_) => unreachable!(),
-                            Insert::Split(left, median, right) => InsertSplit(left, median, right),
-                        },
-                    };
-                    match action {
-                        NoAction => return Insert::NoChange,
-                        IncAction => {
+                    InsertAt => {
+                        if has_room {
+                            node.keys.insert(index, value);
+                            node.children.insert(index + 1, None);
                             node.count += 1;
                             return Insert::JustInc;
+                        } else {
+                            (value, None, None)
                         }
-                        InsertAt => {
-                            if has_room {
-                                node.keys.insert(index, Pair { key, value });
-                                node.children.insert(index + 1, None);
-                                node.count += 1;
-                                return Insert::JustInc;
-                            } else {
-                                (Pair { key, value }, None, None)
-                            }
-                        }
-                        InsertSplit(left, median, right) => {
-                            if has_room {
-                                node.children[index] = Some(left);
-                                node.keys.insert(index, median);
-                                node.children.insert(index + 1, Some(right));
-                                node.count += 1;
-                                return Insert::JustInc;
-                            } else {
-                                (median, Some(left), Some(right))
-                            }
+                    }
+                    InsertSplit(left, median, right) => {
+                        if has_room {
+                            node.children[index] = Some(left);
+                            node.keys.insert(index, median);
+                            node.children.insert(index + 1, Some(right));
+                            node.count += 1;
+                            return Insert::JustInc;
+                        } else {
+                            (median, Some(left), Some(right))
                         }
                     }
                 }
-            };
+            }
+        };
         self.split(median, left, right)
     }
 
-    pub fn remove_mut(&mut self, key: &K) -> Remove<K, V> {
-        let action = match self.0.keys.binary_search_by_key(&&*key, |pair| &*pair.key) {
+    pub fn remove_mut(&mut self, key: &A::Key) -> Remove<A> {
+        let action = match self.0.keys.binary_search_by(|item| item.extract_key().cmp(key)) {
             // Key exists in node, remove it.
             Ok(index) => {
                 match (&self.0.children[index], &self.0.children[index + 1]) {
@@ -661,11 +651,11 @@ where
                     (&None, &None) => RemoveAction::DeleteAt(index),
                     // If the left hand child has capacity, pull the predecessor up.
                     (&Some(ref left), _) if !left.too_small() => {
-                        RemoveAction::PullUp(left.max().unwrap().key.clone(), index, index)
+                        RemoveAction::PullUp(left.max().unwrap().clone(), index, index)
                     }
                     // If the right hand child has capacity, pull the successor up.
                     (_, &Some(ref right)) if !right.too_small() => {
-                        RemoveAction::PullUp(right.min().unwrap().key.clone(), index, index + 1)
+                        RemoveAction::PullUp(right.min().unwrap().clone(), index, index + 1)
                     }
                     // If neither child has capacity, we'll have to merge them.
                     (&Some(_), &Some(_)) => RemoveAction::Merge(index),
@@ -714,13 +704,13 @@ where
                 node.count -= 1;
                 Remove::Removed(pair)
             }
-            RemoveAction::PullUp(key, pull_to, child_index) => {
+            RemoveAction::PullUp(value, pull_to, child_index) => {
                 let mut node = Arc::make_mut(&mut self.0);
                 let mut children = &mut node.children;
                 let mut update = None;
                 let mut pair;
                 if let Some(&mut Some(ref mut child)) = children.get_mut(child_index) {
-                    match child.remove_mut(&key) {
+                    match child.remove_mut(value.extract_key()) {
                         Remove::NoChange => unreachable!(),
                         Remove::Removed(pulled_pair) => {
                             node.keys.push(pulled_pair);
@@ -932,56 +922,23 @@ where
     }
 }
 
-impl<K, V> Debug for Node<K, V>
-where
-    K: Ord + Debug,
-    V: Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Node[{:?}]{{ {:?} }}", self.len(), self.0)
-    }
-}
-
-impl<K, V> Debug for Pair<K, V>
-where
-    K: Ord + Debug,
-    V: Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "[{:?} => {:?}]", self.key, self.value)
-    }
-}
-
-impl<K, V> Debug for NodeData<K, V>
-where
-    K: Ord + Debug,
-    V: Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        for i in 0..self.keys.len() {
-            write!(f, "{:?}, {:?}, ", self.children[i], self.keys[i])?;
-        }
-        write!(f, "{:?}", self.children[self.keys.len()])
-    }
-}
-
 // Iterator
 
-enum IterItem<K, V> {
-    Consider(Node<K, V>),
-    Yield(Pair<K, V>),
+enum IterItem<A> {
+    Consider(Node<A>),
+    Yield(A),
 }
 
-pub struct Iter<K, V> {
-    fwd_last: Option<Arc<K>>,
-    fwd_stack: Vec<IterItem<K, V>>,
-    back_last: Option<Arc<K>>,
-    back_stack: Vec<IterItem<K, V>>,
+pub struct Iter<A> {
+    fwd_last: Option<A>,
+    fwd_stack: Vec<IterItem<A>>,
+    back_last: Option<A>,
+    back_stack: Vec<IterItem<A>>,
     remaining: usize,
 }
 
-impl<K, V> Iter<K, V> {
-    pub fn new(root: &Node<K, V>) -> Self {
+impl<A: Clone> Iter<A> {
+    pub fn new(root: &Node<A>) -> Self {
         Iter {
             fwd_last: None,
             fwd_stack: vec![IterItem::Consider(root.clone())],
@@ -991,13 +948,13 @@ impl<K, V> Iter<K, V> {
         }
     }
 
-    fn push_node_fwd(&mut self, maybe_node: &Option<Node<K, V>>) {
+    fn push_node_fwd(&mut self, maybe_node: &Option<Node<A>>) {
         if let Some(ref node) = *maybe_node {
             self.fwd_stack.push(IterItem::Consider(node.clone()))
         }
     }
 
-    fn push_fwd(&mut self, node: &Node<K, V>) {
+    fn push_fwd(&mut self, node: &Node<A>) {
         for n in 0..node.0.keys.len() {
             let i = node.0.keys.len() - n;
             self.push_node_fwd(&node.0.children[i]);
@@ -1007,13 +964,13 @@ impl<K, V> Iter<K, V> {
         self.push_node_fwd(&node.0.children[0]);
     }
 
-    fn push_node_back(&mut self, maybe_node: &Option<Node<K, V>>) {
+    fn push_node_back(&mut self, maybe_node: &Option<Node<A>>) {
         if let Some(ref node) = *maybe_node {
             self.back_stack.push(IterItem::Consider(node.clone()))
         }
     }
 
-    fn push_back(&mut self, node: &Node<K, V>) {
+    fn push_back(&mut self, node: &Node<A>) {
         for i in 0..node.0.keys.len() {
             self.push_node_back(&node.0.children[i]);
             self.back_stack
@@ -1023,11 +980,11 @@ impl<K, V> Iter<K, V> {
     }
 }
 
-impl<K, V> Iterator for Iter<K, V>
+impl<A> Iterator for Iter<A>
 where
-    K: Ord,
+    A: OrdValue,
 {
-    type Item = (Arc<K>, Arc<V>);
+    type Item = A;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -1037,18 +994,18 @@ where
                     return None;
                 }
                 Some(IterItem::Consider(node)) => self.push_fwd(&node),
-                Some(IterItem::Yield(pair)) => {
-                    if self.back_last.is_some()
-                        && Some(pair.key.clone()).cmp(&self.back_last) != Ordering::Less
-                    {
-                        self.fwd_stack.clear();
-                        self.back_stack.clear();
-                        self.remaining = 0;
-                        return None;
+                Some(IterItem::Yield(value)) => {
+                    if let Some(ref last) = self.back_last {
+                        if value.extract_key().cmp(last.extract_key()) != Ordering::Less {
+                            self.fwd_stack.clear();
+                            self.back_stack.clear();
+                            self.remaining = 0;
+                            return None;
+                        }
                     }
                     self.remaining -= 1;
-                    self.fwd_last = Some(pair.key.clone());
-                    return Some((pair.key, pair.value));
+                    self.fwd_last = Some(value.clone());
+                    return Some(value);
                 }
             }
         }
@@ -1059,7 +1016,7 @@ where
     }
 }
 
-impl<K: Ord, V> DoubleEndedIterator for Iter<K, V> {
+impl<A: OrdValue> DoubleEndedIterator for Iter<A> {
     fn next_back(&mut self) -> Option<Self::Item> {
         loop {
             match self.back_stack.pop() {
@@ -1068,22 +1025,22 @@ impl<K: Ord, V> DoubleEndedIterator for Iter<K, V> {
                     return None;
                 }
                 Some(IterItem::Consider(node)) => self.push_back(&node),
-                Some(IterItem::Yield(pair)) => {
-                    if self.fwd_last.is_some()
-                        && Some(pair.key.clone()).cmp(&self.fwd_last) != Ordering::Greater
-                    {
-                        self.fwd_stack.clear();
-                        self.back_stack.clear();
-                        self.remaining = 0;
-                        return None;
+                Some(IterItem::Yield(value)) => {
+                    if let Some(ref last) = self.fwd_last {
+                        if value.extract_key().cmp(last.extract_key()) != Ordering::Greater {
+                            self.fwd_stack.clear();
+                            self.back_stack.clear();
+                            self.remaining = 0;
+                            return None;
+                        }
                     }
                     self.remaining -= 1;
-                    self.back_last = Some(pair.key.clone());
-                    return Some((pair.key, pair.value));
+                    self.back_last = Some(value.clone());
+                    return Some(value);
                 }
             }
         }
     }
 }
 
-impl<K: Ord, V> ExactSizeIterator for Iter<K, V> {}
+impl<A: OrdValue> ExactSizeIterator for Iter<A> {}

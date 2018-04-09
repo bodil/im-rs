@@ -20,7 +20,7 @@ use std::ops::{Add, Mul};
 use std::sync::Arc;
 
 use hashset::HashSet;
-use ordmap::{self, OrdMap};
+use nodes::btree::{Insert, Iter, Node, OrdValue, Remove};
 use shared::Shared;
 
 /// Construct a set from a sequence of values.
@@ -50,6 +50,18 @@ macro_rules! ordset {
     }};
 }
 
+impl<A: Ord> OrdValue for Arc<A> {
+    type Key = A;
+
+    fn extract_key(&self) -> &A {
+        &*self
+    }
+
+    fn ptr_eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(self, other)
+    }
+}
+
 /// # Ordered Set
 ///
 /// This is implemented as an [`OrdMap`][ordmap::OrdMap] with no
@@ -57,12 +69,14 @@ macro_rules! ordset {
 /// [`OrdMap`][ordmap::OrdMap].
 ///
 /// [ordmap::OrdMap]: ../ordmap/struct.OrdMap.html
-pub struct OrdSet<A>(OrdMap<A, ()>);
+pub struct OrdSet<A> {
+    root: Node<Arc<A>>,
+}
 
 impl<A> OrdSet<A> {
     /// Construct an empty set.
     pub fn new() -> Self {
-        OrdSet(OrdMap::new())
+        OrdSet { root: Node::new() }
     }
 
     /// Construct a set with a single value.
@@ -82,11 +96,9 @@ impl<A> OrdSet<A> {
     where
         R: Shared<A>,
     {
-        OrdSet(OrdMap::<A, ()>::singleton(a, ()))
-    }
-
-    pub fn iter(&self) -> Iter<A> {
-        Iter { it: self.0.iter() }
+        OrdSet {
+            root: Node::singleton(a.shared()),
+        }
     }
 
     /// Test whether a set is empty.
@@ -108,7 +120,7 @@ impl<A> OrdSet<A> {
     /// # }
     /// ```
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.root.len() == 0
     }
 
     /// Get the size of a set.
@@ -125,25 +137,30 @@ impl<A> OrdSet<A> {
     /// # }
     /// ```
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.root.len()
     }
 
     /// Get the smallest value in a set.
     ///
     /// If the set is empty, returns `None`.
     pub fn get_min(&self) -> Option<Arc<A>> {
-        self.0.get_min().map(|(a, _)| a)
+        self.root.min().cloned()
     }
 
     /// Get the largest value in a set.
     ///
     /// If the set is empty, returns `None`.
     pub fn get_max(&self) -> Option<Arc<A>> {
-        self.0.get_max().map(|(a, _)| a)
+        self.root.max().cloned()
     }
 }
 
 impl<A: Ord> OrdSet<A> {
+    // Create an iterator over the contents of the set.
+    pub fn iter(&self) -> Iter<Arc<A>> {
+        Iter::new(&self.root)
+    }
+
     /// Insert a value into a set.
     ///
     /// Time: O(log n)
@@ -166,7 +183,14 @@ impl<A: Ord> OrdSet<A> {
     where
         R: Shared<A>,
     {
-        OrdSet(self.0.insert(a, ()))
+        match self.root.insert(a.shared()) {
+            Insert::NoChange => self.clone(),
+            Insert::JustInc => unreachable!(),
+            Insert::Update(root) => OrdSet { root },
+            Insert::Split(left, median, right) => OrdSet {
+                root: Node::from_split(left, median, right),
+            },
+        }
     }
 
     /// Insert a value into a set.
@@ -200,21 +224,29 @@ impl<A: Ord> OrdSet<A> {
     where
         R: Shared<A>,
     {
-        self.0.insert_mut(a, ())
+        match self.root.insert_mut(a.shared()) {
+            Insert::NoChange | Insert::JustInc => {}
+            Insert::Update(root) => self.root = root,
+            Insert::Split(left, median, right) => self.root = Node::from_split(left, median, right),
+        }
     }
 
     /// Test if a value is part of a set.
     ///
     /// Time: O(log n)
     pub fn contains(&self, a: &A) -> bool {
-        self.0.contains_key(a)
+        self.root.lookup(a).is_some()
     }
 
     /// Remove a value from a set.
     ///
     /// Time: O(log n)
     pub fn remove(&self, a: &A) -> Self {
-        OrdSet(self.0.remove(a))
+        match self.root.remove(a) {
+            Remove::NoChange => self.clone(),
+            Remove::Removed(_) => unreachable!(),
+            Remove::Update(_, root) => OrdSet { root },
+        }
     }
 
     /// Remove a value from a set.
@@ -226,7 +258,9 @@ impl<A: Ord> OrdSet<A> {
     /// Time: O(log n)
     #[inline]
     pub fn remove_mut<R>(&mut self, a: &A) {
-        self.0.remove_mut(a)
+        if let Remove::Update(_, root) = self.root.remove_mut(a) {
+            self.root = root;
+        }
     }
 
     /// Construct the union of two sets.
@@ -234,7 +268,10 @@ impl<A: Ord> OrdSet<A> {
     where
         RS: Borrow<Self>,
     {
-        OrdSet(self.0.union(&other.borrow().0))
+        other
+            .borrow()
+            .iter()
+            .fold(self.clone(), |set, item| set.insert(item))
     }
 
     /// Construct the union of multiple sets.
@@ -242,7 +279,7 @@ impl<A: Ord> OrdSet<A> {
     where
         I: IntoIterator<Item = Self>,
     {
-        i.into_iter().fold(ordset![], |a, b| a.union(&b))
+        i.into_iter().fold(OrdSet::new(), |a, b| a.union(&b))
     }
 
     /// Construct the difference between two sets.
@@ -250,7 +287,10 @@ impl<A: Ord> OrdSet<A> {
     where
         RS: Borrow<Self>,
     {
-        OrdSet(self.0.difference(&other.borrow().0))
+        other
+            .borrow()
+            .iter()
+            .fold(self.clone(), |set, item| set.remove(&item))
     }
 
     /// Construct the intersection of two sets.
@@ -258,7 +298,13 @@ impl<A: Ord> OrdSet<A> {
     where
         RS: Borrow<Self>,
     {
-        OrdSet(self.0.intersection(&other.borrow().0))
+        other.borrow().iter().fold(OrdSet::new(), |set, item| {
+            if self.contains(&item) {
+                set.insert(item)
+            } else {
+                set
+            }
+        })
     }
 
     /// Split a set into two, with the left hand set containing values
@@ -267,8 +313,14 @@ impl<A: Ord> OrdSet<A> {
     ///
     /// The `split` value itself is discarded.
     pub fn split(&self, split: &A) -> (Self, Self) {
-        let (l, r) = self.0.split(split);
-        (OrdSet(l), OrdSet(r))
+        self.iter().fold(
+            (OrdSet::new(), OrdSet::new()),
+            |(less, greater), item| match (&*item).cmp(split) {
+                Ordering::Less => (less.insert(item), greater),
+                Ordering::Equal => (less, greater),
+                Ordering::Greater => (less, greater.insert(item)),
+            },
+        )
     }
 
     /// Split a set into two, with the left hand set containing values
@@ -279,8 +331,14 @@ impl<A: Ord> OrdSet<A> {
     /// the `split` value existed in the original set, and false
     /// otherwise.
     pub fn split_member(&self, split: &A) -> (Self, bool, Self) {
-        let (l, m, r) = self.0.split_lookup(split);
-        (OrdSet(l), m.is_some(), OrdSet(r))
+        self.iter().fold(
+            (OrdSet::new(), false, OrdSet::new()),
+            |(less, present, greater), item| match (&*item).cmp(split) {
+                Ordering::Less => (less.insert(item), present, greater),
+                Ordering::Equal => (less, true, greater),
+                Ordering::Greater => (less, present, greater.insert(item)),
+            },
+        )
     }
 
     /// Test whether a set is a subset of another set, meaning that
@@ -289,7 +347,8 @@ impl<A: Ord> OrdSet<A> {
     where
         RS: Borrow<Self>,
     {
-        self.0.is_submap(&other.borrow().0)
+        let o = other.borrow();
+        self.iter().all(|v| o.contains(&v))
     }
 
     /// Test whether a set is a proper subset of another set, meaning
@@ -299,33 +358,38 @@ impl<A: Ord> OrdSet<A> {
     where
         RS: Borrow<Self>,
     {
-        self.0.is_proper_submap(&other.borrow().0)
+        let o = other.borrow();
+        self.len() < o.len() && self.is_subset(o)
     }
 
     /// Construct a set with only the `n` smallest values from a given
     /// set.
     pub fn take(&self, n: usize) -> Self {
-        OrdSet(self.0.take(n))
+        self.iter().take(n).collect()
     }
 
     /// Construct a set with the `n` smallest values removed from a
     /// given set.
-    pub fn drop(&self, n: usize) -> Self {
-        OrdSet(self.0.drop(n))
+    pub fn skip(&self, n: usize) -> Self {
+        self.iter().skip(n).collect()
     }
 
     /// Remove the smallest value from a set, and return that value as
     /// well as the updated set.
     pub fn pop_min(&self) -> (Option<Arc<A>>, Self) {
-        let (pair, set) = self.0.pop_min_with_key();
-        (pair.map(|(a, _)| a), OrdSet(set))
+        match self.get_min() {
+            Some(v) => (Some(v.clone()), self.remove(&v)),
+            None => (None, self.clone()),
+        }
     }
 
     /// Remove the largest value from a set, and return that value as
     /// well as the updated set.
     pub fn pop_max(&self) -> (Option<Arc<A>>, Self) {
-        let (pair, set) = self.0.pop_max_with_key();
-        (pair.map(|(a, _)| a), OrdSet(set))
+        match self.get_max() {
+            Some(v) => (Some(v.clone()), self.remove(&v)),
+            None => (None, self.clone()),
+        }
     }
 
     /// Discard the smallest value from a set, returning the updated
@@ -345,13 +409,15 @@ impl<A: Ord> OrdSet<A> {
 
 impl<A> Clone for OrdSet<A> {
     fn clone(&self) -> Self {
-        OrdSet(self.0.clone())
+        OrdSet {
+            root: self.root.clone(),
+        }
     }
 }
 
-impl<A: Ord + PartialEq> PartialEq for OrdSet<A> {
+impl<A: Ord> PartialEq for OrdSet<A> {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        self.root.ptr_eq(&other.root) || (self.len() == other.len() && self.iter().eq(other.iter()))
     }
 }
 
@@ -359,13 +425,13 @@ impl<A: Ord + Eq> Eq for OrdSet<A> {}
 
 impl<A: Ord> PartialOrd for OrdSet<A> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.0.partial_cmp(&other.0)
+        self.iter().partial_cmp(other.iter())
     }
 }
 
 impl<A: Ord> Ord for OrdSet<A> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.0.cmp(&other.0)
+        self.iter().cmp(other.iter())
     }
 }
 
@@ -382,7 +448,7 @@ impl<A: Ord + Hash> Hash for OrdSet<A> {
 
 impl<A> Default for OrdSet<A> {
     fn default() -> Self {
-        ordset![]
+        OrdSet::new()
     }
 }
 
@@ -464,21 +530,6 @@ impl<A: Ord + Debug> Debug for OrdSet<A> {
 
 // Iterators
 
-pub struct Iter<A> {
-    it: ordmap::Iter<A, ()>,
-}
-
-impl<A> Iterator for Iter<A>
-where
-    A: Ord,
-{
-    type Item = Arc<A>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.it.next().map(|(a, _)| a)
-    }
-}
-
 impl<A: Ord, RA> FromIterator<RA> for OrdSet<A>
 where
     RA: Shared<A>,
@@ -496,7 +547,7 @@ where
     A: Ord,
 {
     type Item = Arc<A>;
-    type IntoIter = Iter<A>;
+    type IntoIter = Iter<Arc<A>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -508,7 +559,7 @@ where
     A: Ord,
 {
     type Item = Arc<A>;
-    type IntoIter = Iter<A>;
+    type IntoIter = Iter<Arc<A>>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
