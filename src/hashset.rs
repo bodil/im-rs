@@ -25,7 +25,7 @@ use std::ops::{Add, Mul};
 use std::sync::Arc;
 
 use bits::hash_key;
-use nodes::hamt::{Iter, Node};
+use nodes::hamt::{HashValue, Iter, Node};
 use ordset::OrdSet;
 use shared::Shared;
 
@@ -69,6 +69,18 @@ pub struct HashSet<A, S = RandomState> {
     hasher: Arc<S>,
     root: Arc<Node<Arc<A>>>,
     size: usize,
+}
+
+impl<A: Hash + Eq> HashValue for Arc<A> {
+    type Key = A;
+
+    fn extract_key(&self) -> &Self::Key {
+        &*self
+    }
+
+    fn ptr_eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(self, other)
+    }
 }
 
 impl<A> HashSet<A, RandomState>
@@ -140,17 +152,6 @@ impl<A, S> HashSet<A, S> {
     pub fn len(&self) -> usize {
         self.size
     }
-
-    /// Get an iterator over the values in a hash set.
-    ///
-    /// Please note that the order is consistent between sets using
-    /// the same hasher, but no other ordering guarantee is offered.
-    /// Items will not come out in insertion order or sort order.
-    /// They will, however, come out in the same order every time for
-    /// the same set.
-    pub fn iter(&self) -> Iter<Arc<A>> {
-        Node::iter(self.root.clone(), self.size)
-    }
 }
 
 impl<A, S> HashSet<A, S>
@@ -158,14 +159,6 @@ where
     A: Hash + Eq,
     S: BuildHasher,
 {
-    fn match_key(key: &A, other: &Arc<A>) -> bool {
-        key == &**other
-    }
-
-    fn compare_keys(key: &Arc<A>, other: &Arc<A>) -> bool {
-        key == other
-    }
-
     fn test_eq(&self, other: &Self) -> bool {
         if self.len() != other.len() {
             return false;
@@ -211,6 +204,17 @@ where
         }
     }
 
+    /// Get an iterator over the values in a hash set.
+    ///
+    /// Please note that the order is consistent between sets using
+    /// the same hasher, but no other ordering guarantee is offered.
+    /// Items will not come out in insertion order or sort order.
+    /// They will, however, come out in the same order every time for
+    /// the same set.
+    pub fn iter(&self) -> Iter<Arc<A>> {
+        Node::iter(self.root.clone(), self.size)
+    }
+
     /// Insert a value into a set.
     ///
     /// Time: O(log n)
@@ -237,12 +241,7 @@ where
     }
 
     fn insert_ref(&self, a: Arc<A>) -> Self {
-        let (added, new_node) = self.root.insert(
-            hash_key(&*self.hasher, &a),
-            0,
-            a,
-            &HashSet::<A, S>::compare_keys,
-        );
+        let (added, new_node) = self.root.insert(hash_key(&*self.hasher, &a), 0, a);
         HashSet {
             root: Arc::new(new_node),
             size: if added {
@@ -272,7 +271,7 @@ where
     fn insert_mut_ref(&mut self, a: Arc<A>) {
         let hash = hash_key(&*self.hasher, &a);
         let root = Arc::make_mut(&mut self.root);
-        let added = root.insert_mut(hash, 0, a, &HashSet::<A, S>::compare_keys);
+        let added = root.insert_mut(hash, 0, a);
         if added {
             self.size += 1
         }
@@ -282,14 +281,7 @@ where
     ///
     /// Time: O(log n)
     pub fn contains(&self, a: &A) -> bool {
-        self.root
-            .get(
-                hash_key(&*self.hasher, a),
-                0,
-                a,
-                &HashSet::<A, S>::match_key,
-            )
-            .is_some()
+        self.root.get(hash_key(&*self.hasher, a), 0, a).is_some()
     }
 
     /// Remove a value from a set if it exists.
@@ -297,12 +289,7 @@ where
     /// Time: O(log n)
     pub fn remove(&self, a: &A) -> Self {
         self.root
-            .remove(
-                hash_key(&*self.hasher, a),
-                0,
-                a,
-                &HashSet::<A, S>::match_key,
-            )
+            .remove(hash_key(&*self.hasher, a), 0, a)
             .map(|(_, node)| HashSet {
                 hasher: self.hasher.clone(),
                 size: self.size - 1,
@@ -320,12 +307,7 @@ where
     /// Time: O(log n)
     pub fn remove_mut(&mut self, a: &A) {
         let root = Arc::make_mut(&mut self.root);
-        let result = root.remove_mut(
-            hash_key(&*self.hasher, a),
-            0,
-            a,
-            &HashSet::<A, S>::match_key,
-        );
+        let result = root.remove_mut(hash_key(&*self.hasher, a), 0, a);
         if result.is_some() {
             self.size -= 1;
         }
@@ -560,7 +542,7 @@ where
     }
 }
 
-impl<'a, A, S> IntoIterator for &'a HashSet<A, S> {
+impl<'a, A: Hash + Eq, S: BuildHasher> IntoIterator for &'a HashSet<A, S> {
     type Item = Arc<A>;
     type IntoIter = Iter<Self::Item>;
 
@@ -569,7 +551,7 @@ impl<'a, A, S> IntoIterator for &'a HashSet<A, S> {
     }
 }
 
-impl<A, S> IntoIterator for HashSet<A, S> {
+impl<A: Hash + Eq, S: BuildHasher> IntoIterator for HashSet<A, S> {
     type Item = Arc<A>;
     type IntoIter = Iter<Self::Item>;
 

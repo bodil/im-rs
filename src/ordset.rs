@@ -14,7 +14,7 @@ use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections;
 use std::fmt::{Debug, Error, Formatter};
-use std::hash::{Hash, Hasher};
+use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::{FromIterator, IntoIterator, Sum};
 use std::ops::{Add, Mul};
 use std::sync::Arc;
@@ -634,13 +634,13 @@ impl<'a, A: Ord> From<&'a collections::BTreeSet<Arc<A>>> for OrdSet<A> {
     }
 }
 
-impl<A: Ord, S> From<HashSet<A, S>> for OrdSet<A> {
+impl<A: Hash + Eq + Ord, S: BuildHasher> From<HashSet<A, S>> for OrdSet<A> {
     fn from(hashset: HashSet<A, S>) -> Self {
         hashset.into_iter().collect()
     }
 }
 
-impl<'a, A: Ord, S> From<&'a HashSet<A, S>> for OrdSet<A> {
+impl<'a, A: Hash + Eq + Ord, S: BuildHasher> From<&'a HashSet<A, S>> for OrdSet<A> {
     fn from(hashset: &HashSet<A, S>) -> Self {
         hashset.into_iter().collect()
     }

@@ -17,10 +17,12 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 * Generalised `OrdMap`/`OrdSet`'s internal nodes so `OrdSet` now only
   needs to store pointers to its values, not pairs of pointers to
   value and `Unit`. This has caused `OrdMap/Set`'s type constraints to
-  tighten somewhat - in particular, some operations on maps/sets whose
-  keys don't implement `Ord` are no longer possible, but as you would
+  tighten somewhat - in particular, iteration over maps/sets whose
+  keys don't implement `Ord` is no longer possible, but as you would
   only have been able to create empty instances of these, no real code
   should break because of this.
+* `HashMap`/`HashSet` now also cannot be iterated over unless they
+  implement `Hash + Eq`, with the same note as above.
 
 ### Fixed
 

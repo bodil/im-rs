@@ -20,7 +20,7 @@ use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections;
 use std::fmt::{Debug, Error, Formatter};
-use std::hash::{Hash, Hasher};
+use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::{FromIterator, Iterator, Sum};
 use std::ops::Add;
 use std::sync::Arc;
@@ -1329,13 +1329,13 @@ where
     }
 }
 
-impl<K: Ord, V, S> From<HashMap<K, V, S>> for OrdMap<K, V> {
+impl<K: Ord + Hash + Eq, V, S: BuildHasher> From<HashMap<K, V, S>> for OrdMap<K, V> {
     fn from(m: HashMap<K, V, S>) -> Self {
         m.into_iter().collect()
     }
 }
 
-impl<'a, K: Ord, V, S> From<&'a HashMap<K, V, S>> for OrdMap<K, V> {
+impl<'a, K: Ord + Hash + Eq, V, S: BuildHasher> From<&'a HashMap<K, V, S>> for OrdMap<K, V> {
     fn from(m: &'a HashMap<K, V, S>) -> Self {
         m.into_iter().collect()
     }

@@ -39,7 +39,7 @@ use std::sync::Arc;
 use bits::hash_key;
 use shared::Shared;
 
-use nodes::hamt::{Iter, Node};
+use nodes::hamt::{HashValue, Iter, Node};
 
 /// Construct a hash map from a sequence of key/value pairs.
 ///
@@ -98,6 +98,21 @@ pub struct HashMap<K, V, S = RandomState> {
     size: usize,
     root: Arc<Node<(Arc<K>, Arc<V>)>>,
     hasher: Arc<S>,
+}
+
+impl<K, V> HashValue for (Arc<K>, Arc<V>)
+where
+    K: Eq,
+{
+    type Key = K;
+
+    fn extract_key(&self) -> &Self::Key {
+        &*self.0
+    }
+
+    fn ptr_eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.1, &other.1) && Arc::ptr_eq(&self.0, &other.0)
+    }
 }
 
 impl<K, V> HashMap<K, V, RandomState>
@@ -181,42 +196,6 @@ impl<K, V, S> HashMap<K, V, S> {
     pub fn len(&self) -> usize {
         self.size
     }
-
-    /// Get an iterator over the key/value pairs of a hash map.
-    ///
-    /// Please note that the order is consistent between maps using
-    /// the same hasher, but no other ordering guarantee is offered.
-    /// Items will not come out in insertion order or sort order.
-    /// They will, however, come out in the same order every time for
-    /// the same map.
-    #[inline]
-    pub fn iter(&self) -> Iter<(Arc<K>, Arc<V>)> {
-        Node::iter(self.root.clone(), self.size)
-    }
-
-    /// Get an iterator over a hash map's keys.
-    ///
-    /// Please note that the order is consistent between maps using
-    /// the same hasher, but no other ordering guarantee is offered.
-    /// Items will not come out in insertion order or sort order.
-    /// They will, however, come out in the same order every time for
-    /// the same map.
-    #[inline]
-    pub fn keys(&self) -> Keys<K, V> {
-        Keys { it: self.iter() }
-    }
-
-    /// Get an iterator over a hash map's values.
-    ///
-    /// Please note that the order is consistent between maps using
-    /// the same hasher, but no other ordering guarantee is offered.
-    /// Items will not come out in insertion order or sort order.
-    /// They will, however, come out in the same order every time for
-    /// the same map.
-    #[inline]
-    pub fn values(&self) -> Values<K, V> {
-        Values { it: self.iter() }
-    }
 }
 
 impl<K, V, S> HashMap<K, V, S>
@@ -224,14 +203,6 @@ where
     K: Hash + Eq,
     S: BuildHasher,
 {
-    fn match_key(key: &K, pair: &(Arc<K>, Arc<V>)) -> bool {
-        key == &*pair.0
-    }
-
-    fn compare_keys(pair1: &(Arc<K>, Arc<V>), pair2: &(Arc<K>, Arc<V>)) -> bool {
-        pair1.0 == pair2.0
-    }
-
     fn test_eq(&self, other: &Self) -> bool
     where
         V: PartialEq,
@@ -281,6 +252,42 @@ where
         }
     }
 
+    /// Get an iterator over the key/value pairs of a hash map.
+    ///
+    /// Please note that the order is consistent between maps using
+    /// the same hasher, but no other ordering guarantee is offered.
+    /// Items will not come out in insertion order or sort order.
+    /// They will, however, come out in the same order every time for
+    /// the same map.
+    #[inline]
+    pub fn iter(&self) -> Iter<(Arc<K>, Arc<V>)> {
+        Node::iter(self.root.clone(), self.size)
+    }
+
+    /// Get an iterator over a hash map's keys.
+    ///
+    /// Please note that the order is consistent between maps using
+    /// the same hasher, but no other ordering guarantee is offered.
+    /// Items will not come out in insertion order or sort order.
+    /// They will, however, come out in the same order every time for
+    /// the same map.
+    #[inline]
+    pub fn keys(&self) -> Keys<K, V> {
+        Keys { it: self.iter() }
+    }
+
+    /// Get an iterator over a hash map's values.
+    ///
+    /// Please note that the order is consistent between maps using
+    /// the same hasher, but no other ordering guarantee is offered.
+    /// Items will not come out in insertion order or sort order.
+    /// They will, however, come out in the same order every time for
+    /// the same map.
+    #[inline]
+    pub fn values(&self) -> Values<K, V> {
+        Values { it: self.iter() }
+    }
+
     /// Get the value for a key from a hash map.
     ///
     /// Time: O(log n)
@@ -301,12 +308,7 @@ where
     /// ```
     pub fn get(&self, k: &K) -> Option<Arc<V>> {
         self.root
-            .get(
-                hash_key(&*self.hasher, k),
-                0,
-                k,
-                &HashMap::<K, V, S>::match_key,
-            )
+            .get(hash_key(&*self.hasher, k), 0, k)
             .map(|&(_, ref v)| v.clone())
     }
 
@@ -396,12 +398,7 @@ where
     }
 
     fn insert_ref(&self, k: Arc<K>, v: Arc<V>) -> Self {
-        let (added, new_node) = self.root.insert(
-            hash_key(&*self.hasher, &k),
-            0,
-            (k, v),
-            &HashMap::<K, V, S>::compare_keys,
-        );
+        let (added, new_node) = self.root.insert(hash_key(&*self.hasher, &k), 0, (k, v));
         HashMap {
             root: Arc::new(new_node),
             size: if added {
@@ -454,7 +451,7 @@ where
     fn insert_mut_ref(&mut self, k: Arc<K>, v: Arc<V>) {
         let hash = hash_key(&*self.hasher, &k);
         let root = Arc::make_mut(&mut self.root);
-        let added = root.insert_mut(hash, 0, (k, v), &HashMap::<K, V, S>::compare_keys);
+        let added = root.insert_mut(hash, 0, (k, v));
         if added {
             self.size += 1
         }
@@ -714,12 +711,7 @@ where
     /// Time: O(log n)
     pub fn pop_with_key(&self, k: &K) -> Option<(Arc<K>, Arc<V>, Self)> {
         self.root
-            .remove(
-                hash_key(&*self.hasher, k),
-                0,
-                k,
-                &HashMap::<K, V, S>::match_key,
-            )
+            .remove(hash_key(&*self.hasher, k), 0, k)
             .map(|((k, v), node)| {
                 (
                     k,
@@ -743,12 +735,7 @@ where
     /// Time: O(log n)
     pub fn pop_with_key_mut(&mut self, k: &K) -> Option<(Arc<K>, Arc<V>)> {
         let root = Arc::make_mut(&mut self.root);
-        let result = root.remove_mut(
-            hash_key(&*self.hasher, k),
-            0,
-            k,
-            &HashMap::<K, V, S>::match_key,
-        );
+        let result = root.remove_mut(hash_key(&*self.hasher, k), 0, k);
         if result.is_some() {
             self.size -= 1;
         }
@@ -1087,8 +1074,9 @@ where
 
 impl<K, V, S> Hash for HashMap<K, V, S>
 where
-    K: Hash,
+    K: Hash + Eq,
     V: Hash,
+    S: BuildHasher,
 {
     fn hash<H>(&self, state: &mut H)
     where
@@ -1171,8 +1159,9 @@ where
 
 impl<K, V, S> Debug for HashMap<K, V, S>
 where
-    K: Debug,
+    K: Hash + Eq + Debug,
     V: Debug,
+    S: BuildHasher,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "{{ ")?;
@@ -1219,7 +1208,11 @@ impl<K, V> Iterator for Values<K, V> {
     }
 }
 
-impl<'a, K, V, S> IntoIterator for &'a HashMap<K, V, S> {
+impl<'a, K, V, S> IntoIterator for &'a HashMap<K, V, S>
+where
+    K: Hash + Eq,
+    S: BuildHasher,
+{
     type Item = (Arc<K>, Arc<V>);
     type IntoIter = Iter<(Arc<K>, Arc<V>)>;
 
@@ -1229,7 +1222,11 @@ impl<'a, K, V, S> IntoIterator for &'a HashMap<K, V, S> {
     }
 }
 
-impl<K, V, S> IntoIterator for HashMap<K, V, S> {
+impl<K, V, S> IntoIterator for HashMap<K, V, S>
+where
+    K: Hash + Eq,
+    S: BuildHasher,
+{
     type Item = (Arc<K>, Arc<V>);
     type IntoIter = Iter<(Arc<K>, Arc<V>)>;
 
@@ -1433,7 +1430,7 @@ pub mod proptest {
 mod test {
     use super::*;
     use proptest::collection;
-    use proptest::num::{usize, i16};
+    use proptest::num::{i16, usize};
     use std::hash::BuildHasherDefault;
     use test::LolHasher;
 

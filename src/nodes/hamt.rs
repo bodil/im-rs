@@ -7,6 +7,13 @@ use std::sync::Arc;
 use bits::{bitpos, index, Bitmap, HASH_BITS, HASH_SIZE};
 use shared::Shared;
 
+pub trait HashValue: Clone {
+    type Key: Eq;
+
+    fn extract_key(&self) -> &Self::Key;
+    fn ptr_eq(&self, other: &Self) -> bool;
+}
+
 #[derive(PartialEq, Eq, Clone)]
 pub struct Node<A> {
     datamap: Bitmap,
@@ -33,7 +40,7 @@ enum SizePredicate {
     Many,
 }
 
-impl<A: Clone> Node<A> {
+impl<A: HashValue> Node<A> {
     #[inline]
     pub fn iter(root: Arc<Self>, size: usize) -> Iter<A> {
         Iter::new(root, size)
@@ -283,31 +290,25 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn get<K, F>(&self, hash: Bitmap, shift: usize, key: &K, pred: &F) -> Option<&A>
-    where
-        F: Fn(&K, &A) -> bool,
-    {
+    pub fn get(&self, hash: Bitmap, shift: usize, key: &A::Key) -> Option<&A> {
         let bitpos = bitpos(hash, shift);
         if self.datamap & bitpos != 0 {
             match self.data[self.data_index(bitpos)] {
-                Entry::Value(ref value, _) => if (pred)(key, value) {
+                Entry::Value(ref value, _) => if key == value.extract_key() {
                     Some(value)
                 } else {
                     None
                 },
-                Entry::Collision(ref coll) => coll.get(key, pred),
+                Entry::Collision(ref coll) => coll.get(key),
             }
         } else if self.nodemap & bitpos != 0 {
-            self.nodes[self.node_index(bitpos)].get(hash, shift + HASH_BITS, key, pred)
+            self.nodes[self.node_index(bitpos)].get(hash, shift + HASH_BITS, key)
         } else {
             None
         }
     }
 
-    pub fn insert<F>(&self, hash: Bitmap, shift: usize, value: A, compare: &F) -> (bool, Self)
-    where
-        F: Fn(&A, &A) -> bool,
-    {
+    pub fn insert(&self, hash: Bitmap, shift: usize, value: A) -> (bool, Self) {
         let bitpos = bitpos(hash, shift);
         if self.datamap & bitpos != 0 {
             // Value is here
@@ -315,7 +316,7 @@ impl<A: Clone> Node<A> {
             match self.data[index] {
                 // Update value or create a subtree
                 Entry::Value(ref current, hash2) => {
-                    if (compare)(&value, current) {
+                    if value.extract_key() == current.extract_key() {
                         (false, self.update_value(bitpos, Entry::Value(value, hash)))
                     } else {
                         let value2 = current.clone();
@@ -344,7 +345,7 @@ impl<A: Clone> Node<A> {
                 }
                 // There's already a collision here.
                 Entry::Collision(ref coll) => {
-                    let (added, new_coll) = coll.insert(value, compare);
+                    let (added, new_coll) = coll.insert(value);
                     (
                         added,
                         self.update_value(bitpos, Entry::Collision(Arc::new(new_coll))),
@@ -355,7 +356,7 @@ impl<A: Clone> Node<A> {
             // Child node
             let index = self.node_index(bitpos);
             let child = &self.nodes[index];
-            let (added, new_child) = child.insert(hash, shift + HASH_BITS, value, compare);
+            let (added, new_child) = child.insert(hash, shift + HASH_BITS, value);
             (added, self.update_node(bitpos, Arc::new(new_child)))
         } else {
             // New value
@@ -363,10 +364,7 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn insert_mut<F>(&mut self, hash: Bitmap, shift: usize, value: A, compare: &F) -> bool
-    where
-        F: Fn(&A, &A) -> bool,
-    {
+    pub fn insert_mut(&mut self, hash: Bitmap, shift: usize, value: A) -> bool {
         let bitpos = bitpos(hash, shift);
         if self.datamap & bitpos != 0 {
             // Value is here
@@ -376,7 +374,7 @@ impl<A: Clone> Node<A> {
             match self.data[index] {
                 // Update value or create a subtree
                 Entry::Value(ref current, hash2) => {
-                    if (compare)(&value, current) {
+                    if value.extract_key() == current.extract_key() {
                         insert = true;
                     } else {
                         merge = Some((current.clone(), hash2));
@@ -385,7 +383,7 @@ impl<A: Clone> Node<A> {
                 // There's already a collision here.
                 Entry::Collision(ref mut collision) => {
                     let coll = Arc::make_mut(collision);
-                    return coll.insert_mut(value, compare);
+                    return coll.insert_mut(value);
                 }
             }
             if insert {
@@ -419,7 +417,7 @@ impl<A: Clone> Node<A> {
             // Child node
             let index = self.node_index(bitpos);
             let child = Arc::make_mut(&mut self.nodes[index]);
-            child.insert_mut(hash, shift + HASH_BITS, value, compare)
+            child.insert_mut(hash, shift + HASH_BITS, value)
         } else {
             // New value
             self.insert_value_mut(bitpos, Entry::Value(value, hash));
@@ -427,22 +425,19 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn remove<F, K>(&self, hash: Bitmap, shift: usize, key: &K, pred: &F) -> Option<(A, Self)>
-    where
-        F: Fn(&K, &A) -> bool,
-    {
+    pub fn remove(&self, hash: Bitmap, shift: usize, key: &A::Key) -> Option<(A, Self)> {
         let pos = bitpos(hash, shift);
         if self.datamap & pos != 0 {
             // Key is (or would be) in this node.
             let index = self.data_index(pos);
             match self.data[index] {
-                Entry::Value(ref value, _) => if (pred)(key, value) {
+                Entry::Value(ref value, _) => if key == value.extract_key() {
                     Some((value.clone(), self.remove_value(pos)))
                 // }
                 } else {
                     None
                 },
-                Entry::Collision(ref coll) => match coll.remove(key, pred) {
+                Entry::Collision(ref coll) => match coll.remove(key) {
                     None => None,
                     Some((value, next_coll)) => Some((
                         value,
@@ -453,7 +448,7 @@ impl<A: Clone> Node<A> {
         } else if self.nodemap & pos != 0 {
             // Key is in a subnode.
             let remove_result =
-                self.nodes[self.node_index(pos)].remove(hash, shift + HASH_BITS, key, pred);
+                self.nodes[self.node_index(pos)].remove(hash, shift + HASH_BITS, key);
             match remove_result {
                 None => None,
                 Some((value, next_node)) => {
@@ -475,24 +470,21 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn remove_mut<F, K>(&mut self, hash: Bitmap, shift: usize, key: &K, pred: &F) -> Option<A>
-    where
-        F: Fn(&K, &A) -> bool,
-    {
+    pub fn remove_mut(&mut self, hash: Bitmap, shift: usize, key: &A::Key) -> Option<A> {
         let pos = bitpos(hash, shift);
         if self.datamap & pos != 0 {
             // Key is (or would be) in this node.
             let index = self.data_index(pos);
             let removed;
             match self.data[index] {
-                Entry::Value(ref value, _) => if (pred)(key, value) {
+                Entry::Value(ref value, _) => if key == value.extract_key() {
                     removed = value.clone();
                 } else {
                     return None;
                 },
                 Entry::Collision(ref mut collisions) => {
                     let mut coll = Arc::make_mut(collisions);
-                    return coll.remove_mut(key, pred);
+                    return coll.remove_mut(key);
                 }
             }
             self.remove_value_mut(pos);
@@ -504,7 +496,7 @@ impl<A: Clone> Node<A> {
             let remaining;
             {
                 let child = Arc::make_mut(&mut self.nodes[index]);
-                match child.remove_mut(hash, shift + HASH_BITS, key, pred) {
+                match child.remove_mut(hash, shift + HASH_BITS, key) {
                     None => return None,
                     Some(value) => match child.size_predicate() {
                         SizePredicate::Empty => panic!(
@@ -528,7 +520,7 @@ impl<A: Clone> Node<A> {
     }
 }
 
-impl<A: Clone> CollisionNode<A> {
+impl<A: HashValue> CollisionNode<A> {
     fn new(hash: Bitmap, value1: Entry<A>, value2: Entry<A>) -> Self {
         let mut data = Vec::new();
         match value1 {
@@ -542,26 +534,20 @@ impl<A: Clone> CollisionNode<A> {
         CollisionNode { hash, data }
     }
 
-    fn get<F, K>(&self, key: &K, pred: &F) -> Option<&A>
-    where
-        F: Fn(&K, &A) -> bool,
-    {
+    fn get(&self, key: &A::Key) -> Option<&A> {
         for entry in &self.data {
-            if (pred)(key, entry) {
+            if key == entry.extract_key() {
                 return Some(entry);
             }
         }
         None
     }
 
-    fn insert<F>(&self, value: A, compare: &F) -> (bool, Self)
-    where
-        F: Fn(&A, &A) -> bool,
-    {
+    fn insert(&self, value: A) -> (bool, Self) {
         let mut data = Vec::with_capacity(self.data.len() + 1);
         let mut add = true;
         for item in &self.data {
-            if (compare)(&value, item) {
+            if value.extract_key() == item.extract_key() {
                 data.push(value.clone());
                 add = false;
             } else {
@@ -580,12 +566,9 @@ impl<A: Clone> CollisionNode<A> {
         )
     }
 
-    fn insert_mut<F>(&mut self, value: A, compare: &F) -> bool
-    where
-        F: Fn(&A, &A) -> bool,
-    {
+    fn insert_mut(&mut self, value: A) -> bool {
         for item in &mut self.data {
-            if (compare)(&value, item) {
+            if value.extract_key() == item.extract_key() {
                 *item = value;
                 return false;
             }
@@ -594,12 +577,9 @@ impl<A: Clone> CollisionNode<A> {
         true
     }
 
-    fn remove<F, K>(&self, key: &K, pred: &F) -> Option<(A, Self)>
-    where
-        F: Fn(&K, &A) -> bool,
-    {
+    fn remove(&self, key: &A::Key) -> Option<(A, Self)> {
         for (index, item) in self.data.iter().enumerate() {
-            if (pred)(key, item) {
+            if key == item.extract_key() {
                 let mut data = self.data.clone();
                 let value = data.remove(index);
                 return Some((
@@ -614,13 +594,10 @@ impl<A: Clone> CollisionNode<A> {
         None
     }
 
-    fn remove_mut<F, K>(&mut self, key: &K, pred: &F) -> Option<A>
-    where
-        F: Fn(&K, &A) -> bool,
-    {
+    fn remove_mut(&mut self, key: &A::Key) -> Option<A> {
         let mut loc = None;
         for (index, item) in self.data.iter().enumerate() {
-            if (pred)(key, item) {
+            if key == item.extract_key() {
                 loc = Some(index);
             }
         }
