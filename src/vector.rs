@@ -462,14 +462,33 @@ impl<A> Vector<A> {
 
     /// Get the head and the tail of a vector.
     ///
+    /// If the vector is empty, [`None`][None] is returned.
+    ///
     /// This is an alias for [`pop_front`][pop_front].
     ///
     /// Time: O(log n)
     ///
+    /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
     /// [pop_front]: #method.pop_front
     #[inline]
     pub fn uncons(&self) -> Option<(Arc<A>, Self)> {
         self.pop_front()
+    }
+
+    /// Get the last element of a vector, as well as the vector with the
+    /// last element removed.
+    ///
+    /// If the vector is empty, [`None`][None] is returned.
+    ///
+    /// This is an alias for [`pop_back`][pop_back].
+    ///
+    /// Time: O(1)*
+    ///
+    /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
+    /// [pop_back]: #method.pop_back
+    #[inline]
+    pub fn unsnoc(&self) -> Option<(Arc<A>, Vector<A>)> {
+        self.pop_back()
     }
 
     /// Remove the first element of a vector in place and return it.

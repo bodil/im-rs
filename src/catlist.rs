@@ -592,10 +592,13 @@ impl<A> CatList<A> {
 
     /// Get the head and the tail of a list.
     ///
+    /// If the list is empty, [`None`][None] is returned.
+    ///
     /// This is an alias for [`pop_front`][pop_front].
     ///
     /// Time: O(1)*
     ///
+    /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
     /// [pop_front]: #method.pop_front
     #[inline]
     pub fn uncons(&self) -> Option<(Arc<A>, CatList<A>)> {
@@ -605,6 +608,22 @@ impl<A> CatList<A> {
     pub fn uncons2(&self) -> Option<(Arc<A>, Arc<A>, CatList<A>)> {
         self.uncons()
             .and_then(|(a1, d)| d.uncons().map(|(a2, d)| (a1, a2, d)))
+    }
+
+    /// Get the last element of a list, as well as the list with the
+    /// last element removed.
+    ///
+    /// If the list is empty, [`None`][None] is returned.
+    ///
+    /// This is an alias for [`pop_back`][pop_back].
+    ///
+    /// Time: O(1)*
+    ///
+    /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
+    /// [pop_back]: #method.pop_back
+    #[inline]
+    pub fn unsnoc(&self) -> Option<(Arc<A>, CatList<A>)> {
+        self.pop_back()
     }
 
     /// Get an iterator over a list.
