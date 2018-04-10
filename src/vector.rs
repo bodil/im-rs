@@ -681,7 +681,7 @@ impl<A> Vector<A> {
     where
         A: Ord,
     {
-        self.sort_by(|a, b| a.cmp(b))
+        self.sort_by(Ord::cmp)
     }
 
     /// Sort a vector using a comparator function.

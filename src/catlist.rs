@@ -745,7 +745,7 @@ impl<A> CatList<A> {
     where
         A: Ord,
     {
-        self.sort_by(|a, b| a.cmp(b))
+        self.sort_by(Ord::cmp)
     }
 
     /// Insert an item into a sorted list.

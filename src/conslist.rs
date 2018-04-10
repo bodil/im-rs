@@ -348,16 +348,16 @@ impl<A> ConsList<A> {
     /// Time: O(n log n)
     pub fn sort_by<F>(&self, cmp: F) -> ConsList<A>
     where
-        F: Fn(Arc<A>, Arc<A>) -> Ordering,
+        F: Fn(&A, &A) -> Ordering,
     {
         fn merge<A>(
             la: &ConsList<A>,
             lb: &ConsList<A>,
-            cmp: &Fn(Arc<A>, Arc<A>) -> Ordering,
+            cmp: &Fn(&A, &A) -> Ordering,
         ) -> ConsList<A> {
             match (la.uncons(), lb.uncons()) {
                 (Some((ref a, _)), Some((ref b, ref lb1)))
-                    if cmp(a.clone(), b.clone()) == Ordering::Greater =>
+                    if cmp(a, b) == Ordering::Greater =>
                 {
                     cons(b.clone(), &merge(la, lb1, cmp))
                 }
@@ -369,7 +369,7 @@ impl<A> ConsList<A> {
 
         fn merge_pairs<A>(
             l: &ConsList<ConsList<A>>,
-            cmp: &Fn(Arc<A>, Arc<A>) -> Ordering,
+            cmp: &Fn(&A, &A) -> Ordering,
         ) -> ConsList<ConsList<A>> {
             match l.uncons2() {
                 Some((a, b, rest)) => cons(merge(&a, &b, cmp), &merge_pairs(&rest, cmp)),
@@ -379,7 +379,7 @@ impl<A> ConsList<A> {
 
         fn merge_all<A>(
             l: &ConsList<ConsList<A>>,
-            cmp: &Fn(Arc<A>, Arc<A>) -> Ordering,
+            cmp: &Fn(&A, &A) -> Ordering,
         ) -> ConsList<A> {
             match l.uncons() {
                 None => conslist![],
@@ -392,10 +392,10 @@ impl<A> ConsList<A> {
             a: &Arc<A>,
             f: &Fn(ConsList<A>) -> ConsList<A>,
             l: &ConsList<A>,
-            cmp: &Fn(Arc<A>, Arc<A>) -> Ordering,
+            cmp: &Fn(&A, &A) -> Ordering,
         ) -> ConsList<ConsList<A>> {
             match l.uncons() {
-                Some((ref b, ref lb)) if cmp(a.clone(), b.clone()) != Ordering::Greater => {
+                Some((ref b, ref lb)) if cmp(a, b) != Ordering::Greater => {
                     ascending(&b.clone(), &|ys| f(cons(a.clone(), &ys)), lb, cmp)
                 }
                 _ => cons(f(ConsList::singleton(a.clone())), &sequences(l, cmp)),
@@ -406,10 +406,10 @@ impl<A> ConsList<A> {
             a: &Arc<A>,
             la: &ConsList<A>,
             lb: &ConsList<A>,
-            cmp: &Fn(Arc<A>, Arc<A>) -> Ordering,
+            cmp: &Fn(&A, &A) -> Ordering,
         ) -> ConsList<ConsList<A>> {
             match lb.uncons() {
-                Some((ref b, ref bs)) if cmp(a.clone(), b.clone()) == Ordering::Greater => {
+                Some((ref b, ref bs)) if cmp(a, b) == Ordering::Greater => {
                     descending(&b.clone(), &cons(a.clone(), la), bs, cmp)
                 }
                 _ => cons(cons(a.clone(), la), &sequences(lb, cmp)),
@@ -418,10 +418,10 @@ impl<A> ConsList<A> {
 
         fn sequences<A>(
             l: &ConsList<A>,
-            cmp: &Fn(Arc<A>, Arc<A>) -> Ordering,
+            cmp: &Fn(&A, &A) -> Ordering,
         ) -> ConsList<ConsList<A>> {
             match l.uncons2() {
-                Some((ref a, ref b, ref xs)) if cmp(a.clone(), b.clone()) == Ordering::Greater => {
+                Some((ref a, ref b, ref xs)) if cmp(a, b) == Ordering::Greater => {
                     descending(&b.clone(), &ConsList::singleton(a.clone()), xs, cmp)
                 }
                 Some((ref a, ref b, ref xs)) => {
@@ -502,7 +502,7 @@ impl<A> ConsList<A> {
     where
         A: Ord,
     {
-        self.sort_by(|a: Arc<A>, b: Arc<A>| a.cmp(&b))
+        self.sort_by(Ord::cmp)
     }
 }
 
