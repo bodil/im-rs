@@ -503,7 +503,7 @@ where
     where
         RK: Shared<K>,
         RV: Shared<V>,
-        F: Fn(Arc<V>, Arc<V>) -> Arc<V>,
+        F: FnOnce(Arc<V>, Arc<V>) -> Arc<V>,
     {
         let ak = k.shared();
         let av = v.shared();
@@ -523,7 +523,7 @@ where
     /// Time: O(log n)
     pub fn insert_with_key<RK, RV, F>(self, k: RK, v: RV, f: F) -> Self
     where
-        F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
+        F: FnOnce(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
         RK: Shared<K>,
         RV: Shared<V>,
     {
@@ -546,7 +546,7 @@ where
     /// Time: O(log n)
     pub fn insert_lookup_with_key<RK, RV, F>(self, k: RK, v: RV, f: F) -> (Option<Arc<V>>, Self)
     where
-        F: Fn(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
+        F: FnOnce(Arc<K>, Arc<V>, Arc<V>) -> Arc<V>,
         RK: Shared<K>,
         RV: Shared<V>,
     {
@@ -565,7 +565,7 @@ where
     /// Time: O(log n)
     pub fn update<F>(&self, k: &K, f: F) -> Self
     where
-        F: Fn(Arc<V>) -> Option<Arc<V>>,
+        F: FnOnce(Arc<V>) -> Option<Arc<V>>,
     {
         match self.pop_with_key(k) {
             None => self.clone(),
@@ -583,7 +583,7 @@ where
     /// Time: O(log n)
     pub fn update_with_key<F>(&self, k: &K, f: F) -> Self
     where
-        F: Fn(Arc<K>, Arc<V>) -> Option<Arc<V>>,
+        F: FnOnce(Arc<K>, Arc<V>) -> Option<Arc<V>>,
     {
         match self.pop_with_key(k) {
             None => self.clone(),
@@ -607,7 +607,7 @@ where
     /// Time: O(log n)
     pub fn update_lookup_with_key<F>(&self, k: &K, f: F) -> (Option<Arc<V>>, Self)
     where
-        F: Fn(Arc<K>, Arc<V>) -> Option<Arc<V>>,
+        F: FnOnce(Arc<K>, Arc<V>) -> Option<Arc<V>>,
     {
         match self.pop_with_key(k) {
             None => (None, self.clone()),
@@ -634,7 +634,7 @@ where
     /// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
     pub fn alter<RK, F>(&self, f: F, k: RK) -> Self
     where
-        F: Fn(Option<Arc<V>>) -> Option<Arc<V>>,
+        F: FnOnce(Option<Arc<V>>) -> Option<Arc<V>>,
         RK: Shared<K>,
     {
         let ak = k.shared();
@@ -910,8 +910,8 @@ where
     where
         RM: Borrow<HashMap<K, B, S>>,
         FC: Fn(Arc<K>, Arc<V>, Arc<B>) -> Option<Arc<C>>,
-        F1: Fn(Self) -> HashMap<K, C, S>,
-        F2: Fn(HashMap<K, B, S>) -> HashMap<K, C, S>,
+        F1: FnOnce(Self) -> HashMap<K, C, S>,
+        F2: FnOnce(HashMap<K, B, S>) -> HashMap<K, C, S>,
     {
         let (left, right, both) = other.borrow().iter().fold(
             (self.clone(), other.borrow().clone(), self.new_from()),
