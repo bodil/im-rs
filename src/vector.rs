@@ -32,7 +32,7 @@ use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{Hash, Hasher};
 use std::iter::{FromIterator, Sum};
-use std::ops::Add;
+use std::ops::{Add, Index, IndexMut};
 use std::sync::Arc;
 
 use bits::{HASH_BITS, HASH_MASK, HASH_SIZE};
@@ -1173,6 +1173,47 @@ impl<A, R: Shared<A>> Extend<R> for Vector<A> {
     }
 }
 
+impl<A> Index<usize> for Vector<A> {
+    type Output = A;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        let i = match self.map_index(index) {
+            None => panic!("index out of bounds: {} < {}", index, self.len()),
+            Some(i) => i,
+        };
+
+        let node = self.node_for(i);
+
+        match node.children[index] {
+            Entry::Value(ref value) => value,
+            _ => panic!("Vector::index: vector structure inconsistent"),
+        }
+    }
+}
+
+impl<A> IndexMut<usize> for Vector<A>
+where
+    A: Clone,
+{
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        let i = match self.map_index(index) {
+            None => panic!("index out of bounds: {} < {}", index, self.len()),
+            Some(i) => i,
+        };
+        let entry = if i >= tail_offset(self.meta.capacity) {
+            let tail = Arc::make_mut(&mut self.tail);
+            &mut tail.children[i & HASH_MASK as usize]
+        } else {
+            let root = Arc::make_mut(&mut self.root);
+            root.ref_mut(self.meta.level, 0, i)
+        };
+        match *entry {
+            Entry::Value(ref mut value) => Arc::make_mut(value),
+            _ => panic!("Vector::index_mut: vector structure inconsistent"),
+        }
+    }
+}
+
 // Conversions
 
 impl<A, RA: Shared<A>> FromIterator<RA> for Vector<A> {
@@ -1397,6 +1438,21 @@ mod test {
         v2.set_mut(131000, 23);
         assert_eq!(Some(Arc::new(23)), v2.get(131000));
         assert_eq!(Some(Arc::new(131000)), v1.get(131000));
+    }
+
+    #[test]
+    fn index_operator() {
+        let mut vec = vector![1, 2, 3, 4, 5];
+        assert_eq!(4, vec[3]);
+        vec[3] = 9;
+        assert_eq!(vector![1, 2, 3, 9, 5], vec);
+    }
+
+    #[test]
+    fn add_operator() {
+        let vec1 = vector![1, 2, 3];
+        let vec2 = vector![4, 5, 6];
+        assert_eq!(vector![1, 2, 3, 4, 5, 6], vec1 + vec2);
     }
 
     proptest! {

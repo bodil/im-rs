@@ -197,7 +197,7 @@ impl<A> Node<A> {
 
 impl<A: OrdValue> Node<A> {
     #[cfg_attr(feature = "clippy", allow(op_ref))]
-    pub fn lookup(&self, key: &A::Key) -> Option<A> {
+    pub fn lookup(&self, key: &A::Key) -> Option<&A> {
         if self.0.keys.is_empty() {
             return None;
         }
@@ -216,10 +216,37 @@ impl<A: OrdValue> Node<A> {
             .keys
             .binary_search_by(|value| value.extract_key().cmp(key))
         {
-            Ok(index) => Some(self.0.keys[index].clone()),
+            Ok(index) => Some(&self.0.keys[index]),
             Err(index) => match self.0.children[index] {
                 None => None,
                 Some(ref node) => node.lookup(key),
+            },
+        }
+    }
+
+    pub fn lookup_mut(&mut self, key: &A::Key) -> Option<&mut A> {
+        if self.0.keys.is_empty() {
+            return None;
+        }
+        let node = Arc::make_mut(&mut self.0);
+        // Start by checking if the key is greater than the node's max,
+        // and search the rightmost child if so.
+        if key > node.keys[node.keys.len() - 1].extract_key() {
+            match node.children[node.keys.len()] {
+                None => return None,
+                Some(ref mut child) => return child.lookup_mut(key),
+            }
+        }
+        // Perform a binary search, resulting in either a match or
+        // the index of the first higher key, meaning we search the
+        // child to the left of it.
+        match node.keys
+            .binary_search_by(|value| value.extract_key().cmp(key))
+        {
+            Ok(index) => Some(&mut node.keys[index]),
+            Err(index) => match node.children[index] {
+                None => None,
+                Some(ref mut child) => child.lookup_mut(key),
             },
         }
     }
@@ -255,7 +282,10 @@ impl<A: OrdValue> Node<A> {
         if self.0.keys.is_empty() {
             return Insert::Update(Node::singleton(value));
         }
-        match self.0.keys.binary_search_by(|item| item.extract_key().cmp(value.extract_key())) {
+        match self.0
+            .keys
+            .binary_search_by(|item| item.extract_key().cmp(value.extract_key()))
+        {
             // Key exists in node
             Ok(index) => {
                 if value.ptr_eq(&self.0.keys[index]) {
@@ -408,7 +438,10 @@ impl<A: OrdValue> Node<A> {
     }
 
     pub fn remove(&self, key: &A::Key) -> Remove<A> {
-        match self.0.keys.binary_search_by(|value| value.extract_key().cmp(key)) {
+        match self.0
+            .keys
+            .binary_search_by(|value| value.extract_key().cmp(key))
+        {
             // Key exists in node, remove it.
             Ok(index) => {
                 match (&self.0.children[index], &self.0.children[index + 1]) {
@@ -583,7 +616,10 @@ impl<A: OrdValue> Node<A> {
             node.count += 1;
             return Insert::JustInc;
         }
-        let (median, left, right) = match self.0.keys.binary_search_by(|item| item.extract_key().cmp(value.extract_key())) {
+        let (median, left, right) = match self.0
+            .keys
+            .binary_search_by(|item| item.extract_key().cmp(value.extract_key()))
+        {
             // Key exists in node
             Ok(index) => {
                 if value.ptr_eq(&self.0.keys[index]) {
@@ -643,7 +679,10 @@ impl<A: OrdValue> Node<A> {
     }
 
     pub fn remove_mut(&mut self, key: &A::Key) -> Remove<A> {
-        let action = match self.0.keys.binary_search_by(|item| item.extract_key().cmp(key)) {
+        let action = match self.0
+            .keys
+            .binary_search_by(|item| item.extract_key().cmp(key))
+        {
             // Key exists in node, remove it.
             Ok(index) => {
                 match (&self.0.children[index], &self.0.children[index + 1]) {

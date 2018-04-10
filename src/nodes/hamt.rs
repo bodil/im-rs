@@ -308,6 +308,30 @@ impl<A: HashValue> Node<A> {
         }
     }
 
+    pub fn get_mut(&mut self, hash: Bitmap, shift: usize, key: &A::Key) -> Option<&mut A> {
+        let bitpos = bitpos(hash, shift);
+        let data_index = self.data_index(bitpos);
+        let node_index = self.node_index(bitpos);
+        if self.datamap & bitpos != 0 {
+            match self.data[data_index] {
+                Entry::Value(ref mut value, _) => if key == value.extract_key() {
+                    Some(value)
+                } else {
+                    None
+                },
+                Entry::Collision(ref mut coll_ref) => {
+                    let coll = Arc::make_mut(coll_ref);
+                    coll.get_mut(key)
+                }
+            }
+        } else if self.nodemap & bitpos != 0 {
+            let child = Arc::make_mut(&mut self.nodes[node_index]);
+            child.get_mut(hash, shift + HASH_BITS, key)
+        } else {
+            None
+        }
+    }
+
     pub fn insert(&self, hash: Bitmap, shift: usize, value: A) -> (bool, Self) {
         let bitpos = bitpos(hash, shift);
         if self.datamap & bitpos != 0 {
@@ -536,6 +560,15 @@ impl<A: HashValue> CollisionNode<A> {
 
     fn get(&self, key: &A::Key) -> Option<&A> {
         for entry in &self.data {
+            if key == entry.extract_key() {
+                return Some(entry);
+            }
+        }
+        None
+    }
+
+    fn get_mut(&mut self, key: &A::Key) -> Option<&mut A> {
+        for entry in &mut self.data {
             if key == entry.extract_key() {
                 return Some(entry);
             }

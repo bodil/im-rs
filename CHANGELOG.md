@@ -9,6 +9,8 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 ### Added
 
+* `Vector`, `OrdMap` and `HashMap` now implement `Index` and
+  `IndexMut`, allowing for syntax like `map[key] = value`.
 * Added `cons`, `snoc`, `uncons` and `unsnoc` aliases where they were missing.
 * Everything now implements `Sum` and `Extend` where possible.
 

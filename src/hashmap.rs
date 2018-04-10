@@ -33,7 +33,7 @@ use std::collections::hash_map::RandomState;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::{FromIterator, Sum};
-use std::ops::Add;
+use std::ops::{Add, Index, IndexMut};
 use std::sync::Arc;
 
 use bits::hash_key;
@@ -1157,6 +1157,36 @@ where
     }
 }
 
+impl<'a, K, V, S> Index<&'a K> for HashMap<K, V, S>
+where
+    K: Hash + Eq,
+    S: BuildHasher,
+{
+    type Output = V;
+
+    fn index(&self, key: &K) -> &Self::Output {
+        match self.root.get(hash_key(&*self.hasher, key), 0, key) {
+            None => panic!("HashMap::index: invalid key"),
+            Some(&(_, ref value)) => value,
+        }
+    }
+}
+
+impl<'a, K, V, S> IndexMut<&'a K> for HashMap<K, V, S>
+where
+    K: Hash + Eq,
+    V: Clone,
+    S: BuildHasher,
+{
+    fn index_mut(&mut self, key: &K) -> &mut Self::Output {
+        let root = Arc::make_mut(&mut self.root);
+        match root.get_mut(hash_key(&*self.hasher, key), 0, key) {
+            None => panic!("HashMap::index_mut: invalid key"),
+            Some(&mut (_, ref mut value)) => Arc::make_mut(value),
+        }
+    }
+}
+
 impl<K, V, S> Debug for HashMap<K, V, S>
 where
     K: Hash + Eq + Debug,
@@ -1441,6 +1471,14 @@ mod test {
         v2.set_mut(131000, 23);
         assert_eq!(Some(Arc::new(23)), v2.get(&131000));
         assert_eq!(Some(Arc::new(131000)), v1.get(&131000));
+    }
+
+    #[test]
+    fn index_operator() {
+        let mut map = hashmap![1 => 2, 3 => 4, 5 => 6];
+        assert_eq!(4, map[&3]);
+        map[&3] = 8;
+        assert_eq!(hashmap![1 => 2, 3 => 8, 5 => 6], map);
     }
 
     #[test]

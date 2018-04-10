@@ -22,7 +22,7 @@ use std::collections;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::{FromIterator, Iterator, Sum};
-use std::ops::Add;
+use std::ops::{Add, Index, IndexMut};
 use std::sync::Arc;
 
 use hashmap::HashMap;
@@ -249,7 +249,7 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// # }
     /// ```
     pub fn get(&self, k: &K) -> Option<Arc<V>> {
-        self.root.lookup(k).map(|item| item.1)
+        self.root.lookup(k).map(|item| item.1.clone())
     }
 
     /// Get the value for a key from a map, or a default value if the
@@ -1099,6 +1099,33 @@ where
     }
 }
 
+impl<'a, K, V> Index<&'a K> for OrdMap<K, V>
+where
+    K: Ord,
+{
+    type Output = V;
+
+    fn index(&self, key: &K) -> &Self::Output {
+        match self.root.lookup(key) {
+            None => panic!("OrdMap::index: invalid key"),
+            Some(&(_, ref value)) => value,
+        }
+    }
+}
+
+impl<'a, K, V> IndexMut<&'a K> for OrdMap<K, V>
+where
+    K: Ord,
+    V: Clone,
+{
+    fn index_mut(&mut self, key: &K) -> &mut Self::Output {
+        match self.root.lookup_mut(key) {
+            None => panic!("OrdMap::index: invalid key"),
+            Some(&mut (_, ref mut value)) => Arc::make_mut(value),
+        }
+    }
+}
+
 impl<K: Debug, V: Debug> Debug for OrdMap<K, V>
 where
     K: Ord,
@@ -1536,6 +1563,14 @@ mod test {
         v2.set_mut(131000, 23);
         assert_eq!(Some(Arc::new(23)), v2.get(&131000));
         assert_eq!(Some(Arc::new(131000)), v1.get(&131000));
+    }
+
+    #[test]
+    fn index_operator() {
+        let mut map = ordmap![1 => 2, 3 => 4, 5 => 6];
+        assert_eq!(4, map[&3]);
+        map[&3] = 8;
+        assert_eq!(ordmap![1 => 2, 3 => 8, 5 => 6], map);
     }
 
     quickcheck! {

@@ -2,8 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::sync::Arc;
 use std::fmt::{Debug, Error, Formatter};
+use std::sync::Arc;
 
 use bits::{HASH_BITS, HASH_MASK, HASH_SIZE};
 
@@ -182,6 +182,19 @@ impl<A> Node<A> {
             }
             self.set(sub_index, Entry::Node(Arc::new(Node::new())));
             self.set_in_mut(level, end, index, value);
+        }
+    }
+
+    pub fn ref_mut(&mut self, level: usize, end: usize, index: usize) -> &mut Entry<A> {
+        let sub_index = (index >> level) & HASH_MASK as usize;
+        let child_pos = &mut self.children[sub_index];
+        if level == end {
+            child_pos
+        } else if let Entry::Node(ref mut sub_node) = *child_pos {
+            let mut node = Arc::make_mut(sub_node);
+            return node.ref_mut(level - HASH_BITS, end, index);
+        } else {
+            panic!("Vector::Node::ref_mut: inconsistent tree structure")
         }
     }
 
