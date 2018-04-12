@@ -1187,6 +1187,7 @@ where
     }
 }
 
+#[cfg(not(has_specialisation))]
 impl<K, V, S> Debug for HashMap<K, V, S>
 where
     K: Hash + Eq + Debug,
@@ -1201,6 +1202,60 @@ where
                 None => break,
                 Some((k, v)) => {
                     write!(f, "{:?} => {:?}", k, v)?;
+                    match it.peek() {
+                        None => write!(f, " }}")?,
+                        Some(_) => write!(f, ", ")?,
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(has_specialisation)]
+impl<K, V, S> Debug for HashMap<K, V, S>
+where
+    K: Hash + Eq + Debug,
+    V: Debug,
+    S: BuildHasher,
+{
+    default fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "{{ ")?;
+        let mut it = self.iter().peekable();
+        loop {
+            match it.next() {
+                None => break,
+                Some((k, v)) => {
+                    write!(f, "{:?} => {:?}", k, v)?;
+                    match it.peek() {
+                        None => write!(f, " }}")?,
+                        Some(_) => write!(f, ", ")?,
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(has_specialisation)]
+impl<K, V, S> Debug for HashMap<K, V, S>
+where
+    K: Hash + Eq + Ord + Debug,
+    V: Debug,
+    S: BuildHasher,
+{
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        let mut keys: Vec<_> = self.keys().collect();
+        keys.sort();
+        write!(f, "{{ ")?;
+        let mut it = keys.iter().peekable();
+        loop {
+            match it.next() {
+                None => break,
+                Some(k) => {
+                    write!(f, "{:?} => {:?}", k, self[k])?;
                     match it.peek() {
                         None => write!(f, " }}")?,
                         Some(_) => write!(f, ", ")?,
