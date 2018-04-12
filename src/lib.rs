@@ -212,6 +212,10 @@
 #![cfg_attr(feature = "clippy", allow(unreadable_literal))]
 #![cfg_attr(has_specialisation, feature(specialization))]
 
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
+
 #[cfg(any(test, feature = "quickcheck"))]
 #[macro_use]
 extern crate quickcheck;
