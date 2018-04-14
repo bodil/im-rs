@@ -1139,13 +1139,13 @@ where
                 Some((k, v)) => {
                     write!(f, "{:?} => {:?}", k, v)?;
                     match it.peek() {
-                        None => write!(f, " }}")?,
+                        None => write!(f, " ")?,
                         Some(_) => write!(f, ", ")?,
                     }
                 }
             }
         }
-        Ok(())
+        write!(f, "}}")
     }
 }
 

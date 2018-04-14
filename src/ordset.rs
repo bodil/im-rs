@@ -518,13 +518,13 @@ impl<A: Ord + Debug> Debug for OrdSet<A> {
                 Some(a) => {
                     write!(f, "{:?}", a)?;
                     match it.peek() {
-                        None => write!(f, " }}")?,
+                        None => write!(f, " ")?,
                         Some(_) => write!(f, ", ")?,
                     }
                 }
             }
         }
-        Ok(())
+        write!(f, "}}")
     }
 }
 

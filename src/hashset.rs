@@ -514,13 +514,13 @@ impl<A: Hash + Eq + Debug, S: BuildHasher + Default> Debug for HashSet<A, S> {
                 Some(a) => {
                     write!(f, "{:?}", a)?;
                     match it.peek() {
-                        None => write!(f, " }}")?,
+                        None => write!(f, " ")?,
                         Some(_) => write!(f, ", ")?,
                     }
                 }
             }
         }
-        Ok(())
+        write!(f, "}}")
     }
 }
 
@@ -535,13 +535,13 @@ impl<A: Hash + Eq + Debug, S: BuildHasher + Default> Debug for HashSet<A, S> {
                 Some(a) => {
                     write!(f, "{:?}", a)?;
                     match it.peek() {
-                        None => write!(f, " }}")?,
+                        None => write!(f, " ")?,
                         Some(_) => write!(f, ", ")?,
                     }
                 }
             }
         }
-        Ok(())
+        write!(f, "}}")
     }
 }
 
@@ -558,13 +558,13 @@ impl<A: Hash + Eq + Debug + Ord, S: BuildHasher + Default> Debug for HashSet<A, 
                 Some(a) => {
                     write!(f, "{:?}", a)?;
                     match it.peek() {
-                        None => write!(f, " }}")?,
+                        None => write!(f, " ")?,
                         Some(_) => write!(f, ", ")?,
                     }
                 }
             }
         }
-        Ok(())
+        write!(f, "}}")
     }
 }
 

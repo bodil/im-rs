@@ -930,14 +930,13 @@ impl<A: Debug> Debug for CatList<A> {
                 None => break,
                 Some(a) => {
                     write!(f, "{:?}", a)?;
-                    match it.peek() {
-                        None => write!(f, "]")?,
-                        Some(_) => write!(f, ", ")?,
+                    if it.peek().is_some() {
+                        write!(f, ", ")?;
                     }
                 }
             }
         }
-        Ok(())
+        write!(f, "]")
     }
 }
 
