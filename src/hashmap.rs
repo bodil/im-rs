@@ -1203,13 +1203,13 @@ where
                 Some((k, v)) => {
                     write!(f, "{:?} => {:?}", k, v)?;
                     match it.peek() {
-                        None => write!(f, " }}")?,
+                        None => write!(f, " ")?,
                         Some(_) => write!(f, ", ")?,
                     }
                 }
             }
         }
-        Ok(())
+        write!(f, "}}")
     }
 }
 
@@ -1534,6 +1534,15 @@ mod test {
         assert_eq!(4, map[&3]);
         map[&3] = 8;
         assert_eq!(hashmap![1 => 2, 3 => 8, 5 => 6], map);
+    }
+
+    #[test]
+    fn proper_formatting() {
+        let map = hashmap![1 => 2];
+        assert_eq!(format!("{:?}", map), "{ 1 => 2 }");
+
+        let map : HashMap<u32, u32> = hashmap![];
+        assert_eq!(format!("{:?}", map), "{ }");
     }
 
     #[test]
