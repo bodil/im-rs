@@ -6,7 +6,7 @@ The format is based on [Keep a
 Changelog](http://keepachangelog.com/en/1.0.0/) and this project
 adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [10.2.0] - 2018-04-15
 ### Added
 
 * Map/set methods which accept references to keys will now also take
