@@ -280,14 +280,22 @@ where
     /// Test if a value is part of a set.
     ///
     /// Time: O(log n)
-    pub fn contains(&self, a: &A) -> bool {
+    pub fn contains<BA>(&self, a: &BA) -> bool
+    where
+        BA: Hash + Eq + ?Sized,
+        A: Borrow<BA>,
+    {
         self.root.get(hash_key(&*self.hasher, a), 0, a).is_some()
     }
 
     /// Remove a value from a set if it exists.
     ///
     /// Time: O(log n)
-    pub fn remove(&self, a: &A) -> Self {
+    pub fn remove<BA>(&self, a: &BA) -> Self
+    where
+        BA: Hash + Eq + ?Sized,
+        A: Borrow<BA>,
+    {
         self.root
             .remove(hash_key(&*self.hasher, a), 0, a)
             .map(|(_, node)| HashSet {
@@ -305,7 +313,11 @@ where
     /// safely copied before mutating.
     ///
     /// Time: O(log n)
-    pub fn remove_mut(&mut self, a: &A) {
+    pub fn remove_mut<BA>(&mut self, a: &BA)
+    where
+        BA: Hash + Eq + ?Sized,
+        A: Borrow<BA>,
+    {
         let root = Arc::make_mut(&mut self.root);
         let result = root.remove_mut(hash_key(&*self.hasher, a), 0, a);
         if result.is_some() {
@@ -607,6 +619,18 @@ impl<A: Hash + Eq, S: BuildHasher> IntoIterator for HashSet<A, S> {
 
 // Conversions
 
+impl<'s, 'a, A, OA, SA, SB> From<&'s HashSet<&'a A, SA>> for HashSet<OA, SB>
+where
+    A: ToOwned<Owned = OA> + Hash + Eq + ?Sized,
+    OA: Borrow<A> + Hash + Eq,
+    SA: BuildHasher,
+    SB: BuildHasher + Default,
+{
+    fn from(set: &HashSet<&A, SA>) -> Self {
+        set.iter().map(|a| (*a).to_owned()).collect()
+    }
+}
+
 impl<'a, A: Hash + Eq + Clone, S: BuildHasher + Default> From<&'a [A]> for HashSet<A, S> {
     fn from(slice: &'a [A]) -> Self {
         slice.into_iter().cloned().collect()
@@ -741,6 +765,16 @@ pub mod proptest {
 #[cfg(test)]
 mod test {
     use super::proptest::*;
+    use super::*;
+
+    #[test]
+    fn match_strings_with_string_slices() {
+        let mut set: HashSet<String> = From::from(&hashset!["foo", "bar"]);
+        set = set.remove("bar");
+        assert!(!set.contains("bar"));
+        set.remove_mut("foo");
+        assert!(!set.contains("foo"));
+    }
 
     proptest! {
         #[test]

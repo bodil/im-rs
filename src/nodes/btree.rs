@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::ops::IndexMut;
 use std::sync::Arc;
@@ -197,13 +198,17 @@ impl<A> Node<A> {
 
 impl<A: OrdValue> Node<A> {
     #[cfg_attr(feature = "clippy", allow(op_ref))]
-    pub fn lookup(&self, key: &A::Key) -> Option<&A> {
+    pub fn lookup<BK>(&self, key: &BK) -> Option<&A>
+    where
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
         if self.0.keys.is_empty() {
             return None;
         }
         // Start by checking if the key is greater than the node's max,
         // and search the rightmost child if so.
-        if key > self.0.keys[self.0.keys.len() - 1].extract_key() {
+        if key > self.0.keys[self.0.keys.len() - 1].extract_key().borrow() {
             match self.0.children[self.0.keys.len()] {
                 None => return None,
                 Some(ref node) => return node.lookup(key),
@@ -214,7 +219,7 @@ impl<A: OrdValue> Node<A> {
         // child to the left of it.
         match self.0
             .keys
-            .binary_search_by(|value| value.extract_key().cmp(key))
+            .binary_search_by(|value| value.extract_key().borrow().cmp(key))
         {
             Ok(index) => Some(&self.0.keys[index]),
             Err(index) => match self.0.children[index] {
@@ -224,14 +229,18 @@ impl<A: OrdValue> Node<A> {
         }
     }
 
-    pub fn lookup_mut(&mut self, key: &A::Key) -> Option<&mut A> {
+    pub fn lookup_mut<BK>(&mut self, key: &BK) -> Option<&mut A>
+    where
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
         if self.0.keys.is_empty() {
             return None;
         }
         let node = Arc::make_mut(&mut self.0);
         // Start by checking if the key is greater than the node's max,
         // and search the rightmost child if so.
-        if key > node.keys[node.keys.len() - 1].extract_key() {
+        if key > node.keys[node.keys.len() - 1].extract_key().borrow() {
             match node.children[node.keys.len()] {
                 None => return None,
                 Some(ref mut child) => return child.lookup_mut(key),
@@ -241,7 +250,7 @@ impl<A: OrdValue> Node<A> {
         // the index of the first higher key, meaning we search the
         // child to the left of it.
         match node.keys
-            .binary_search_by(|value| value.extract_key().cmp(key))
+            .binary_search_by(|value| value.extract_key().borrow().cmp(key))
         {
             Ok(index) => Some(&mut node.keys[index]),
             Err(index) => match node.children[index] {
@@ -416,13 +425,17 @@ impl<A: OrdValue> Node<A> {
         node.children.push(child);
     }
 
-    fn pull_up(
+    fn pull_up<BK>(
         &self,
-        key: &A::Key,
+        key: &BK,
         from_child: &Node<A>,
         pull_to: usize,
         child_index: usize,
-    ) -> Remove<A> {
+    ) -> Remove<A>
+    where
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
         match from_child.remove(key) {
             Remove::NoChange => unreachable!(),
             Remove::Removed(_) => unreachable!(),
@@ -437,10 +450,14 @@ impl<A: OrdValue> Node<A> {
         }
     }
 
-    pub fn remove(&self, key: &A::Key) -> Remove<A> {
+    pub fn remove<BK>(&self, key: &BK) -> Remove<A>
+    where
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
         match self.0
             .keys
-            .binary_search_by(|value| value.extract_key().cmp(key))
+            .binary_search_by(|value| value.extract_key().borrow().cmp(key))
         {
             // Key exists in node, remove it.
             Ok(index) => {
@@ -455,11 +472,11 @@ impl<A: OrdValue> Node<A> {
                     }
                     // If the left hand child has capacity, pull the predecessor up.
                     (&Some(ref left), _) if !left.too_small() => {
-                        self.pull_up(left.max().unwrap().extract_key(), left, index, index)
+                        self.pull_up(left.max().unwrap().extract_key().borrow(), left, index, index)
                     }
                     // If the right hand child has capacity, pull the successor up.
                     (_, &Some(ref right)) if !right.too_small() => {
-                        self.pull_up(right.min().unwrap().extract_key(), right, index, index + 1)
+                        self.pull_up(right.min().unwrap().extract_key().borrow(), right, index, index + 1)
                     }
                     // If neither child has capacity, we'll have to merge them.
                     (&Some(ref left), &Some(ref right)) => {
@@ -678,10 +695,14 @@ impl<A: OrdValue> Node<A> {
         self.split(median, left, right)
     }
 
-    pub fn remove_mut(&mut self, key: &A::Key) -> Remove<A> {
+    pub fn remove_mut<BK>(&mut self, key: &BK) -> Remove<A>
+    where
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
         let action = match self.0
             .keys
-            .binary_search_by(|item| item.extract_key().cmp(key))
+            .binary_search_by(|item| item.extract_key().borrow().cmp(key))
         {
             // Key exists in node, remove it.
             Ok(index) => {
@@ -749,7 +770,7 @@ impl<A: OrdValue> Node<A> {
                 let mut update = None;
                 let mut pair;
                 if let Some(&mut Some(ref mut child)) = children.get_mut(child_index) {
-                    match child.remove_mut(value.extract_key()) {
+                    match child.remove_mut(value.extract_key().borrow()) {
                         Remove::NoChange => unreachable!(),
                         Remove::Removed(pulled_pair) => {
                             node.keys.push(pulled_pair);

@@ -306,7 +306,11 @@ where
     /// );
     /// # }
     /// ```
-    pub fn get(&self, k: &K) -> Option<Arc<V>> {
+    pub fn get<BK>(&self, k: &BK) -> Option<Arc<V>>
+    where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
+    {
         self.root
             .get(hash_key(&*self.hasher, k), 0, k)
             .map(|&(_, ref v)| v.clone())
@@ -335,8 +339,10 @@ where
     /// );
     /// # }
     /// ```
-    pub fn get_or<RV>(&self, k: &K, default: RV) -> Arc<V>
+    pub fn get_or<BK, RV>(&self, k: &BK, default: RV) -> Arc<V>
     where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
         RV: Shared<V>,
     {
         self.get(k).unwrap_or_else(|| default.shared())
@@ -363,7 +369,11 @@ where
     /// # }
     /// ```
     #[inline]
-    pub fn contains_key(&self, k: &K) -> bool {
+    pub fn contains_key<BK>(&self, k: &BK) -> bool
+    where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
+    {
         self.get(k).is_some()
     }
 
@@ -563,8 +573,10 @@ where
     /// return value.
     ///
     /// Time: O(log n)
-    pub fn update<F>(&self, k: &K, f: F) -> Self
+    pub fn update<BK, F>(&self, k: &BK, f: F) -> Self
     where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
         F: FnOnce(Arc<V>) -> Option<Arc<V>>,
     {
         match self.pop_with_key(k) {
@@ -581,8 +593,10 @@ where
     /// function's return value.
     ///
     /// Time: O(log n)
-    pub fn update_with_key<F>(&self, k: &K, f: F) -> Self
+    pub fn update_with_key<BK, F>(&self, k: &BK, f: F) -> Self
     where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
         F: FnOnce(Arc<K>, Arc<V>) -> Option<Arc<V>>,
     {
         match self.pop_with_key(k) {
@@ -605,8 +619,10 @@ where
     /// map.
     ///
     /// Time: O(log n)
-    pub fn update_lookup_with_key<F>(&self, k: &K, f: F) -> (Option<Arc<V>>, Self)
+    pub fn update_lookup_with_key<BK, F>(&self, k: &BK, f: F) -> (Option<Arc<V>>, Self)
     where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
         F: FnOnce(Arc<K>, Arc<V>) -> Option<Arc<V>>,
     {
         match self.pop_with_key(k) {
@@ -650,7 +666,11 @@ where
     /// Remove a key/value pair from a hash map, if it exists.
     ///
     /// Time: O(log n)
-    pub fn remove(&self, k: &K) -> Self {
+    pub fn remove<BK>(&self, k: &BK) -> Self
+    where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
+    {
         match self.pop_with_key(k) {
             None => self.clone(),
             Some((_, _, map)) => map,
@@ -681,7 +701,11 @@ where
     ///
     /// [remove]: #method.remove
     #[inline]
-    pub fn remove_mut(&mut self, k: &K) {
+    pub fn remove_mut<BK>(&mut self, k: &BK)
+    where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
+    {
         self.pop_with_key_mut(k);
     }
 
@@ -689,7 +713,11 @@ where
     /// the removed value as well as the updated list.
     ///
     /// Time: O(log n)
-    pub fn pop(&self, k: &K) -> Option<(Arc<V>, Self)> {
+    pub fn pop<BK>(&self, k: &BK) -> Option<(Arc<V>, Self)>
+    where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
+    {
         self.pop_with_key(k).map(|(_, v, m)| (v, m))
     }
 
@@ -701,7 +729,11 @@ where
     /// safely copied before mutating.
     ///
     /// Time: O(log n)
-    pub fn pop_mut(&mut self, k: &K) -> Option<Arc<V>> {
+    pub fn pop_mut<BK>(&mut self, k: &BK) -> Option<Arc<V>>
+    where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
+    {
         self.pop_with_key_mut(k).map(|(_, v)| v)
     }
 
@@ -709,7 +741,11 @@ where
     /// the removed key and value as well as the updated list.
     ///
     /// Time: O(log n)
-    pub fn pop_with_key(&self, k: &K) -> Option<(Arc<K>, Arc<V>, Self)> {
+    pub fn pop_with_key<BK>(&self, k: &BK) -> Option<(Arc<K>, Arc<V>, Self)>
+    where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
+    {
         self.root
             .remove(hash_key(&*self.hasher, k), 0, k)
             .map(|((k, v), node)| {
@@ -733,7 +769,11 @@ where
     /// safely copied before mutating.
     ///
     /// Time: O(log n)
-    pub fn pop_with_key_mut(&mut self, k: &K) -> Option<(Arc<K>, Arc<V>)> {
+    pub fn pop_with_key_mut<BK>(&mut self, k: &BK) -> Option<(Arc<K>, Arc<V>)>
+    where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
+    {
         let root = Arc::make_mut(&mut self.root);
         let result = root.remove_mut(hash_key(&*self.hasher, k), 0, k);
         if result.is_some() {
@@ -745,7 +785,10 @@ where
     /// Construct the union of two maps, keeping the values in the
     /// current map when keys exist in both maps.
     #[inline]
-    pub fn union(&self, other: &Self) -> Self {
+    pub fn union<RM>(&self, other: RM) -> Self
+    where
+        RM: Borrow<Self>,
+    {
         self.union_with_key(other, |_, v, _| v)
     }
 
@@ -1157,14 +1200,15 @@ where
     }
 }
 
-impl<'a, K, V, S> Index<&'a K> for HashMap<K, V, S>
+impl<'a, BK, K, V, S> Index<&'a BK> for HashMap<K, V, S>
 where
-    K: Hash + Eq,
+    BK: Hash + Eq + ?Sized,
+    K: Hash + Eq + Borrow<BK>,
     S: BuildHasher,
 {
     type Output = V;
 
-    fn index(&self, key: &K) -> &Self::Output {
+    fn index(&self, key: &BK) -> &Self::Output {
         match self.root.get(hash_key(&*self.hasher, key), 0, key) {
             None => panic!("HashMap::index: invalid key"),
             Some(&(_, ref value)) => value,
@@ -1172,13 +1216,14 @@ where
     }
 }
 
-impl<'a, K, V, S> IndexMut<&'a K> for HashMap<K, V, S>
+impl<'a, BK, K, V, S> IndexMut<&'a BK> for HashMap<K, V, S>
 where
-    K: Hash + Eq,
+    BK: Hash + Eq + ?Sized,
+    K: Hash + Eq + Borrow<BK>,
     V: Clone,
     S: BuildHasher,
 {
-    fn index_mut(&mut self, key: &K) -> &mut Self::Output {
+    fn index_mut(&mut self, key: &BK) -> &mut Self::Output {
         let root = Arc::make_mut(&mut self.root);
         match root.get_mut(hash_key(&*self.hasher, key), 0, key) {
             None => panic!("HashMap::index_mut: invalid key"),
@@ -1346,6 +1391,22 @@ impl<K, V, S> AsRef<HashMap<K, V, S>> for HashMap<K, V, S> {
     #[inline]
     fn as_ref(&self) -> &Self {
         self
+    }
+}
+
+impl<'m, 'k, 'v, K, V, OK, OV, SA, SB> From<&'m HashMap<&'k K, &'v V, SA>> for HashMap<OK, OV, SB>
+where
+    K: Hash + Eq + ToOwned<Owned = OK> + ?Sized,
+    V: ToOwned<Owned = OV> + ?Sized,
+    OK: Hash + Eq + Borrow<K>,
+    OV: Borrow<V>,
+    SA: BuildHasher,
+    SB: BuildHasher + Default,
+{
+    fn from(m: &HashMap<&K, &V, SA>) -> Self {
+        m.iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect()
     }
 }
 
@@ -1564,6 +1625,18 @@ mod test {
             assert_eq!(None, map.get(k));
             assert_eq!(l - 1, map.len());
         }
+    }
+
+    #[test]
+    fn match_string_keys_with_string_slices() {
+        let mut map: HashMap<String, i32> =
+            From::from(&hashmap!{ "foo" => &1, "bar" => &2, "baz" => &3 });
+        assert_eq!(Some(Arc::new(1)), map.get("foo"));
+        map = map.remove("foo");
+        assert_eq!(Arc::new(5), map.get_or("foo", 5));
+        assert_eq!(Some(Arc::new(3)), map.pop_mut("baz"));
+        map["bar"] = 8;
+        assert_eq!(8, map["bar"]);
     }
 
     proptest! {

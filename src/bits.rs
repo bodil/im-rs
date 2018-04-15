@@ -27,7 +27,7 @@ pub fn index(bitmap: Bitmap, bit: Bitmap) -> usize {
     (bitmap & (bit - 1)).count_ones() as usize
 }
 
-pub fn hash_key<K: Hash, S: BuildHasher>(bh: &S, key: &K) -> Bitmap {
+pub fn hash_key<K: Hash + ?Sized, S: BuildHasher>(bh: &S, key: &K) -> Bitmap {
     let mut hasher = bh.build_hasher();
     key.hash(&mut hasher);
     // (hasher.finish() & HASH_COERCE) as Bitmap

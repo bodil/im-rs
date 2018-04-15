@@ -248,7 +248,11 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// );
     /// # }
     /// ```
-    pub fn get(&self, k: &K) -> Option<Arc<V>> {
+    pub fn get<BK>(&self, k: &BK) -> Option<Arc<V>>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
         self.root.lookup(k).map(|item| item.1.clone())
     }
 
@@ -275,8 +279,10 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// );
     /// # }
     /// ```
-    pub fn get_or<RV>(&self, k: &K, default: RV) -> Arc<V>
+    pub fn get_or<BK, RV>(&self, k: &BK, default: RV) -> Arc<V>
     where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
         RV: Shared<V>,
     {
         self.get(k).unwrap_or_else(|| default.shared())
@@ -302,7 +308,11 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// );
     /// # }
     /// ```
-    pub fn contains_key(&self, k: &K) -> bool {
+    pub fn contains_key<BK>(&self, k: &BK) -> bool
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
         self.get(k).is_some()
     }
 
@@ -495,8 +505,10 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// return value.
     ///
     /// Time: O(log n)
-    pub fn update<F>(&self, k: &K, f: F) -> Self
+    pub fn update<BK, F>(&self, k: &BK, f: F) -> Self
     where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
         F: FnOnce(Arc<V>) -> Option<Arc<V>>,
     {
         match self.pop_with_key(k) {
@@ -513,8 +525,10 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// function's return value.
     ///
     /// Time: O(log n)
-    pub fn update_with_key<F>(&self, k: &K, f: F) -> Self
+    pub fn update_with_key<BK, F>(&self, k: &BK, f: F) -> Self
     where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
         F: FnOnce(Arc<K>, Arc<V>) -> Option<Arc<V>>,
     {
         match self.pop_with_key(k) {
@@ -537,8 +551,10 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// map.
     ///
     /// Time: O(log n)
-    pub fn update_lookup_with_key<F>(&self, k: &K, f: F) -> (Option<Arc<V>>, Self)
+    pub fn update_lookup_with_key<BK, F>(&self, k: &BK, f: F) -> (Option<Arc<V>>, Self)
     where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
         F: FnOnce(Arc<K>, Arc<V>) -> Option<Arc<V>>,
     {
         match self.pop_with_key(k) {
@@ -582,7 +598,11 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// Remove a key/value pair from a map, if it exists.
     ///
     /// Time: O(log n)
-    pub fn remove(&self, k: &K) -> Self {
+    pub fn remove<BK>(&self, k: &BK) -> Self
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
         self.pop(k).map(|(_, m)| m).unwrap_or_else(|| self.clone())
     }
 
@@ -611,7 +631,11 @@ impl<K: Ord, V> OrdMap<K, V> {
     ///
     /// [remove]: #method.remove
     #[inline]
-    pub fn remove_mut(&mut self, k: &K) {
+    pub fn remove_mut<BK>(&mut self, k: &BK)
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
         self.pop_with_key_mut(k);
     }
 
@@ -619,7 +643,11 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// the removed value as well as the updated list.
     ///
     /// Time: O(log n)
-    pub fn pop(&self, k: &K) -> Option<(Arc<V>, Self)> {
+    pub fn pop<BK>(&self, k: &BK) -> Option<(Arc<V>, Self)>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
         self.pop_with_key(k).map(|(_, v, m)| (v, m))
     }
 
@@ -631,7 +659,11 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// safely copied before mutating.
     ///
     /// Time: O(log n)
-    pub fn pop_mut(&mut self, k: &K) -> Option<Arc<V>> {
+    pub fn pop_mut<BK>(&mut self, k: &BK) -> Option<Arc<V>>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
         self.pop_with_key_mut(k).map(|(_, v)| v)
     }
 
@@ -639,7 +671,11 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// the removed key and value as well as the updated list.
     ///
     /// Time: O(log n)
-    pub fn pop_with_key(&self, k: &K) -> Option<(Arc<K>, Arc<V>, Self)> {
+    pub fn pop_with_key<BK>(&self, k: &BK) -> Option<(Arc<K>, Arc<V>, Self)>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
         match self.root.remove(k) {
             Remove::NoChange => None,
             Remove::Removed(_) => unreachable!(),
@@ -655,7 +691,11 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// safely copied before mutating.
     ///
     /// Time: O(log n)
-    pub fn pop_with_key_mut(&mut self, k: &K) -> Option<(Arc<K>, Arc<V>)> {
+    pub fn pop_with_key_mut<BK>(&mut self, k: &BK) -> Option<(Arc<K>, Arc<V>)>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
         match self.root.remove_mut(k) {
             Remove::NoChange => None,
             Remove::Removed(pair) => Some(pair),
@@ -851,7 +891,11 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// containing keys which are larger than `split`.
     ///
     /// The `split` mapping is discarded.
-    pub fn split(&self, split: &K) -> (Self, Self) {
+    pub fn split<BK>(&self, split: &BK) -> (Self, Self)
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
         let (l, _, r) = self.split_lookup(split);
         (l, r)
     }
@@ -861,10 +905,14 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// containing keys which are larger than `split`.
     ///
     /// Returns both the two maps and the value of `split`.
-    pub fn split_lookup(&self, split: &K) -> (Self, Option<Arc<V>>, Self) {
+    pub fn split_lookup<BK>(&self, split: &BK) -> (Self, Option<Arc<V>>, Self)
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
         self.iter()
             .fold((ordmap![], None, ordmap![]), |(l, m, r), (k, v)| {
-                match k.as_ref().cmp(split) {
+                match k.as_ref().borrow().cmp(split) {
                     Ordering::Less => (l.insert(k, v), m, r),
                     Ordering::Equal => (l, Some(v), r),
                     Ordering::Greater => (l, m, r.insert(k, v)),
@@ -1099,13 +1147,14 @@ where
     }
 }
 
-impl<'a, K, V> Index<&'a K> for OrdMap<K, V>
+impl<'a, BK, K, V> Index<&'a BK> for OrdMap<K, V>
 where
-    K: Ord,
+    BK: Ord + ?Sized,
+    K: Ord + Borrow<BK>,
 {
     type Output = V;
 
-    fn index(&self, key: &K) -> &Self::Output {
+    fn index(&self, key: &BK) -> &Self::Output {
         match self.root.lookup(key) {
             None => panic!("OrdMap::index: invalid key"),
             Some(&(_, ref value)) => value,
@@ -1113,12 +1162,13 @@ where
     }
 }
 
-impl<'a, K, V> IndexMut<&'a K> for OrdMap<K, V>
+impl<'a, BK, K, V> IndexMut<&'a BK> for OrdMap<K, V>
 where
-    K: Ord,
+    BK: Ord + ?Sized,
+    K: Ord + Borrow<BK>,
     V: Clone,
 {
-    fn index_mut(&mut self, key: &K) -> &mut Self::Output {
+    fn index_mut(&mut self, key: &BK) -> &mut Self::Output {
         match self.root.lookup_mut(key) {
             None => panic!("OrdMap::index: invalid key"),
             Some(&mut (_, ref mut value)) => Arc::make_mut(value),
@@ -1269,6 +1319,20 @@ where
 impl<K, V> AsRef<OrdMap<K, V>> for OrdMap<K, V> {
     fn as_ref(&self) -> &Self {
         self
+    }
+}
+
+impl<'m, 'k, 'v, K, V, OK, OV> From<&'m OrdMap<&'k K, &'v V>> for OrdMap<OK, OV>
+where
+    K: Ord + ToOwned<Owned = OK> + ?Sized,
+    V: ToOwned<Owned = OV> + ?Sized,
+    OK: Ord + Borrow<K>,
+    OV: Borrow<V>,
+{
+    fn from(m: &OrdMap<&K, &V>) -> Self {
+        m.iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect()
     }
 }
 
@@ -1536,7 +1600,7 @@ mod test {
 
     #[test]
     fn double_ended_iterator_1() {
-        let m = ordmap![1 => 1, 2 => 2, 3 => 3, 4 => 4];
+        let m = ordmap!{1 => 1, 2 => 2, 3 => 3, 4 => 4};
         let mut it = m.iter();
         assert_eq!(Some((Arc::new(1), Arc::new(1))), it.next());
         assert_eq!(Some((Arc::new(4), Arc::new(4))), it.next_back());
@@ -1547,7 +1611,7 @@ mod test {
 
     #[test]
     fn double_ended_iterator_2() {
-        let m = ordmap![1 => 1, 2 => 2, 3 => 3, 4 => 4];
+        let m = ordmap!{1 => 1, 2 => 2, 3 => 3, 4 => 4};
         let mut it = m.iter();
         assert_eq!(Some((Arc::new(1), Arc::new(1))), it.next());
         assert_eq!(Some((Arc::new(4), Arc::new(4))), it.next_back());
@@ -1567,10 +1631,22 @@ mod test {
 
     #[test]
     fn index_operator() {
-        let mut map = ordmap![1 => 2, 3 => 4, 5 => 6];
+        let mut map = ordmap!{1 => 2, 3 => 4, 5 => 6};
         assert_eq!(4, map[&3]);
         map[&3] = 8;
-        assert_eq!(ordmap![1 => 2, 3 => 8, 5 => 6], map);
+        assert_eq!(ordmap!{1 => 2, 3 => 8, 5 => 6}, map);
+    }
+
+    #[test]
+    fn match_string_keys_with_string_slices() {
+        let mut map: OrdMap<String, i32> =
+            From::from(&ordmap!{ "foo" => &1, "bar" => &2, "baz" => &3 });
+        assert_eq!(Some(Arc::new(1)), map.get("foo"));
+        map = map.remove("foo");
+        assert_eq!(Arc::new(5), map.get_or("foo", 5));
+        assert_eq!(Some(Arc::new(3)), map.pop_mut("baz"));
+        map["bar"] = 8;
+        assert_eq!(8, map["bar"]);
     }
 
     quickcheck! {

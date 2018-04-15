@@ -6,6 +6,18 @@ The format is based on [Keep a
 Changelog](http://keepachangelog.com/en/1.0.0/) and this project
 adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+
+* Map/set methods which accept references to keys will now also take
+  any value that's borrowable to the key's type, ie. it will take a
+  reference to a type `Borrowable` where the key implements
+  `Borrow<Borrowable>`. This is particularly handy for types such as
+  `String` because you can now pass `&str` to key lookups instead of
+  `&String`. So, instead of the incredibly cumbersome
+  `map.get(&"foo".to_string())` you can just do `map.get("foo")` when
+  looking up a mapping for a string literal.
+
 ## [10.1.0] - 2018-04-12
 ### Added
 

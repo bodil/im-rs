@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::borrow::Borrow;
 use std::sync::Arc;
 
 use bits::{bitpos, index, Bitmap, HASH_BITS, HASH_SIZE};
@@ -290,11 +291,15 @@ impl<A: HashValue> Node<A> {
         }
     }
 
-    pub fn get(&self, hash: Bitmap, shift: usize, key: &A::Key) -> Option<&A> {
+    pub fn get<BK>(&self, hash: Bitmap, shift: usize, key: &BK) -> Option<&A>
+    where
+        BK: Eq + ?Sized,
+        A::Key: Borrow<BK>,
+    {
         let bitpos = bitpos(hash, shift);
         if self.datamap & bitpos != 0 {
             match self.data[self.data_index(bitpos)] {
-                Entry::Value(ref value, _) => if key == value.extract_key() {
+                Entry::Value(ref value, _) => if key == value.extract_key().borrow() {
                     Some(value)
                 } else {
                     None
@@ -308,13 +313,17 @@ impl<A: HashValue> Node<A> {
         }
     }
 
-    pub fn get_mut(&mut self, hash: Bitmap, shift: usize, key: &A::Key) -> Option<&mut A> {
+    pub fn get_mut<BK>(&mut self, hash: Bitmap, shift: usize, key: &BK) -> Option<&mut A>
+    where
+        BK: Eq + ?Sized,
+        A::Key: Borrow<BK>,
+    {
         let bitpos = bitpos(hash, shift);
         let data_index = self.data_index(bitpos);
         let node_index = self.node_index(bitpos);
         if self.datamap & bitpos != 0 {
             match self.data[data_index] {
-                Entry::Value(ref mut value, _) => if key == value.extract_key() {
+                Entry::Value(ref mut value, _) => if key == value.extract_key().borrow() {
                     Some(value)
                 } else {
                     None
@@ -449,13 +458,17 @@ impl<A: HashValue> Node<A> {
         }
     }
 
-    pub fn remove(&self, hash: Bitmap, shift: usize, key: &A::Key) -> Option<(A, Self)> {
+    pub fn remove<BK>(&self, hash: Bitmap, shift: usize, key: &BK) -> Option<(A, Self)>
+    where
+        BK: Eq + ?Sized,
+        A::Key: Borrow<BK>,
+    {
         let pos = bitpos(hash, shift);
         if self.datamap & pos != 0 {
             // Key is (or would be) in this node.
             let index = self.data_index(pos);
             match self.data[index] {
-                Entry::Value(ref value, _) => if key == value.extract_key() {
+                Entry::Value(ref value, _) => if key == value.extract_key().borrow() {
                     Some((value.clone(), self.remove_value(pos)))
                 // }
                 } else {
@@ -494,14 +507,18 @@ impl<A: HashValue> Node<A> {
         }
     }
 
-    pub fn remove_mut(&mut self, hash: Bitmap, shift: usize, key: &A::Key) -> Option<A> {
+    pub fn remove_mut<BK>(&mut self, hash: Bitmap, shift: usize, key: &BK) -> Option<A>
+    where
+        BK: Eq + ?Sized,
+        A::Key: Borrow<BK>,
+    {
         let pos = bitpos(hash, shift);
         if self.datamap & pos != 0 {
             // Key is (or would be) in this node.
             let index = self.data_index(pos);
             let removed;
             match self.data[index] {
-                Entry::Value(ref value, _) => if key == value.extract_key() {
+                Entry::Value(ref value, _) => if key == value.extract_key().borrow() {
                     removed = value.clone();
                 } else {
                     return None;
@@ -558,18 +575,26 @@ impl<A: HashValue> CollisionNode<A> {
         CollisionNode { hash, data }
     }
 
-    fn get(&self, key: &A::Key) -> Option<&A> {
+    fn get<BK>(&self, key: &BK) -> Option<&A>
+    where
+        BK: Eq + ?Sized,
+        A::Key: Borrow<BK>,
+    {
         for entry in &self.data {
-            if key == entry.extract_key() {
+            if key == entry.extract_key().borrow() {
                 return Some(entry);
             }
         }
         None
     }
 
-    fn get_mut(&mut self, key: &A::Key) -> Option<&mut A> {
+    fn get_mut<BK>(&mut self, key: &BK) -> Option<&mut A>
+    where
+        BK: Eq + ?Sized,
+        A::Key: Borrow<BK>,
+    {
         for entry in &mut self.data {
-            if key == entry.extract_key() {
+            if key == entry.extract_key().borrow() {
                 return Some(entry);
             }
         }
@@ -610,9 +635,13 @@ impl<A: HashValue> CollisionNode<A> {
         true
     }
 
-    fn remove(&self, key: &A::Key) -> Option<(A, Self)> {
+    fn remove<BK>(&self, key: &BK) -> Option<(A, Self)>
+    where
+        BK: Eq + ?Sized,
+        A::Key: Borrow<BK>,
+    {
         for (index, item) in self.data.iter().enumerate() {
-            if key == item.extract_key() {
+            if key == item.extract_key().borrow() {
                 let mut data = self.data.clone();
                 let value = data.remove(index);
                 return Some((
@@ -627,10 +656,14 @@ impl<A: HashValue> CollisionNode<A> {
         None
     }
 
-    fn remove_mut(&mut self, key: &A::Key) -> Option<A> {
+    fn remove_mut<BK>(&mut self, key: &BK) -> Option<A>
+    where
+        BK: Eq + ?Sized,
+        A::Key: Borrow<BK>,
+    {
         let mut loc = None;
         for (index, item) in self.data.iter().enumerate() {
-            if key == item.extract_key() {
+            if key == item.extract_key().borrow() {
                 loc = Some(index);
             }
         }

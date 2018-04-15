@@ -234,14 +234,22 @@ impl<A: Ord> OrdSet<A> {
     /// Test if a value is part of a set.
     ///
     /// Time: O(log n)
-    pub fn contains(&self, a: &A) -> bool {
+    pub fn contains<BA>(&self, a: &BA) -> bool
+    where
+        BA: Ord + ?Sized,
+        A: Borrow<BA>,
+    {
         self.root.lookup(a).is_some()
     }
 
     /// Remove a value from a set.
     ///
     /// Time: O(log n)
-    pub fn remove(&self, a: &A) -> Self {
+    pub fn remove<BA>(&self, a: &BA) -> Self
+    where
+        BA: Ord + ?Sized,
+        A: Borrow<BA>,
+    {
         match self.root.remove(a) {
             Remove::NoChange => self.clone(),
             Remove::Removed(_) => unreachable!(),
@@ -257,7 +265,11 @@ impl<A: Ord> OrdSet<A> {
     ///
     /// Time: O(log n)
     #[inline]
-    pub fn remove_mut<R>(&mut self, a: &A) {
+    pub fn remove_mut<BA>(&mut self, a: &BA)
+    where
+        BA: Ord + ?Sized,
+        A: Borrow<BA>,
+    {
         if let Remove::Update(_, root) = self.root.remove_mut(a) {
             self.root = root;
         }
@@ -312,10 +324,14 @@ impl<A: Ord> OrdSet<A> {
     /// containing values which are larger than `split`.
     ///
     /// The `split` value itself is discarded.
-    pub fn split(&self, split: &A) -> (Self, Self) {
+    pub fn split<BA>(&self, split: &BA) -> (Self, Self)
+    where
+        BA: Ord + ?Sized,
+        A: Borrow<BA>,
+    {
         self.iter().fold(
             (OrdSet::new(), OrdSet::new()),
-            |(less, greater), item| match (&*item).cmp(split) {
+            |(less, greater), item| match (*item).borrow().cmp(split) {
                 Ordering::Less => (less.insert(item), greater),
                 Ordering::Equal => (less, greater),
                 Ordering::Greater => (less, greater.insert(item)),
@@ -330,10 +346,14 @@ impl<A: Ord> OrdSet<A> {
     /// Returns a tuple of the two maps and a boolean which is true if
     /// the `split` value existed in the original set, and false
     /// otherwise.
-    pub fn split_member(&self, split: &A) -> (Self, bool, Self) {
+    pub fn split_member<BA>(&self, split: &BA) -> (Self, bool, Self)
+    where
+        BA: Ord + ?Sized,
+        A: Borrow<BA>,
+    {
         self.iter().fold(
             (OrdSet::new(), false, OrdSet::new()),
-            |(less, present, greater), item| match (&*item).cmp(split) {
+            |(less, present, greater), item| match (*item).borrow().cmp(split) {
                 Ordering::Less => (less.insert(item), present, greater),
                 Ordering::Equal => (less, true, greater),
                 Ordering::Greater => (less, present, greater.insert(item)),
@@ -568,6 +588,16 @@ where
 
 // Conversions
 
+impl<'s, 'a, A, OA> From<&'s OrdSet<&'a A>> for OrdSet<OA>
+where
+    A: ToOwned<Owned = OA> + Ord + ?Sized,
+    OA: Borrow<A> + Ord,
+{
+    fn from(set: &OrdSet<&A>) -> Self {
+        set.iter().map(|a| (*a).to_owned()).collect()
+    }
+}
+
 impl<'a, A: Ord + Clone> From<&'a [A]> for OrdSet<A> {
     fn from(slice: &'a [A]) -> Self {
         slice.into_iter().cloned().collect()
@@ -698,6 +728,13 @@ pub mod proptest {
 #[cfg(test)]
 mod test {
     use super::proptest::*;
+    use super::*;
+
+    #[test]
+    fn match_strings_with_string_slices() {
+        let set: OrdSet<String> = From::from(&ordset!["foo"]);
+        assert!(set.contains("foo"));
+    }
 
     proptest! {
         #[test]
