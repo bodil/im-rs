@@ -13,15 +13,15 @@ use self::InsertAction::*;
 const NODE_SIZE: usize = 16; // Must be an even number!
 const MEDIAN: usize = (NODE_SIZE + 1) >> 1;
 
-pub trait OrdValue: Clone {
-    type Key: Ord;
-
-    fn extract_key(&self) -> &Self::Key;
+pub trait BTreeValue: Clone {
+    type Key;
     fn ptr_eq(&self, other: &Self) -> bool;
-
-    fn cmp_with(&self, right: &Self) -> Ordering {
-        self.extract_key().cmp(right.extract_key())
-    }
+    fn search_key<BK>(slice: &[Self], key: &BK) -> Result<usize, usize>
+    where
+        BK: Ord + ?Sized,
+        Self::Key: Borrow<BK>;
+    fn search_value(slice: &[Self], value: &Self) -> Result<usize, usize>;
+    fn cmp_keys(&self, other: &Self) -> Ordering;
 }
 
 pub struct Node<A>(Arc<NodeData<A>>);
@@ -52,9 +52,9 @@ pub enum Remove<A> {
     Update(A, Node<A>),
 }
 
-enum RemoveAction<A> {
+enum RemoveAction {
     DeleteAt(usize),
-    PullUp(A, usize, usize),
+    PullUp(usize, usize, usize),
     Merge(usize),
     StealFromLeft(usize),
     StealFromRight(usize),
@@ -196,8 +196,7 @@ impl<A> Node<A> {
     }
 }
 
-impl<A: OrdValue> Node<A> {
-    #[cfg_attr(feature = "clippy", allow(op_ref))]
+impl<A: BTreeValue> Node<A> {
     pub fn lookup<BK>(&self, key: &BK) -> Option<&A>
     where
         BK: Ord + ?Sized,
@@ -206,21 +205,10 @@ impl<A: OrdValue> Node<A> {
         if self.0.keys.is_empty() {
             return None;
         }
-        // Start by checking if the key is greater than the node's max,
-        // and search the rightmost child if so.
-        if key > self.0.keys[self.0.keys.len() - 1].extract_key().borrow() {
-            match self.0.children[self.0.keys.len()] {
-                None => return None,
-                Some(ref node) => return node.lookup(key),
-            }
-        }
         // Perform a binary search, resulting in either a match or
         // the index of the first higher key, meaning we search the
         // child to the left of it.
-        match self.0
-            .keys
-            .binary_search_by(|value| value.extract_key().borrow().cmp(key))
-        {
+        match A::search_key(&self.0.keys, key) {
             Ok(index) => Some(&self.0.keys[index]),
             Err(index) => match self.0.children[index] {
                 None => None,
@@ -238,20 +226,10 @@ impl<A: OrdValue> Node<A> {
             return None;
         }
         let node = Arc::make_mut(&mut self.0);
-        // Start by checking if the key is greater than the node's max,
-        // and search the rightmost child if so.
-        if key > node.keys[node.keys.len() - 1].extract_key().borrow() {
-            match node.children[node.keys.len()] {
-                None => return None,
-                Some(ref mut child) => return child.lookup_mut(key),
-            }
-        }
         // Perform a binary search, resulting in either a match or
         // the index of the first higher key, meaning we search the
         // child to the left of it.
-        match node.keys
-            .binary_search_by(|value| value.extract_key().borrow().cmp(key))
-        {
+        match A::search_key(&node.keys, key) {
             Ok(index) => Some(&mut node.keys[index]),
             Err(index) => match node.children[index] {
                 None => None,
@@ -264,7 +242,7 @@ impl<A: OrdValue> Node<A> {
         let mut new_keys = self.0.keys.clone();
         let mut new_children = self.0.children.clone();
 
-        match new_keys.binary_search_by(|item| item.extract_key().cmp(value.extract_key())) {
+        match A::search_value(&new_keys, &value) {
             Ok(_) => unreachable!(),
             Err(index) => {
                 new_children[index] = ins_left;
@@ -291,10 +269,7 @@ impl<A: OrdValue> Node<A> {
         if self.0.keys.is_empty() {
             return Insert::Update(Node::singleton(value));
         }
-        match self.0
-            .keys
-            .binary_search_by(|item| item.extract_key().cmp(value.extract_key()))
-        {
+        match A::search_value(&self.0.keys, &value) {
             // Key exists in node
             Ok(index) => {
                 if value.ptr_eq(&self.0.keys[index]) {
@@ -428,6 +403,7 @@ impl<A: OrdValue> Node<A> {
     fn pull_up<BK>(
         &self,
         key: &BK,
+        from_index: usize,
         from_child: &Node<A>,
         pull_to: usize,
         child_index: usize,
@@ -436,7 +412,7 @@ impl<A: OrdValue> Node<A> {
         BK: Ord + ?Sized,
         A::Key: Borrow<BK>,
     {
-        match from_child.remove(key) {
+        match from_child.remove_index(Ok(from_index), key) {
             Remove::NoChange => unreachable!(),
             Remove::Removed(_) => unreachable!(),
             Remove::Update(pulled_pair, new_child) => {
@@ -455,10 +431,15 @@ impl<A: OrdValue> Node<A> {
         BK: Ord + ?Sized,
         A::Key: Borrow<BK>,
     {
-        match self.0
-            .keys
-            .binary_search_by(|value| value.extract_key().borrow().cmp(key))
-        {
+        self.remove_index(A::search_key(&self.0.keys, key), key)
+    }
+
+    pub fn remove_index<BK>(&self, index: Result<usize, usize>, key: &BK) -> Remove<A>
+    where
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
+        match index {
             // Key exists in node, remove it.
             Ok(index) => {
                 match (&self.0.children[index], &self.0.children[index + 1]) {
@@ -472,11 +453,11 @@ impl<A: OrdValue> Node<A> {
                     }
                     // If the left hand child has capacity, pull the predecessor up.
                     (&Some(ref left), _) if !left.too_small() => {
-                        self.pull_up(left.max().unwrap().extract_key().borrow(), left, index, index)
+                        self.pull_up(key, left.0.keys.len() - 1, left, index, index)
                     }
                     // If the right hand child has capacity, pull the successor up.
                     (_, &Some(ref right)) if !right.too_small() => {
-                        self.pull_up(right.min().unwrap().extract_key().borrow(), right, index, index + 1)
+                        self.pull_up(key, 0, right, index, index + 1)
                     }
                     // If neither child has capacity, we'll have to merge them.
                     (&Some(ref left), &Some(ref right)) => {
@@ -633,10 +614,7 @@ impl<A: OrdValue> Node<A> {
             node.count += 1;
             return Insert::JustInc;
         }
-        let (median, left, right) = match self.0
-            .keys
-            .binary_search_by(|item| item.extract_key().cmp(value.extract_key()))
-        {
+        let (median, left, right) = match A::search_value(&self.0.keys, &value) {
             // Key exists in node
             Ok(index) => {
                 if value.ptr_eq(&self.0.keys[index]) {
@@ -700,10 +678,16 @@ impl<A: OrdValue> Node<A> {
         BK: Ord + ?Sized,
         A::Key: Borrow<BK>,
     {
-        let action = match self.0
-            .keys
-            .binary_search_by(|item| item.extract_key().borrow().cmp(key))
-        {
+        let index = A::search_key(&self.0.keys, key);
+        self.remove_mut_index(index, key)
+    }
+
+    fn remove_mut_index<BK>(&mut self, index: Result<usize, usize>, key: &BK) -> Remove<A>
+    where
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
+        let action = match index {
             // Key exists in node, remove it.
             Ok(index) => {
                 match (&self.0.children[index], &self.0.children[index + 1]) {
@@ -711,11 +695,11 @@ impl<A: OrdValue> Node<A> {
                     (&None, &None) => RemoveAction::DeleteAt(index),
                     // If the left hand child has capacity, pull the predecessor up.
                     (&Some(ref left), _) if !left.too_small() => {
-                        RemoveAction::PullUp(left.max().unwrap().clone(), index, index)
+                        RemoveAction::PullUp(left.0.keys.len() - 1, index, index)
                     }
                     // If the right hand child has capacity, pull the successor up.
                     (_, &Some(ref right)) if !right.too_small() => {
-                        RemoveAction::PullUp(right.min().unwrap().clone(), index, index + 1)
+                        RemoveAction::PullUp(0, index, index + 1)
                     }
                     // If neither child has capacity, we'll have to merge them.
                     (&Some(_), &Some(_)) => RemoveAction::Merge(index),
@@ -764,13 +748,13 @@ impl<A: OrdValue> Node<A> {
                 node.count -= 1;
                 Remove::Removed(pair)
             }
-            RemoveAction::PullUp(value, pull_to, child_index) => {
+            RemoveAction::PullUp(target_index, pull_to, child_index) => {
                 let mut node = Arc::make_mut(&mut self.0);
                 let mut children = &mut node.children;
                 let mut update = None;
                 let mut pair;
                 if let Some(&mut Some(ref mut child)) = children.get_mut(child_index) {
-                    match child.remove_mut(value.extract_key().borrow()) {
+                    match child.remove_mut_index(Ok(target_index), key) {
                         Remove::NoChange => unreachable!(),
                         Remove::Removed(pulled_pair) => {
                             node.keys.push(pulled_pair);
@@ -1042,7 +1026,7 @@ impl<A: Clone> Iter<A> {
 
 impl<A> Iterator for Iter<A>
 where
-    A: OrdValue,
+    A: BTreeValue,
 {
     type Item = A;
 
@@ -1056,7 +1040,7 @@ where
                 Some(IterItem::Consider(node)) => self.push_fwd(&node),
                 Some(IterItem::Yield(value)) => {
                     if let Some(ref last) = self.back_last {
-                        if value.extract_key().cmp(last.extract_key()) != Ordering::Less {
+                        if value.cmp_keys(last) != Ordering::Less {
                             self.fwd_stack.clear();
                             self.back_stack.clear();
                             self.remaining = 0;
@@ -1076,7 +1060,10 @@ where
     }
 }
 
-impl<A: OrdValue> DoubleEndedIterator for Iter<A> {
+impl<A> DoubleEndedIterator for Iter<A>
+where
+    A: BTreeValue,
+{
     fn next_back(&mut self) -> Option<Self::Item> {
         loop {
             match self.back_stack.pop() {
@@ -1087,7 +1074,7 @@ impl<A: OrdValue> DoubleEndedIterator for Iter<A> {
                 Some(IterItem::Consider(node)) => self.push_back(&node),
                 Some(IterItem::Yield(value)) => {
                     if let Some(ref last) = self.fwd_last {
-                        if value.extract_key().cmp(last.extract_key()) != Ordering::Greater {
+                        if value.cmp_keys(last) != Ordering::Greater {
                             self.fwd_stack.clear();
                             self.back_stack.clear();
                             self.remaining = 0;
@@ -1103,4 +1090,4 @@ impl<A: OrdValue> DoubleEndedIterator for Iter<A> {
     }
 }
 
-impl<A: OrdValue> ExactSizeIterator for Iter<A> {}
+impl<A: BTreeValue> ExactSizeIterator for Iter<A> {}

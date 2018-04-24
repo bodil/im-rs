@@ -28,7 +28,7 @@ use std::sync::Arc;
 use hashmap::HashMap;
 use shared::Shared;
 
-use nodes::btree::{Insert, Iter, Node, OrdValue, Remove};
+use nodes::btree::{BTreeValue, Insert, Iter, Node, Remove};
 
 /// Construct a map from a sequence of key/value pairs.
 ///
@@ -61,15 +61,27 @@ macro_rules! ordmap {
     }};
 }
 
-impl<K: Ord, V> OrdValue for (Arc<K>, Arc<V>) {
+impl<K: Ord, V> BTreeValue for (Arc<K>, Arc<V>) {
     type Key = K;
-
-    fn extract_key(&self) -> &K {
-        &self.0
-    }
 
     fn ptr_eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.1, &other.1) && Arc::ptr_eq(&self.0, &other.0)
+    }
+
+    fn search_key<BK>(slice: &[Self], key: &BK) -> Result<usize, usize>
+    where
+        BK: Ord + ?Sized,
+        Self::Key: Borrow<BK>,
+    {
+        slice.binary_search_by(|value| Self::Key::borrow(&*value.0).cmp(key))
+    }
+
+    fn search_value(slice: &[Self], key: &Self) -> Result<usize, usize> {
+        slice.binary_search_by(|value| value.0.cmp(&key.0))
+    }
+
+    fn cmp_keys(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0)
     }
 }
 

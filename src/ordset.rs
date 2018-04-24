@@ -20,7 +20,7 @@ use std::ops::{Add, Mul};
 use std::sync::Arc;
 
 use hashset::HashSet;
-use nodes::btree::{Insert, Iter, Node, OrdValue, Remove};
+use nodes::btree::{BTreeValue, Insert, Iter, Node, Remove};
 use shared::Shared;
 
 /// Construct a set from a sequence of values.
@@ -50,15 +50,27 @@ macro_rules! ordset {
     }};
 }
 
-impl<A: Ord> OrdValue for Arc<A> {
+impl<A: Ord> BTreeValue for Arc<A> {
     type Key = A;
-
-    fn extract_key(&self) -> &A {
-        &*self
-    }
 
     fn ptr_eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(self, other)
+    }
+
+    fn search_key<BK>(slice: &[Self], key: &BK) -> Result<usize, usize>
+    where
+        BK: Ord + ?Sized,
+        Self::Key: Borrow<BK>,
+    {
+        slice.binary_search_by(|value| Self::Key::borrow(value).cmp(key))
+    }
+
+    fn search_value(slice: &[Self], key: &Self) -> Result<usize, usize> {
+        slice.binary_search_by(|value| value.cmp(key))
+    }
+
+    fn cmp_keys(&self, other: &Self) -> Ordering {
+        self.cmp(other)
     }
 }
 
