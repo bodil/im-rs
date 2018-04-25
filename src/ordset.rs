@@ -20,7 +20,7 @@ use std::ops::{Add, Mul};
 use std::sync::Arc;
 
 use hashset::HashSet;
-use nodes::btree::{BTreeValue, Insert, Iter, Node, Remove};
+use nodes::btree::{BTreeValue, DiffIter, Insert, Iter, Node, Remove};
 use shared::Shared;
 
 /// Construct a set from a sequence of values.
@@ -171,6 +171,21 @@ impl<A: Ord> OrdSet<A> {
     // Create an iterator over the contents of the set.
     pub fn iter(&self) -> Iter<Arc<A>> {
         Iter::new(&self.root)
+    }
+
+    /// Get an iterator over the differences between this set and
+    /// another, i.e. the set of entries to add or remove to this set
+    /// in order to make it equal to the other set.
+    ///
+    /// This function will avoid visiting nodes which are shared
+    /// between the two sets, meaning that even very large sets can be
+    /// compared quickly if most of their structure is shared.
+    ///
+    /// Time: between O(1) and O(n) (where n is the sum of the sizes
+    /// of the sets), depending on the amount of structure shared
+    /// between the two sets
+    pub fn diff<RS: Borrow<Self>>(&self, other: RS) -> DiffIter<Arc<A>> {
+        DiffIter::new(&self.root, &other.borrow().root)
     }
 
     /// Insert a value into a set.
@@ -355,7 +370,7 @@ impl<A: Ord> OrdSet<A> {
     /// which are smaller than `split`, and the right hand set
     /// containing values which are larger than `split`.
     ///
-    /// Returns a tuple of the two maps and a boolean which is true if
+    /// Returns a tuple of the two sets and a boolean which is true if
     /// the `split` value existed in the original set, and false
     /// otherwise.
     pub fn split_member<BA>(&self, split: &BA) -> (Self, bool, Self)

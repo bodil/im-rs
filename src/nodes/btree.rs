@@ -981,6 +981,21 @@ pub struct Iter<A> {
     remaining: usize,
 }
 
+fn push_node<A: Clone>(stack: &mut Vec<IterItem<A>>, maybe_node: &Option<Node<A>>) {
+    if let Some(ref node) = *maybe_node {
+        stack.push(IterItem::Consider(node.clone()))
+    }
+}
+
+fn push<A: Clone>(stack: &mut Vec<IterItem<A>>, node: &Node<A>) {
+    for n in 0..node.0.keys.len() {
+        let i = node.0.keys.len() - n;
+        push_node(stack, &node.0.children[i]);
+        stack.push(IterItem::Yield(node.0.keys[i - 1].clone()));
+    }
+    push_node(stack, &node.0.children[0]);
+}
+
 impl<A: Clone> Iter<A> {
     pub fn new(root: &Node<A>) -> Self {
         Iter {
@@ -992,20 +1007,8 @@ impl<A: Clone> Iter<A> {
         }
     }
 
-    fn push_node_fwd(&mut self, maybe_node: &Option<Node<A>>) {
-        if let Some(ref node) = *maybe_node {
-            self.fwd_stack.push(IterItem::Consider(node.clone()))
-        }
-    }
-
     fn push_fwd(&mut self, node: &Node<A>) {
-        for n in 0..node.0.keys.len() {
-            let i = node.0.keys.len() - n;
-            self.push_node_fwd(&node.0.children[i]);
-            self.fwd_stack
-                .push(IterItem::Yield(node.0.keys[i - 1].clone()));
-        }
-        self.push_node_fwd(&node.0.children[0]);
+        push(&mut self.fwd_stack, node)
     }
 
     fn push_node_back(&mut self, maybe_node: &Option<Node<A>>) {
@@ -1091,3 +1094,98 @@ where
 }
 
 impl<A: BTreeValue> ExactSizeIterator for Iter<A> {}
+
+// DiffIter
+
+pub struct DiffIter<A> {
+    old_stack: Vec<IterItem<A>>,
+    new_stack: Vec<IterItem<A>>,
+}
+
+#[derive(PartialEq, Eq)]
+pub enum DiffItem<A> {
+    Add(A),
+    Update { old: A, new: A },
+    Remove(A),
+}
+
+impl<A> DiffIter<A> {
+    pub fn new(old: &Node<A>, new: &Node<A>) -> Self {
+        DiffIter {
+            old_stack: if old.0.keys.is_empty() {
+                Vec::new()
+            } else {
+                vec![IterItem::Consider(old.clone())]
+            },
+            new_stack: if new.0.keys.is_empty() {
+                Vec::new()
+            } else {
+                vec![IterItem::Consider(new.clone())]
+            },
+        }
+    }
+}
+
+impl<A: Eq> Iterator for DiffIter<A>
+where
+    A: BTreeValue,
+{
+    type Item = DiffItem<A>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match (self.old_stack.pop(), self.new_stack.pop()) {
+                (None, None) => return None,
+                (None, Some(new)) => match new {
+                    IterItem::Consider(new) => push(&mut self.new_stack, &new),
+                    IterItem::Yield(new) => return Some(DiffItem::Add(new)),
+                },
+                (Some(old), None) => match old {
+                    IterItem::Consider(old) => push(&mut self.old_stack, &old),
+                    IterItem::Yield(old) => return Some(DiffItem::Remove(old)),
+                },
+                (Some(old), Some(new)) => match (old, new) {
+                    (IterItem::Consider(old), IterItem::Consider(new)) => {
+                        if !Arc::ptr_eq(&old.0, &new.0) {
+                            match old.0.keys[0].cmp_keys(&new.0.keys[0]) {
+                                Ordering::Less => {
+                                    push(&mut self.old_stack, &old);
+                                    self.new_stack.push(IterItem::Consider(new));
+                                }
+                                Ordering::Greater => {
+                                    self.old_stack.push(IterItem::Consider(old));
+                                    push(&mut self.new_stack, &new);
+                                }
+                                Ordering::Equal => {
+                                    push(&mut self.old_stack, &old);
+                                    push(&mut self.new_stack, &new);
+                                }
+                            }
+                        }
+                    }
+                    (IterItem::Consider(old), IterItem::Yield(new)) => {
+                        push(&mut self.old_stack, &old);
+                        self.new_stack.push(IterItem::Yield(new));
+                    }
+                    (IterItem::Yield(old), IterItem::Consider(new)) => {
+                        self.old_stack.push(IterItem::Yield(old));
+                        push(&mut self.new_stack, &new);
+                    }
+                    (IterItem::Yield(old), IterItem::Yield(new)) => match old.cmp_keys(&new) {
+                        Ordering::Less => {
+                            self.new_stack.push(IterItem::Yield(new));
+                            return Some(DiffItem::Remove(old));
+                        }
+                        Ordering::Equal => if old != new {
+                            return Some(DiffItem::Update { old, new });
+                        },
+                        Ordering::Greater => {
+                            self.old_stack.push(IterItem::Yield(old));
+                            return Some(DiffItem::Add(new));
+                        }
+                    },
+                },
+            }
+        }
+    }
+}

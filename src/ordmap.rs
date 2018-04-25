@@ -28,7 +28,7 @@ use std::sync::Arc;
 use hashmap::HashMap;
 use shared::Shared;
 
-use nodes::btree::{BTreeValue, Insert, Iter, Node, Remove};
+use nodes::btree::{BTreeValue, DiffIter, Insert, Iter, Node, Remove};
 
 /// Construct a map from a sequence of key/value pairs.
 ///
@@ -230,6 +230,21 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// Get an iterator over the key/value pairs of a map.
     pub fn iter(&self) -> Iter<(Arc<K>, Arc<V>)> {
         Iter::new(&self.root)
+    }
+
+    /// Get an iterator over the differences between this map and
+    /// another, i.e. the set of entries to add, update, or remove to
+    /// this map in order to make it equal to the other map.
+    ///
+    /// This function will avoid visiting nodes which are shared
+    /// between the two maps, meaning that even very large maps can be
+    /// compared quickly if most of their structure is shared.
+    ///
+    /// Time: between O(1) and O(n) (where n is the sum of the sizes
+    /// of the maps), depending on the amount of structure shared
+    /// between the two maps
+    pub fn diff<RM: Borrow<Self>>(&self, other: RM) -> DiffIter<(Arc<K>, Arc<V>)> {
+        DiffIter::new(&self.root, &other.borrow().root)
     }
 
     /// Get an iterator over a map's keys.
@@ -1487,6 +1502,7 @@ mod test {
     use super::proptest::*;
     use super::*;
     use conslist::ConsList;
+    use nodes::btree::DiffItem;
     use proptest::collection;
     use proptest::num::{i16, usize};
     use test::is_sorted;
@@ -1706,6 +1722,56 @@ mod test {
                 }
             }
             map.iter().map(|(k, v)| (*k, *v)).eq(tree.iter().map(|(k, v)| (*k, *v)))
+        }
+
+        fn diff_added_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
+            let a = OrdMap::from(a);
+            let b = OrdMap::from(b);
+            let ab = a.union(&b);
+            a.diff(ab).eq(b.iter().filter(|&(ref k, _)| !a.contains_key(k)).map(DiffItem::Add))
+        }
+
+        fn diff_updated_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
+            let a = OrdMap::from(a);
+            let b = OrdMap::from(b);
+            let ab = a.union(&b);
+            let ba = ab.union_with(&b, |_, b| b);
+            ab.diff(ba).eq(b.iter().filter(|&(ref k, ref v)| ab.get(k).as_ref() != Some(v))
+                           .map(|(k, v)| DiffItem::Update {
+                               old: (k.clone(), ab.get(&k).unwrap()),
+                               new: (k, v)
+                           }))
+        }
+
+        fn diff_removed_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
+            let a = OrdMap::from(a);
+            let b = OrdMap::from(b);
+            let ab = a.union(&b);
+            ab.diff(&a).eq(b.iter().filter(|&(ref k, _)| !a.contains_key(k)).map(DiffItem::Remove))
+        }
+
+        fn diff_all_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
+            let a = OrdMap::from(a);
+            let b = OrdMap::from(b);
+            a.diff(&b).eq(b.union(&a).iter().filter_map(|(k, v)| {
+                if a.contains_key(&k) {
+                    if b.contains_key(&k) {
+                        let old = a.get(&k).unwrap();
+                        if old != v	{
+                            Some(DiffItem::Update {
+                                old: (k.clone(), old),
+                                new: (k, v),
+                            })
+                        } else {
+                            None
+                        }
+                    } else {
+                        Some(DiffItem::Remove((k, v)))
+                    }
+                } else {
+                    Some(DiffItem::Add((k, v)))
+                }
+            }))
         }
     }
 
