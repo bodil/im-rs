@@ -518,65 +518,21 @@ where
 #[cfg(not(has_specialisation))]
 impl<A: Hash + Eq + Debug, S: BuildHasher + Default> Debug for HashSet<A, S> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "{{ ")?;
-        let mut it = self.iter().peekable();
-        loop {
-            match it.next() {
-                None => break,
-                Some(a) => {
-                    write!(f, "{:?}", a)?;
-                    match it.peek() {
-                        None => write!(f, " ")?,
-                        Some(_) => write!(f, ", ")?,
-                    }
-                }
-            }
-        }
-        write!(f, "}}")
+        f.debug_set().entries(self.iter()).finish()
     }
 }
 
 #[cfg(has_specialisation)]
 impl<A: Hash + Eq + Debug, S: BuildHasher + Default> Debug for HashSet<A, S> {
     default fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "{{ ")?;
-        let mut it = self.iter().peekable();
-        loop {
-            match it.next() {
-                None => break,
-                Some(a) => {
-                    write!(f, "{:?}", a)?;
-                    match it.peek() {
-                        None => write!(f, " ")?,
-                        Some(_) => write!(f, ", ")?,
-                    }
-                }
-            }
-        }
-        write!(f, "}}")
+        f.debug_set().entries(self.iter()).finish()
     }
 }
 
 #[cfg(has_specialisation)]
 impl<A: Hash + Eq + Debug + Ord, S: BuildHasher + Default> Debug for HashSet<A, S> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        let mut keys: Vec<_> = self.iter().collect();
-        keys.sort();
-        write!(f, "{{ ")?;
-        let mut it = keys.iter().peekable();
-        loop {
-            match it.next() {
-                None => break,
-                Some(a) => {
-                    write!(f, "{:?}", a)?;
-                    match it.peek() {
-                        None => write!(f, " ")?,
-                        Some(_) => write!(f, ", ")?,
-                    }
-                }
-            }
-        }
-        write!(f, "}}")
+        f.debug_set().entries(self.iter()).finish()
     }
 }
 

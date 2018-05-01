@@ -542,21 +542,7 @@ where
 
 impl<A: Ord + Debug> Debug for OrdSet<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "{{ ")?;
-        let mut it = self.iter().peekable();
-        loop {
-            match it.next() {
-                None => break,
-                Some(a) => {
-                    write!(f, "{:?}", a)?;
-                    match it.peek() {
-                        None => write!(f, " ")?,
-                        Some(_) => write!(f, ", ")?,
-                    }
-                }
-            }
-        }
-        write!(f, "}}")
+        f.debug_set().entries(self.iter()).finish()
     }
 }
 

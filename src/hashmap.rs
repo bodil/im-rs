@@ -1240,21 +1240,7 @@ where
     S: BuildHasher,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "{{ ")?;
-        let mut it = self.iter().peekable();
-        loop {
-            match it.next() {
-                None => break,
-                Some((k, v)) => {
-                    write!(f, "{:?} => {:?}", k, v)?;
-                    match it.peek() {
-                        None => write!(f, " ")?,
-                        Some(_) => write!(f, ", ")?,
-                    }
-                }
-            }
-        }
-        write!(f, "}}")
+        f.debug_map().entries(self.iter()).finish()
     }
 }
 
@@ -1266,21 +1252,7 @@ where
     S: BuildHasher,
 {
     default fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "{{ ")?;
-        let mut it = self.iter().peekable();
-        loop {
-            match it.next() {
-                None => break,
-                Some((k, v)) => {
-                    write!(f, "{:?} => {:?}", k, v)?;
-                    match it.peek() {
-                        None => write!(f, " ")?,
-                        Some(_) => write!(f, ", ")?,
-                    }
-                }
-            }
-        }
-        write!(f, "}}")
+        f.debug_map().entries(self.iter()).finish()
     }
 }
 
@@ -1292,23 +1264,7 @@ where
     S: BuildHasher,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        let mut keys: Vec<_> = self.keys().collect();
-        keys.sort();
-        write!(f, "{{ ")?;
-        let mut it = keys.iter().peekable();
-        loop {
-            match it.next() {
-                None => break,
-                Some(k) => {
-                    write!(f, "{:?} => {:?}", k, self[k])?;
-                    match it.peek() {
-                        None => write!(f, " ")?,
-                        Some(_) => write!(f, ", ")?,
-                    }
-                }
-            }
-        }
-        write!(f, "}}")
+        f.debug_map().entries(self.iter()).finish()
     }
 }
 
@@ -1600,9 +1556,9 @@ mod test {
     #[test]
     fn proper_formatting() {
         let map = hashmap![1 => 2];
-        assert_eq!("{ 1 => 2 }", format!("{:?}", map));
+        assert_eq!("{1: 2}", format!("{:?}", map));
 
-        assert_eq!("{ }", format!("{:?}", HashMap::<(), ()>::new()));
+        assert_eq!("{}", format!("{:?}", HashMap::<(), ()>::new()));
     }
 
     #[test]

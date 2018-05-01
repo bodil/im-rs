@@ -356,9 +356,7 @@ impl<A> ConsList<A> {
             cmp: &Fn(&A, &A) -> Ordering,
         ) -> ConsList<A> {
             match (la.uncons(), lb.uncons()) {
-                (Some((ref a, _)), Some((ref b, ref lb1)))
-                    if cmp(a, b) == Ordering::Greater =>
-                {
+                (Some((ref a, _)), Some((ref b, ref lb1))) if cmp(a, b) == Ordering::Greater => {
                     cons(b.clone(), &merge(la, lb1, cmp))
                 }
                 (Some((a, la1)), Some((_, _))) => cons(a.clone(), &merge(&la1, lb, cmp)),
@@ -377,10 +375,7 @@ impl<A> ConsList<A> {
             }
         }
 
-        fn merge_all<A>(
-            l: &ConsList<ConsList<A>>,
-            cmp: &Fn(&A, &A) -> Ordering,
-        ) -> ConsList<A> {
+        fn merge_all<A>(l: &ConsList<ConsList<A>>, cmp: &Fn(&A, &A) -> Ordering) -> ConsList<A> {
             match l.uncons() {
                 None => conslist![],
                 Some((ref a, ref d)) if d.is_empty() => a.deref().clone(),
@@ -416,10 +411,7 @@ impl<A> ConsList<A> {
             }
         }
 
-        fn sequences<A>(
-            l: &ConsList<A>,
-            cmp: &Fn(&A, &A) -> Ordering,
-        ) -> ConsList<ConsList<A>> {
+        fn sequences<A>(l: &ConsList<A>, cmp: &Fn(&A, &A) -> Ordering) -> ConsList<ConsList<A>> {
             match l.uncons2() {
                 Some((ref a, ref b, ref xs)) if cmp(a, b) == Ordering::Greater => {
                     descending(&b.clone(), &ConsList::singleton(a.clone()), xs, cmp)
@@ -634,32 +626,9 @@ impl<A> Add for ConsList<A> {
     }
 }
 
-impl<A> Debug for ConsList<A>
-where
-    A: Debug,
-{
+impl<A: Debug> Debug for ConsList<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        fn items<A>(l: &ConsList<A>, f: &mut Formatter) -> Result<(), Error>
-        where
-            A: Debug,
-        {
-            match *l.0 {
-                Nil => Ok(()),
-                Cons(_, ref a, ref d) => {
-                    write!(f, ", {:?}", a)?;
-                    items(d, f)
-                }
-            }
-        }
-        write!(f, "[")?;
-        match *self.0 {
-            Nil => Ok(()),
-            Cons(_, ref a, ref d) => {
-                write!(f, "{:?}", a)?;
-                items(d, f)
-            }
-        }?;
-        write!(f, "]")
+        f.debug_list().entries(self.iter()).finish()
     }
 }
 
