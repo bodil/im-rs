@@ -915,28 +915,7 @@ impl<A: Hash> Hash for CatList<A> {
 
 impl<A: Debug> Debug for CatList<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        // write!(
-        //     f,
-        //     "[ Len {} Head {}:{:?} Tail {:?} ]",
-        //     self.0.size,
-        //     self.0.head.len(),
-        //     self.0.head,
-        //     self.0.tail
-        // )
-        write!(f, "[")?;
-        let mut it = self.iter().peekable();
-        loop {
-            match it.next() {
-                None => break,
-                Some(a) => {
-                    write!(f, "{:?}", a)?;
-                    if it.peek().is_some() {
-                        write!(f, ", ")?;
-                    }
-                }
-            }
-        }
-        write!(f, "]")
+        f.debug_list().entries(self.iter()).finish()
     }
 }
 

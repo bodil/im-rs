@@ -42,8 +42,8 @@ impl<A> Clone for Entry<A> {
 impl<A: Debug> Debug for Entry<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         match *self {
-            Entry::Node(ref node) => write!(f, "Node{:?}", node),
-            Entry::Value(ref value) => write!(f, "Value[ {:?} ]", value),
+            Entry::Node(ref node) => f.debug_tuple("Node").field(node).finish(),
+            Entry::Value(ref value) => f.debug_tuple("Value").field(value).finish(),
             Entry::Empty => write!(f, "Empty"),
         }
     }

@@ -1193,21 +1193,7 @@ where
     K: Ord,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "{{ ")?;
-        let mut it = self.iter().peekable();
-        loop {
-            match it.next() {
-                None => break,
-                Some((k, v)) => {
-                    write!(f, "{:?} => {:?}", k, v)?;
-                    match it.peek() {
-                        None => write!(f, " ")?,
-                        Some(_) => write!(f, ", ")?,
-                    }
-                }
-            }
-        }
-        write!(f, "}}")
+        f.debug_map().entries(self.iter()).finish()
     }
 }
 
@@ -1584,7 +1570,7 @@ mod test {
     fn debug_output() {
         assert_eq!(
             format!("{:?}", ordmap!{ 3 => 4, 5 => 6, 1 => 2 }),
-            "{ 1 => 2, 3 => 4, 5 => 6 }"
+            "{1: 2, 3: 4, 5: 6}"
         );
     }
 

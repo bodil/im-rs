@@ -1059,15 +1059,7 @@ impl<A> Default for Vector<A> {
 
 impl<A: Debug> Debug for Vector<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "[")?;
-        let mut it = self.iter().peekable();
-        while let Some(item) = it.next() {
-            write!(f, "{:?}", item)?;
-            if it.peek().is_some() {
-                write!(f, ", ")?;
-            }
-        }
-        write!(f, "]")
+        f.debug_list().entries(self.iter()).finish()
     }
 }
 
