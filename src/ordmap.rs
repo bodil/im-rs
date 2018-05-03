@@ -1072,7 +1072,7 @@ impl<K, V> Clone for OrdMap<K, V> {
 #[cfg(not(has_specialisation))]
 impl<K: Ord + PartialEq, V: PartialEq> PartialEq for OrdMap<K, V> {
     fn eq(&self, other: &Self) -> bool {
-        self.len() == other.len() && self.iter().eq(other.iter())
+        self.len() == other.len() && self.diff(other).next().is_none()
     }
 }
 
@@ -1082,7 +1082,7 @@ where
     K: Ord,
 {
     default fn eq(&self, other: &Self) -> bool {
-        self.len() == other.len() && self.iter().eq(other.iter())
+        self.len() == other.len() && self.diff(other).next().is_none()
     }
 }
 
@@ -1092,7 +1092,8 @@ where
     K: Ord,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.root.ptr_eq(&other.root) || (self.len() == other.len() && self.iter().eq(other.iter()))
+        self.root.ptr_eq(&other.root)
+            || (self.len() == other.len() && self.diff(other).next().is_none())
     }
 }
 

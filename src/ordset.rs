@@ -464,7 +464,8 @@ impl<A> Clone for OrdSet<A> {
 
 impl<A: Ord> PartialEq for OrdSet<A> {
     fn eq(&self, other: &Self) -> bool {
-        self.root.ptr_eq(&other.root) || (self.len() == other.len() && self.iter().eq(other.iter()))
+        self.root.ptr_eq(&other.root)
+            || (self.len() == other.len() && self.diff(other).next().is_none())
     }
 }
 
