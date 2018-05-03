@@ -181,9 +181,9 @@ impl<A: Ord> OrdSet<A> {
     /// between the two sets, meaning that even very large sets can be
     /// compared quickly if most of their structure is shared.
     ///
-    /// Time: between O(1) and O(n) (where n is the sum of the sizes
-    /// of the sets), depending on the amount of structure shared
-    /// between the two sets
+    /// Time: O(n) (where n is the number of unique elements across
+    /// the two sets, minus the number of elements belonging to nodes
+    /// shared between them)
     pub fn diff<RS: Borrow<Self>>(&self, other: RS) -> DiffIter<Arc<A>> {
         DiffIter::new(&self.root, &other.borrow().root)
     }

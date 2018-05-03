@@ -240,9 +240,9 @@ impl<K: Ord, V> OrdMap<K, V> {
     /// between the two maps, meaning that even very large maps can be
     /// compared quickly if most of their structure is shared.
     ///
-    /// Time: between O(1) and O(n) (where n is the sum of the sizes
-    /// of the maps), depending on the amount of structure shared
-    /// between the two maps
+    /// Time: O(n) (where n is the number of unique elements across
+    /// the two maps, minus the number of elements belonging to nodes
+    /// shared between them)
     pub fn diff<RM: Borrow<Self>>(&self, other: RM) -> DiffIter<(Arc<K>, Arc<V>)> {
         DiffIter::new(&self.root, &other.borrow().root)
     }
