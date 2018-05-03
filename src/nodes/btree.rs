@@ -1126,7 +1126,7 @@ impl<A> DiffIter<A> {
     }
 }
 
-impl<A: Eq> Iterator for DiffIter<A>
+impl<A: PartialEq> Iterator for DiffIter<A>
 where
     A: BTreeValue,
 {
