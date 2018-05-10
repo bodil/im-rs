@@ -258,6 +258,10 @@ pub mod shared;
 #[cfg(any(test, feature = "serde"))]
 pub mod ser;
 
+pub mod btree {
+    pub use nodes::btree::{DiffItem, DiffIter, Iter};
+}
+
 pub use catlist::CatList;
 pub use conslist::ConsList;
 pub use hashmap::HashMap;
