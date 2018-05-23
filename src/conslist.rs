@@ -798,6 +798,13 @@ mod test {
         assert_eq!(l1, l2);
     }
 
+    #[test]
+    fn len_of_insert_into_empty() {
+        let l1 = ConsList::<i32>::new();
+        let l2 = l1.insert(5);
+        assert_eq!(l2.len(), 1);
+    }
+
     quickcheck! {
         fn length(vec: Vec<i32>) -> bool {
             let list = ConsList::from(vec.clone());
