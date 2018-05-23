@@ -462,7 +462,7 @@ impl<A> ConsList<A> {
         A: Ord,
     {
         match *self.0 {
-            Nil => ConsList(Arc::new(Cons(0, item, ConsList::new()))),
+            Nil => ConsList(Arc::new(Cons(1, item, ConsList::new()))),
             Cons(_, ref a, ref d) => {
                 if a.deref() > item.deref() {
                     self.cons(item)
