@@ -34,8 +34,6 @@ use std::iter::{FromIterator, Iterator, Sum};
 use std::ops::{Add, Deref};
 use std::sync::Arc;
 
-use self::ConsListNode::{Cons, Nil};
-
 /// Construct a list from a sequence of elements.
 ///
 /// # Examples
@@ -150,18 +148,25 @@ where
 /// mutable operations.
 ///
 /// [vector::Vector]: ../vector/struct.Vector.html
-pub struct ConsList<A>(Arc<ConsListNode<A>>);
+pub struct ConsList<A> {
+    link: ConsLink<A>,
+    len:  usize,
+}
 
-#[doc(hidden)]
-pub enum ConsListNode<A> {
-    Cons(usize, Arc<A>, ConsList<A>),
-    Nil,
+type ConsLink<A> = Option<Arc<ConsListNode<A>>>;
+
+struct ConsListNode<A> {
+    car: Arc<A>,
+    cdr: ConsLink<A>,
 }
 
 impl<A> ConsList<A> {
     /// Construct an empty list.
     pub fn new() -> ConsList<A> {
-        ConsList(Arc::new(Nil))
+        ConsList {
+            link: None,
+            len:  0,
+        }
     }
 
     /// Construct a list with a single element.
@@ -169,17 +174,20 @@ impl<A> ConsList<A> {
     where
         R: Shared<A>,
     {
-        ConsList(Arc::new(Cons(1, v.shared(), conslist![])))
+        ConsList {
+            link: Some(Arc::new(ConsListNode {
+                car: v.shared(),
+                cdr: None,
+            })),
+            len: 1,
+        }
     }
 
     /// Test whether a list is empty.
     ///
     /// Time: O(1)
     pub fn is_empty(&self) -> bool {
-        match *self.0 {
-            Nil => true,
-            _ => false,
-        }
+        self.link.is_none()
     }
 
     /// Construct a list with a new value prepended to the front of
@@ -190,7 +198,13 @@ impl<A> ConsList<A> {
     where
         R: Shared<A>,
     {
-        ConsList(Arc::new(Cons(self.len() + 1, car.shared(), self.clone())))
+        ConsList {
+            link: Some(Arc::new(ConsListNode {
+                car: car.shared(),
+                cdr: self.link.clone(),
+            })),
+            len: self.len + 1,
+        }
     }
 
     /// Get the first element of a list.
@@ -199,8 +213,8 @@ impl<A> ConsList<A> {
     ///
     /// Time: O(1)
     pub fn head(&self) -> Option<Arc<A>> {
-        match *self.0 {
-            Cons(_, ref a, _) => Some(a.clone()),
+        match self.link {
+            Some(ref arc) => Some(arc.car.clone()),
             _ => None,
         }
     }
@@ -213,9 +227,12 @@ impl<A> ConsList<A> {
     ///
     /// Time: O(1)
     pub fn tail(&self) -> Option<ConsList<A>> {
-        match *self.0 {
-            Cons(_, _, ref d) => Some(d.clone()),
-            Nil => None,
+        match self.link {
+            Some(ref arc) => Some(ConsList {
+                link: arc.cdr.clone(),
+                len:  self.len - 1,
+            }),
+            _ => None,
         }
     }
 
@@ -253,9 +270,12 @@ impl<A> ConsList<A> {
     /// [tail]: #method.tail
     /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
     pub fn uncons(&self) -> Option<(Arc<A>, ConsList<A>)> {
-        match *self.0 {
-            Nil => None,
-            Cons(_, ref a, ref d) => Some((a.clone(), d.clone())),
+        match self.link {
+            None => None,
+            Some(ref arc) => Some((arc.car.clone(), ConsList {
+                link: arc.cdr.clone(),
+                len:  self.len - 1,
+            })),
         }
     }
 
@@ -280,10 +300,7 @@ impl<A> ConsList<A> {
     /// # }
     /// ```
     pub fn len(&self) -> usize {
-        match *self.0 {
-            Nil => 0,
-            Cons(l, _, _) => l,
-        }
+        self.len
     }
 
     /// Append the list `right` to the end of the current list.
@@ -306,9 +323,9 @@ impl<A> ConsList<A> {
     where
         R: Borrow<Self>,
     {
-        match *self.0 {
-            Nil => right.borrow().clone(),
-            Cons(_, ref a, ref d) => cons(a.clone(), &d.append(right)),
+        match self.uncons() {
+            None => right.borrow().clone(),
+            Some((car, cdr)) => cons(car, &cdr.append(right)),
         }
     }
 
@@ -427,7 +444,11 @@ impl<A> ConsList<A> {
     }
 
     pub fn ptr_eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
+        match (&self.link, &other.link) {
+            (&Some(ref a1), &Some(ref a2)) => Arc::ptr_eq(a1, a2),
+            (&None,         &None)         => true,
+            _                              => false,
+        }
     }
 
     /// Insert an item into a sorted list.
@@ -461,15 +482,14 @@ impl<A> ConsList<A> {
     where
         A: Ord,
     {
-        match *self.0 {
-            Nil => ConsList(Arc::new(Cons(1, item, ConsList::new()))),
-            Cons(_, ref a, ref d) => {
-                if a.deref() > item.deref() {
+        match self.uncons() {
+            None => ConsList::singleton(item),
+            Some((car, cdr)) =>
+                if car.deref() > item.deref() {
                     self.cons(item)
                 } else {
-                    d.insert_ref(item).cons(a.clone())
+                    cdr.insert_ref(item).cons(car)
                 }
-            }
         }
     }
 
@@ -514,8 +534,9 @@ impl<A> Clone for ConsList<A> {
     ///
     /// Time: O(1)
     fn clone(&self) -> Self {
-        match *self {
-            ConsList(ref node) => ConsList(node.clone()),
+        ConsList {
+            link: self.link.clone(),
+            len:  self.len,
         }
     }
 }
@@ -585,7 +606,7 @@ where
     ///
     /// Time: O(n)
     fn eq(&self, other: &ConsList<A>) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
+        self.ptr_eq(other)
             || (self.len() == other.len() && self.iter().eq(other.iter()))
     }
 }
