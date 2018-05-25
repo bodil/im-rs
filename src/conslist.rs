@@ -826,6 +826,12 @@ mod test {
         assert_eq!(l2.len(), 1);
     }
 
+    #[test]
+    fn sum_of_vector_of_lists() {
+        assert_eq!(conslist![1, 2, 3, 4, 5, 6, 7, 8],
+                   vec![conslist![1, 2, 3], conslist![4, 5], conslist![6, 7, 8]].into_iter().sum());
+    }
+
     quickcheck! {
         fn length(vec: Vec<i32>) -> bool {
             let list = ConsList::from(vec.clone());
