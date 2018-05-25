@@ -132,8 +132,10 @@ impl<A> Vector<A> {
     {
         let mut tail = Node::new();
         tail.push(Entry::Value(a.shared()));
+        let mut meta = Meta::default();
+        meta.capacity = 1;
         Vector {
-            meta: Default::default(),
+            meta: meta,
             root: Default::default(),
             tail: Arc::new(tail),
         }
@@ -1445,6 +1447,11 @@ mod test {
         let vec1 = vector![1, 2, 3];
         let vec2 = vector![4, 5, 6];
         assert_eq!(vector![1, 2, 3, 4, 5, 6], vec1 + vec2);
+    }
+
+    #[test]
+    fn vector_singleton() {
+        assert_eq!(Vector::singleton(5).len(), 1);
     }
 
     proptest! {
