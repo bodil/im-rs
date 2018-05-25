@@ -346,11 +346,32 @@ impl<A> ConsList<A> {
     /// # }
     /// ```
     pub fn reverse(&self) -> ConsList<A> {
-        let mut out = ConsList::new();
-        for i in self.iter() {
-            out = out.cons(i);
-        }
-        out
+        self.rev_append(ConsList::new())
+    }
+
+    /// Append this list in reverse onto the front of list `right`.
+    ///
+    /// Unlike [`append`](#method.append), this method runs in constant stack space, meaning it
+    /// is safe to use on any length of list. If you want to append two lists in constant stack
+    /// space, you can accomplish this by reversing the first list, and then applying this method.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::conslist::ConsList;
+    /// # fn main() {
+    /// assert_eq!(
+    ///   conslist![3, 2, 1].rev_append(conslist![7, 8, 9]),
+    ///   conslist![1, 2, 3, 7, 8, 9]
+    /// );
+    /// # }
+    /// ```
+    pub fn rev_append<R>(&self, right: R) -> Self
+    where
+        R: Borrow<Self>
+    {
+        self.iter().fold(right.borrow().clone(), |acc, each| cons(each, acc))
     }
 
     /// Get an iterator over a list.
@@ -695,7 +716,7 @@ impl<A> Sum for ConsList<A> {
     where
         I: Iterator<Item = Self>,
     {
-        it.fold(Self::new(), |a, b| a.append(b))
+        it.fold(Self::new(), |acc, each| each.rev_append(acc)).reverse()
     }
 }
 
