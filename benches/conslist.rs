@@ -42,3 +42,11 @@ fn conslist_append(b: &mut Bencher) {
         }
     })
 }
+
+#[bench]
+fn conslist_concat_using_sum(b: &mut Bencher) {
+    let list = ConsList::from_iter(0u32 .. 100);
+    let vec  = vec![list; 100];
+
+    b.iter::<ConsList<u32>, _>(|| vec.iter().map(ConsList::clone).sum())
+}
