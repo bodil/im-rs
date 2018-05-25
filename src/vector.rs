@@ -135,7 +135,7 @@ impl<A> Vector<A> {
         let mut meta = Meta::default();
         meta.capacity = 1;
         Vector {
-            meta: meta,
+            meta,
             root: Default::default(),
             tail: Arc::new(tail),
         }
