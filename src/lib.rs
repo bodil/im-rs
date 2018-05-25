@@ -258,7 +258,8 @@ pub mod shared;
 #[cfg(any(test, feature = "serde"))]
 pub mod ser;
 
-pub mod btree {
+/// Types shared between `OrdMap` and `OrdSet`.
+pub mod ord {
     pub use nodes::btree::{DiffItem, DiffIter, Iter};
 }
 
