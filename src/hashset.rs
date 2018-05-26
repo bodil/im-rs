@@ -54,6 +54,14 @@ macro_rules! hashset {
         )*
             l
     }};
+
+    ( $($x:expr ,)* ) => {{
+        let mut l = $crate::hashset::HashSet::new();
+        $(
+            l.insert_mut($x);
+        )*
+            l
+    }};
 }
 
 /// A hash set.
@@ -730,6 +738,16 @@ mod test {
         assert!(!set.contains("bar"));
         set.remove_mut("foo");
         assert!(!set.contains("foo"));
+    }
+
+    #[test]
+    fn macro_allows_trailing_comma() {
+        let set1 = hashset!{"foo", "bar"};
+        let set2 = hashset!{
+            "foo",
+            "bar",
+        };
+        assert_eq!(set1, set2);
     }
 
     proptest! {
