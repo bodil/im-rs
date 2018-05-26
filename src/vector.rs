@@ -65,6 +65,14 @@ macro_rules! vector {
         )*
             l
     }};
+
+    ( $($x:expr ,)* ) => {{
+        let mut l = $crate::vector::Vector::new();
+        $(
+            l.push_back_mut($x);
+        )*
+            l
+    }};
 }
 
 #[derive(Clone, Copy)]
@@ -1452,6 +1460,15 @@ mod test {
     #[test]
     fn vector_singleton() {
         assert_eq!(Vector::singleton(5).len(), 1);
+    }
+
+    #[test]
+    fn macro_allows_trailing_comma() {
+        let vec1 = vector![1, 2, 3];
+        let vec2 = vector![
+            1, 2, 3,
+        ];
+        assert_eq!(vec1, vec2);
     }
 
     proptest! {
