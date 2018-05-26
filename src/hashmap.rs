@@ -70,6 +70,14 @@ macro_rules! hashmap {
         })*;
         map
     }};
+
+    ( $( $key:expr => $value:expr ,)* ) => {{
+        let mut map = $crate::hashmap::HashMap::new();
+        $({
+            map.insert_mut($key, $value);
+        })*;
+        map
+    }};
 }
 
 /// A hash map.
@@ -1593,6 +1601,16 @@ mod test {
         assert_eq!(Some(Arc::new(3)), map.pop_mut("baz"));
         map["bar"] = 8;
         assert_eq!(8, map["bar"]);
+    }
+
+    #[test]
+    fn macro_allows_trailing_comma() {
+        let map1 = hashmap!{"x" => 1, "y" => 2};
+        let map2 = hashmap!{
+            "x" => 1,
+            "y" => 2,
+        };
+        assert_eq!(map1, map2);
     }
 
     proptest! {
