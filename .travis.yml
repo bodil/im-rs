@@ -8,6 +8,7 @@ cache:
     - /home/travis/.cargo
 install:
   - rustup toolchain add nightly
+  - cargo +nightly install --force clippy; true
 script:
-  - cargo +nightly rustc --features clippy -- -D warnings
+  - cargo +nightly clippy -- -D warnings
   - cargo test
