@@ -976,6 +976,67 @@ impl<'a, A: Clone> DoubleEndedIterator for Iter<'a, A> {
 
 impl<'a, A: Clone> ExactSizeIterator for Iter<'a, A> {}
 
+impl<'a, A: Clone> FusedIterator for Iter<'a, A> {}
+
+// Mutable iterator
+
+pub struct IterMut<'a, A>
+where
+    A: 'a,
+{
+    root: &'a mut Node<A>,
+    level: usize,
+    front_index: usize,
+    back_index: usize,
+}
+
+impl<'a, A: Clone> IterMut<'a, A> {
+    pub fn new(root: &'a mut Node<A>, level: usize) -> Self {
+        IterMut {
+            front_index: 0,
+            back_index: root.children.len(),
+            root,
+            level,
+        }
+    }
+}
+
+impl<'a, A: Clone> Iterator for IterMut<'a, A> {
+    type Item = &'a mut A;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.front_index == self.back_index {
+            return None;
+        }
+        let r = self.root.index_mut(self.level, self.front_index);
+        self.front_index += 1;
+        // I blame the Iterator trait in its entirety for this unsafe
+        // block, it wouldn't be necessary if `fn next(&'a mut self)`
+        // were permissible.
+        Some(unsafe { &mut *(r as *mut _) })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.back_index - self.front_index;
+        (remaining, Some(remaining))
+    }
+}
+
+impl<'a, A: Clone> DoubleEndedIterator for IterMut<'a, A> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.front_index == self.back_index {
+            return None;
+        }
+        self.back_index -= 1;
+        let r = self.root.index_mut(self.level, self.back_index);
+        Some(unsafe { &mut *(r as *mut _) })
+    }
+}
+
+impl<'a, A: Clone> ExactSizeIterator for IterMut<'a, A> {}
+
+impl<'a, A: Clone> FusedIterator for IterMut<'a, A> {}
+
 // Consuming iterator
 
 pub struct ConsumingIter<A> {

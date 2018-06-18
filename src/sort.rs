@@ -4,23 +4,8 @@
 
 use std::cmp::Ordering;
 use std::ops::IndexMut;
-use std::ptr;
 
-fn swap<V>(vector: &mut V, a: usize, b: usize)
-where
-    V: IndexMut<usize>,
-    V::Output: Sized,
-{
-    if a == b {
-        return;
-    }
-    // so sorry, but there's no implementation for this in std that's sufficiently generic
-    unsafe {
-        let pa: *mut V::Output = &mut vector[a];
-        let pb: *mut V::Output = &mut vector[b];
-        ptr::swap(pa, pb);
-    }
-}
+use util::swap_indices as swap;
 
 // Ported from the Java version at:
 //    http://www.cs.princeton.edu/~rs/talks/QuicksortIsOptimal.pdf

@@ -48,12 +48,16 @@ use std::iter::{Chain, FromIterator, FusedIterator};
 use std::mem::{replace, swap};
 use std::ops::{Add, Index, IndexMut};
 
-use nodes::chunk::{Chunk, ConsumingIter as ConsumingChunkIter, Iter as ChunkIter, CHUNK_SIZE};
+use nodes::chunk::{
+    Chunk, ConsumingIter as ConsumingChunkIter, Iter as ChunkIter, IterMut as ChunkIterMut,
+    CHUNK_SIZE,
+};
 use nodes::rrb::{
-    ConsumingIter as ConsumingNodeIter, Iter as NodeIter, Node, PopResult, PushResult, SplitResult,
+    ConsumingIter as ConsumingNodeIter, Iter as NodeIter, IterMut as NodeIterMut, Node, PopResult,
+    PushResult, SplitResult,
 };
 use sort;
-use util::{clone_ref, Ref, Side};
+use util::{clone_ref, swap_indices, Ref, Side};
 
 /// Construct a vector from a sequence of elements.
 ///
@@ -165,6 +169,14 @@ impl<A: Clone> Vector<A> {
     #[inline]
     pub fn iter(&self) -> Iter<A> {
         Iter::new(self)
+    }
+
+    /// Get a mutable iterator over a vector.
+    ///
+    /// Time: O(1)
+    #[inline]
+    pub fn iter_mut(&mut self) -> IterMut<A> {
+        IterMut::new(self)
     }
 
     /// Get a reference to the value at index `index` in a vector.
@@ -358,6 +370,13 @@ impl<A: Clone> Vector<A> {
     #[inline]
     pub fn set_mut(&mut self, index: usize, value: A) {
         self[index] = value;
+    }
+
+    /// Swaps the elements at indices `i` and `j`.
+    ///
+    /// Time: O(log n)
+    pub fn swap(&mut self, i: usize, j: usize) {
+        swap_indices(self, i, j)
     }
 
     /// Push a value to the front of a vector.
@@ -768,6 +787,11 @@ impl<A: Clone> Vector<A> {
         let mut left = self.clone();
         left.split_off(count);
         left
+    }
+
+    pub fn truncate(&mut self, len: usize) {
+        // FIXME can be made more efficient by dropping the unwanted side without constructing it
+        self.split_off(len);
     }
 
     /// Construct a vector with the elements from `start_index`
@@ -1288,6 +1312,66 @@ impl<'a, A: Clone> ExactSizeIterator for Iter<'a, A> {}
 
 impl<'a, A: Clone> FusedIterator for Iter<'a, A> {}
 
+/// A mutable iterator over vectors with values of type `A`.
+///
+/// To obtain one, use [`Vector::iter_mut()`][iter_mut].
+///
+/// [iter_mut]: struct.Vector.html#method.iter_mut
+pub struct IterMut<'a, A: 'a> {
+    iter: Chain<
+        Chain<
+            Chain<Chain<ChunkIterMut<'a, A>, ChunkIterMut<'a, A>>, NodeIterMut<'a, A>>,
+            ChunkIterMut<'a, A>,
+        >,
+        ChunkIterMut<'a, A>,
+    >,
+}
+
+impl<'a, A: Clone> IterMut<'a, A> {
+    fn new(seq: &'a mut Vector<A>) -> Self {
+        let outer_f = Ref::make_mut(&mut seq.outer_f).iter_mut();
+        let inner_f = Ref::make_mut(&mut seq.inner_f).iter_mut();
+        let middle = NodeIterMut::new(Ref::make_mut(&mut seq.middle), seq.middle_level);
+        let inner_b = Ref::make_mut(&mut seq.inner_b).iter_mut();
+        let outer_b = Ref::make_mut(&mut seq.outer_b).iter_mut();
+        IterMut {
+            iter: outer_f
+                .chain(inner_f)
+                .chain(middle)
+                .chain(inner_b)
+                .chain(outer_b),
+        }
+    }
+}
+
+impl<'a, A: Clone> Iterator for IterMut<'a, A> {
+    type Item = &'a mut A;
+
+    /// Advance the iterator and return the next value.
+    ///
+    /// Time: O(log n)
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<'a, A: Clone> DoubleEndedIterator for IterMut<'a, A> {
+    /// Remove and return an element from the back of the iterator.
+    ///
+    /// Time: O(log n)
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back()
+    }
+}
+
+impl<'a, A: Clone> ExactSizeIterator for IterMut<'a, A> {}
+
+impl<'a, A: Clone> FusedIterator for IterMut<'a, A> {}
+
 /// A consuming iterator over vectors with values of type `A`.
 pub struct ConsumingIter<A> {
     iter: Chain<
@@ -1416,6 +1500,15 @@ mod test {
         assert_eq!(vec1, vec2);
     }
 
+    #[test]
+    fn indexing() {
+        let vec1 = vector![0, 1, 2, 3, 4, 5];
+        let mut vec2 = vec1.clone();
+        vec2.push_front(0);
+        assert_eq!(0, *vec2.get(0).unwrap());
+        assert_eq!(0, vec2[0]);
+    }
+
     proptest! {
         #[test]
         fn iter(ref vec in vec(i32::ANY, 0..1000)) {
@@ -1509,10 +1602,10 @@ mod test {
                 let right = left.split_off(split_index);
                 assert_eq!(left.len(), split_index);
                 assert_eq!(right.len(), vec.len() - split_index);
-                for (index, item) in Iter::new(&left).enumerate() {
+                for (index, item) in left.iter().enumerate() {
                     assert_eq!(&vec[index], item);
                 }
-                for (index, item) in Iter::new(&right).enumerate() {
+                for (index, item) in right.iter().enumerate() {
                     assert_eq!(&vec[split_index + index], item);
                 }
             }
