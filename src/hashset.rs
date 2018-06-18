@@ -12,8 +12,6 @@
 //!
 //! [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 
-#![cfg_attr(feature = "clippy", allow(implicit_hasher))]
-
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections::hash_map::RandomState;

@@ -24,8 +24,6 @@
 //! [std::hash::Hash]: https://doc.rust-lang.org/std/hash/trait.Hash.html
 //! [std::collections::hash_map::RandomState]: https://doc.rust-lang.org/std/collections/hash_map/struct.RandomState.html
 
-#![cfg_attr(feature = "clippy", allow(implicit_hasher))]
-
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections;

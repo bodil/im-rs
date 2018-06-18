@@ -3,20 +3,20 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #![feature(test)]
-#![cfg_attr(feature="cargo-clippy", allow(unreadable_literal))]
+#![cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
 
 extern crate im;
 extern crate rand;
 extern crate test;
 
+use rand::{rngs::SmallRng, FromEntropy, Rng};
 use std::iter::FromIterator;
 use test::Bencher;
-use rand::{weak_rng, Rng};
 
 use im::hashmap::HashMap;
 
 fn random_keys(size: usize) -> Vec<i64> {
-    let mut gen = weak_rng();
+    let mut gen = SmallRng::from_entropy();
     let mut set = Vec::new();
     while set.len() < size {
         let next = gen.gen::<i64>() % 10000;
@@ -28,7 +28,7 @@ fn random_keys(size: usize) -> Vec<i64> {
 }
 
 fn reorder<A: Copy>(vec: &[A]) -> Vec<A> {
-    let mut gen = weak_rng();
+    let mut gen = SmallRng::from_entropy();
     let mut set = vec.to_owned();
     let mut out = Vec::new();
     while !set.is_empty() {

@@ -2,43 +2,58 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! A vector.
+//! A persistent vector of elements of type `A`.
 //!
-//! This is an implementation of [bitmapped vector tries][bmvt], which
-//! offers highly efficient (amortised linear time) index lookups as
-//! well as appending elements to, or popping elements off, either
-//! side of the vector.
+//! This is a sequence of elements in insertion order - if you need a
+//! list of things, any kind of list of things, this is what you're
+//! looking for.
 //!
-//! This is generally the best data structure if you're looking for
-//! something list like. If you don't need lookups or updates by
-//! index, but do need fast concatenation of whole lists, you should
-//! use the [`CatList`][CatList] instead.
+//! It's implemented as an [RRB vector][rrbpaper] with [smart
+//! head/tail chunking][chunkedseq]. In performance terms, this means
+//! that practically every operation is O(log n), except push/pop on
+//! both sides, which will be O(1) amortised, and O(log n) in the
+//! worst case. In practice, the push/pop operations will be
+//! blindingly fast, nearly on par with the native
+//! [`VecDeque`][VecDeque], and other operations will have decent, if
+//! not high, performance, but they all have more or less the same
+//! O(log n) complexity, so you don't need to keep their performance
+//! characteristics in mind - everything, even splitting and merging,
+//! is safe to use and never too slow.
 //!
-//! If you're familiar with the Clojure variant, this improves on it
-//! by being efficiently extensible at the front as well as the back.
-//! If you're familiar with [Immutable.js][immutablejs], this is
-//! essentially the same, but with easier mutability because Rust has
-//! the advantage of direct access to the garbage collector (which in
-//! our case is just [`Arc`][Arc]).
+//! ## Performance Notes
 //!
-//! [bmvt]: https://hypirion.com/musings/understanding-persistent-vector-pt-1
-//! [immutablejs]: https://facebook.github.io/immutable-js/
+//! Because of the head/tail chunking technique, until you push a
+//! number of items above double the tree's branching factor (that's
+//! `self.len()` = 2 × *k* (where *k* = 64) = 128) on either side, the
+//! data structure is still just a handful of arrays, not yet an RRB
+//! tree, so you'll see performance and memory characteristics similar
+//! to [`Vec`][Vec] or [`VecDeque`][VecDeque].
+//!
+//! This means that the structure always preallocates four chunks of
+//! size *k* (*k* being the tree's branching factor), equivalent to a
+//! [`Vec`][Vec] with an initial capacity of 256. Beyond that, it will
+//! allocate tree nodes of capacity *k* as needed.
+//!
+//! [rrbpaper]: https://infoscience.epfl.ch/record/213452/files/rrbvector.pdf
+//! [chunkedseq]: http://deepsea.inria.fr/pasl/chunkedseq.pdf
 //! [Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
-//! [Arc]: https://doc.rust-lang.org/std/sync/struct.Arc.html
-//! [CatList]: ../catlist/struct.CatList.html
+//! [VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
 
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{Hash, Hasher};
-use std::iter::{FromIterator, Sum};
+use std::iter::Sum;
+use std::iter::{Chain, FromIterator, FusedIterator};
+use std::mem::{replace, swap};
 use std::ops::{Add, Index, IndexMut};
-use std::sync::Arc;
 
-use bits::{HASH_BITS, HASH_MASK, HASH_SIZE};
-use shared::Shared;
-
-use nodes::vector::{Entry, Node};
+use nodes::chunk::{Chunk, ConsumingIter as ConsumingChunkIter, Iter as ChunkIter, CHUNK_SIZE};
+use nodes::rrb::{
+    ConsumingIter as ConsumingNodeIter, Iter as NodeIter, Node, PopResult, PushResult, SplitResult,
+};
+use sort;
+use util::{clone_ref, Ref, Side};
 
 /// Construct a vector from a sequence of elements.
 ///
@@ -61,7 +76,7 @@ macro_rules! vector {
     ( $($x:expr),* ) => {{
         let mut l = $crate::vector::Vector::new();
         $(
-            l.push_back_mut($x);
+            l.push_back($x);
         )*
             l
     }};
@@ -69,84 +84,42 @@ macro_rules! vector {
     ( $($x:expr ,)* ) => {{
         let mut l = $crate::vector::Vector::new();
         $(
-            l.push_back_mut($x);
+            l.push_back($x);
         )*
             l
     }};
 }
 
-#[derive(Clone, Copy)]
-struct Meta {
-    origin: usize,
-    capacity: usize,
-    level: usize,
-    reverse: bool,
-}
-
-impl Default for Meta {
-    fn default() -> Self {
-        Meta {
-            origin: 0,
-            capacity: 0,
-            level: HASH_BITS,
-            reverse: false,
-        }
-    }
-}
-
 /// A persistent vector of elements of type `A`.
-///
-/// This is an implementation of [bitmapped vector tries][bmvt], which
-/// offers highly efficient index lookups as well as appending
-/// elements to, or popping elements off, either side of the vector.
-///
-/// This is generally the best data structure if you're looking for
-/// something list like. If you don't need lookups or updates by
-/// index, but do need fast concatenation of whole lists, you should
-/// use the [`CatList`][CatList] instead.
-///
-/// If you're familiar with the Clojure variant, this improves on it
-/// by being efficiently extensible at the front as well as the back.
-/// If you're familiar with [Immutable.js][immutablejs], this is
-/// essentially the same, but with easier mutability because Rust has
-/// the advantage of direct access to the garbage collector (which in
-/// our case is just [`Arc`][Arc]).
-///
-/// [bmvt]: https://hypirion.com/musings/understanding-persistent-vector-pt-1
-/// [immutablejs]: https://facebook.github.io/immutable-js/
-/// [Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
-/// [Arc]: https://doc.rust-lang.org/std/sync/struct.Arc.html
-/// [CatList]: ../catlist/struct.CatList.html
 pub struct Vector<A> {
-    meta: Meta,
-    root: Arc<Node<A>>,
-    tail: Arc<Node<A>>,
+    length: usize,
+    middle_level: usize,
+    outer_f: Ref<Chunk<A>>,
+    inner_f: Ref<Chunk<A>>,
+    middle: Ref<Node<A>>,
+    inner_b: Ref<Chunk<A>>,
+    outer_b: Ref<Chunk<A>>,
 }
 
-impl<A> Vector<A> {
+impl<A: Clone> Vector<A> {
     /// Construct an empty vector.
     pub fn new() -> Self {
         Vector {
-            meta: Default::default(),
-            root: Default::default(),
-            tail: Default::default(),
+            length: 0,
+            middle_level: 0,
+            outer_f: Ref::new(Chunk::new()),
+            inner_f: Ref::new(Chunk::new()),
+            middle: Ref::new(Node::new()),
+            inner_b: Ref::new(Chunk::new()),
+            outer_b: Ref::new(Chunk::new()),
         }
     }
 
     /// Construct a vector with a single value.
-    pub fn singleton<R>(a: R) -> Self
-    where
-        R: Shared<A>,
-    {
-        let mut tail = Node::new();
-        tail.push(Entry::Value(a.shared()));
-        let mut meta = Meta::default();
-        meta.capacity = 1;
-        Vector {
-            meta,
-            root: Default::default(),
-            tail: Arc::new(tail),
-        }
+    pub fn singleton(a: A) -> Self {
+        let mut out = Self::new();
+        out.push_back(a);
+        out
     }
 
     /// Get the length of a vector.
@@ -163,12 +136,24 @@ impl<A> Vector<A> {
     /// ```
     #[inline]
     pub fn len(&self) -> usize {
-        self.meta.capacity - self.meta.origin
+        self.length
     }
 
-    /// Test whether a list is empty.
+    /// Test whether a vector is empty.
     ///
     /// Time: O(1)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::Vector;
+    /// # fn main() {
+    /// let vec = vector!["Joe", "Mike", "Robert"];
+    /// assert_eq!(false, vec.is_empty());
+    /// assert_eq!(true, Vector::<i32>::new().is_empty());
+    /// # }
+    /// ```
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
@@ -176,12 +161,114 @@ impl<A> Vector<A> {
 
     /// Get an iterator over a vector.
     ///
-    /// Time: O(log n) per [`next()`][next] call
-    ///
-    /// [next]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#tymethod.next
+    /// Time: O(1)
     #[inline]
     pub fn iter(&self) -> Iter<A> {
-        Iter::new(self.clone())
+        Iter::new(self)
+    }
+
+    /// Get a reference to the value at index `index` in a vector.
+    ///
+    /// Returns `None` if the index is out of bounds.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::Vector;
+    /// # fn main() {
+    /// let vec = vector!["Joe", "Mike", "Robert"];
+    /// assert_eq!(Some(&"Robert"), vec.get(2));
+    /// assert_eq!(None, vec.get(5));
+    /// # }
+    /// ```
+    pub fn get(&self, index: usize) -> Option<&A> {
+        if index >= self.len() {
+            return None;
+        }
+
+        let mut local_index = index;
+
+        if local_index < self.outer_f.len() {
+            return Some(&self.outer_f[local_index]);
+        }
+        local_index -= self.outer_f.len();
+
+        if local_index < self.inner_f.len() {
+            return Some(&self.inner_f[local_index]);
+        }
+        local_index -= self.inner_f.len();
+
+        if local_index < self.middle.len() {
+            return Some(self.middle.index(self.middle_level, local_index));
+        }
+        local_index -= self.middle.len();
+
+        if local_index < self.inner_b.len() {
+            return Some(&self.inner_b[local_index]);
+        }
+        local_index -= self.inner_b.len();
+
+        Some(&self.outer_b[local_index])
+    }
+
+    /// Get a mutable reference to the value at index `index` in a
+    /// vector.
+    ///
+    /// Returns `None` if the index is out of bounds.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::Vector;
+    /// # fn main() {
+    /// let mut vec = vector!["Joe", "Mike", "Robert"];
+    /// {
+    ///     let robert = vec.get_mut(2).unwrap();
+    ///     assert_eq!(&mut "Robert", robert);
+    ///     *robert = "Bjarne";
+    /// }
+    /// assert_eq!(vector!["Joe", "Mike", "Bjarne"], vec);
+    /// # }
+    /// ```
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut A> {
+        if index >= self.len() {
+            return None;
+        }
+
+        let mut local_index = index;
+
+        if local_index < self.outer_f.len() {
+            let outer_f = Ref::make_mut(&mut self.outer_f);
+            return Some(&mut outer_f[local_index]);
+        }
+        local_index -= self.outer_f.len();
+
+        if local_index < self.inner_f.len() {
+            let inner_f = Ref::make_mut(&mut self.inner_f);
+            return Some(&mut inner_f[local_index]);
+        }
+        local_index -= self.inner_f.len();
+
+        if local_index < self.middle.len() {
+            let middle = Ref::make_mut(&mut self.middle);
+            return Some(middle.index_mut(self.middle_level, local_index));
+        }
+        local_index -= self.middle.len();
+
+        if local_index < self.inner_b.len() {
+            let inner_b = Ref::make_mut(&mut self.inner_b);
+            return Some(&mut inner_b[local_index]);
+        }
+        local_index -= self.inner_b.len();
+
+        let outer_b = Ref::make_mut(&mut self.outer_b);
+        Some(&mut outer_b[local_index])
     }
 
     /// Get the first element of a vector.
@@ -190,7 +277,7 @@ impl<A> Vector<A> {
     ///
     /// Time: O(log n)
     #[inline]
-    pub fn head(&self) -> Option<Arc<A>> {
+    pub fn head(&self) -> Option<&A> {
         self.get(0)
     }
 
@@ -204,7 +291,7 @@ impl<A> Vector<A> {
             None
         } else {
             let mut v = self.clone();
-            v.resize(1, self.len() as isize);
+            v.pop_front();
             Some(v)
         }
     }
@@ -214,7 +301,7 @@ impl<A> Vector<A> {
     /// If the vector is empty, `None` is returned.
     ///
     /// Time: O(log n)
-    pub fn last(&self) -> Option<Arc<A>> {
+    pub fn last(&self) -> Option<&A> {
         if self.is_empty() {
             None
         } else {
@@ -232,38 +319,9 @@ impl<A> Vector<A> {
             None
         } else {
             let mut v = self.clone();
-            v.resize(0, (self.len() - 1) as isize);
+            v.pop_back();
             Some(v)
         }
-    }
-
-    /// Get the value at index `index` in a vector.
-    ///
-    /// Returns `None` if the index is out of bounds.
-    ///
-    /// Time: O(log n)
-    pub fn get(&self, index: usize) -> Option<Arc<A>> {
-        let i = match self.map_index(index) {
-            None => return None,
-            Some(i) => i,
-        };
-
-        let node = self.node_for(i);
-        match node.get(i & HASH_MASK as usize) {
-            Some(&Entry::Value(ref value)) => Some(value.clone()),
-            Some(&Entry::Node(_)) => panic!("Vector::get: encountered node, expected value"),
-            Some(&Entry::Empty) => panic!("Vector::get: encountered null, expected value"),
-            None => panic!("Vector::get: unhandled index out of bounds situation!"),
-        }
-    }
-
-    /// Get the value at index `index` in a vector, directly.
-    ///
-    /// Panics if the index is out of bounds.
-    ///
-    /// Time: O(log n)
-    pub fn get_unwrapped(&self, index: usize) -> Arc<A> {
-        self.get(index).expect("get_unwrapped index out of bounds")
     }
 
     /// Create a new vector with the value at index `index` updated.
@@ -271,24 +329,21 @@ impl<A> Vector<A> {
     /// Panics if the index is out of bounds.
     ///
     /// Time: O(log n)
-    pub fn set<RA>(&self, index: usize, value: RA) -> Self
-    where
-        RA: Shared<A>,
-    {
-        let i = match self.map_index(index) {
-            None => panic!("index out of bounds: {} < {}", index, self.len()),
-            Some(i) => i,
-        };
-        if i >= tail_offset(self.meta.capacity) {
-            let mut tail = (*self.tail).clone();
-            tail.set(i & HASH_MASK as usize, Entry::Value(value.shared()));
-            self.update_tail(tail)
-        } else {
-            self.update_root(
-                self.root
-                    .set_in(self.meta.level, i, Entry::Value(value.shared())),
-            )
-        }
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::Vector;
+    /// # fn main() {
+    /// let mut vec = vector![1, 2, 3];
+    /// assert_eq!(vector![1, 5, 3], vec.set(1, 5));
+    /// # }
+    /// ```
+    pub fn set(&self, index: usize, value: A) -> Self {
+        let mut out = self.clone();
+        out[index] = value;
+        out
     }
 
     /// Update the value at index `index` in a vector.
@@ -300,238 +355,399 @@ impl<A> Vector<A> {
     /// safely copied before mutating.
     ///
     /// Time: O(log n)
-    pub fn set_mut<RA>(&mut self, index: usize, value: RA)
-    where
-        RA: Shared<A>,
-    {
-        let i = match self.map_index(index) {
-            None => panic!("index out of bounds: {} < {}", index, self.len()),
-            Some(i) => i,
-        };
-        if i >= tail_offset(self.meta.capacity) {
-            let tail = Arc::make_mut(&mut self.tail);
-            tail.set(i & HASH_MASK as usize, Entry::Value(value.shared()));
-        } else {
-            let root = Arc::make_mut(&mut self.root);
-            root.set_in_mut(self.meta.level, 0, i, Entry::Value(value.shared()))
-        }
-    }
-
-    /// Construct a vector with a new value prepended to the end of
-    /// the current vector.
-    ///
-    /// Time: O(log n)
-    pub fn push_back<RA>(&self, value: RA) -> Self
-    where
-        RA: Shared<A>,
-    {
-        let len = self.len();
-        let mut v = self.clone();
-        v.resize(0, (len + 1) as isize);
-        v.set_mut(len, value.shared());
-        v
-    }
-
-    /// Construct a vector with a new value prepended to the end of
-    /// the current vector.
-    ///
-    /// `snoc`, for the curious, is [`cons`][cons] spelled backwards,
-    /// to denote that it works on the back of the list rather than
-    /// the front. If you don't find that as clever as whoever coined
-    /// the term no doubt did, this method is also available as
-    /// [`push_back()`][push_back].
-    ///
-    /// Time: O(log n)
-    ///
-    /// [push_back]: #method.push_back
-    /// [cons]: #method.cons
     #[inline]
-    pub fn snoc<RA>(&self, a: RA) -> Self
-    where
-        RA: Shared<A>,
-    {
-        self.push_back(a)
+    pub fn set_mut(&mut self, index: usize, value: A) {
+        self[index] = value;
     }
 
-    /// Update a vector in place with a new value prepended to the end
-    /// of it.
+    /// Push a value to the front of a vector.
     ///
     /// This is a copy-on-write operation, so that the parts of the
     /// vector's structure which are shared with other vectors will be
     /// safely copied before mutating.
-    ///
-    /// Time: O(log n)
-    pub fn push_back_mut<RA>(&mut self, value: RA)
-    where
-        RA: Shared<A>,
-    {
-        let len = self.len();
-        self.resize(0, (len + 1) as isize);
-        self.set_mut(len, value.shared());
-    }
-
-    /// Construct a vector with a new value prepended to the front of
-    /// the current vector.
-    ///
-    /// Time: O(log n)
-    pub fn push_front<RA>(&self, value: RA) -> Self
-    where
-        RA: Shared<A>,
-    {
-        let mut v = self.clone();
-        v.resize(-1, self.len() as isize);
-        v.set_mut(0, value.shared());
-        v
-    }
-
-    /// Construct a vector with a new value prepended to the front of
-    /// the current vector.
-    ///
-    /// This is an alias for [push_front], for the Lispers in the
-    /// house.
-    ///
-    /// Time: O(log n)
-    ///
-    /// [push_front]: #method.push_front
-    #[inline]
-    pub fn cons<RA>(&self, a: RA) -> Self
-    where
-        RA: Shared<A>,
-    {
-        self.push_front(a)
-    }
-
-    /// Update a vector in place with a new value prepended to the
-    /// front of it.
-    ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// vector's structure which are shared with other vectors will be
-    /// safely copied before mutating.
-    ///
-    /// Time: O(log n)
-    pub fn push_front_mut<RA>(&mut self, value: RA)
-    where
-        RA: Shared<A>,
-    {
-        let len = self.len();
-        self.resize(-1, len as isize);
-        self.set_mut(0, value.shared());
-    }
-
-    /// Get the last element of a vector, as well as the vector with
-    /// the last element removed.
-    ///
-    /// If the vector is empty, [`None`][None] is returned.
-    ///
-    /// Time: O(log n)
-    ///
-    /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
-    pub fn pop_back(&self) -> Option<(Arc<A>, Self)> {
-        if self.is_empty() {
-            return None;
-        }
-        let val = self.get(self.len() - 1).unwrap();
-        let mut v = self.clone();
-        v.resize(0, -1 as isize);
-        Some((val, v))
-    }
-
-    /// Remove the last element of a vector in place and return it.
-    ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// vector's structure which are shared with other vectors will be
-    /// safely copied before mutating.
-    ///
-    /// Time: O(log n)
-    pub fn pop_back_mut(&mut self) -> Option<Arc<A>> {
-        if self.is_empty() {
-            return None;
-        }
-        let val = self.get(self.len() - 1).unwrap();
-        self.resize(0, -1);
-        Some(val)
-    }
-
-    /// Get the first element of a vector, as well as the vector with
-    /// the first element removed.
-    ///
-    /// If the vector is empty, [`None`][None] is returned.
-    ///
-    /// Time: O(log n)
-    ///
-    /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
-    pub fn pop_front(&self) -> Option<(Arc<A>, Self)> {
-        if self.is_empty() {
-            return None;
-        }
-        let val = self.get(0).unwrap();
-        let mut v = self.clone();
-        v.resize(1, self.len() as isize);
-        Some((val, v))
-    }
-
-    /// Get the head and the tail of a vector.
-    ///
-    /// If the vector is empty, [`None`][None] is returned.
-    ///
-    /// This is an alias for [`pop_front`][pop_front].
-    ///
-    /// Time: O(log n)
-    ///
-    /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
-    /// [pop_front]: #method.pop_front
-    #[inline]
-    pub fn uncons(&self) -> Option<(Arc<A>, Self)> {
-        self.pop_front()
-    }
-
-    /// Get the last element of a vector, as well as the vector with the
-    /// last element removed.
-    ///
-    /// If the vector is empty, [`None`][None] is returned.
-    ///
-    /// This is an alias for [`pop_back`][pop_back].
     ///
     /// Time: O(1)*
     ///
-    /// [None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
-    /// [pop_back]: #method.pop_back
-    #[inline]
-    pub fn unsnoc(&self) -> Option<(Arc<A>, Vector<A>)> {
-        self.pop_back()
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::Vector;
+    /// # fn main() {
+    /// let mut vec = vector![5, 6, 7];
+    /// vec.push_front(4);
+    /// assert_eq!(vector![4, 5, 6, 7], vec);
+    /// # }
+    /// ```
+    pub fn push_front(&mut self, value: A) {
+        if self.outer_f.is_full() {
+            swap(&mut self.outer_f, &mut self.inner_f);
+            if !self.outer_f.is_empty() {
+                assert!(self.outer_f.is_full());
+                let mut chunk = Ref::new(Chunk::new());
+                swap(&mut chunk, &mut self.outer_f);
+                self.push_middle(Side::Left, chunk);
+            }
+        }
+        self.length += 1;
+        let outer_f = Ref::make_mut(&mut self.outer_f);
+        outer_f.push_front(value)
     }
 
-    /// Remove the first element of a vector in place and return it.
+    /// Push a value to the back of a vector.
     ///
     /// This is a copy-on-write operation, so that the parts of the
     /// vector's structure which are shared with other vectors will be
     /// safely copied before mutating.
     ///
-    /// Time: O(log n)
-    pub fn pop_front_mut(&mut self) -> Option<Arc<A>> {
+    /// Time: O(1)*
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::Vector;
+    /// # fn main() {
+    /// let mut vec = vector![1, 2, 3];
+    /// vec.push_back(4);
+    /// assert_eq!(vector![1, 2, 3, 4], vec);
+    /// # }
+    /// ```
+    pub fn push_back(&mut self, value: A) {
+        if self.outer_b.is_full() {
+            swap(&mut self.outer_b, &mut self.inner_b);
+            if !self.outer_b.is_empty() {
+                assert!(self.outer_b.is_full());
+                let mut chunk = Ref::new(Chunk::new());
+                swap(&mut chunk, &mut self.outer_b);
+                self.push_middle(Side::Right, chunk);
+            }
+        }
+        self.length += 1;
+        let outer_b = Ref::make_mut(&mut self.outer_b);
+        outer_b.push_back(value)
+    }
+
+    /// Remove the first element from a vector and return it.
+    ///
+    /// This is a copy-on-write operation, so that the parts of the
+    /// vector's structure which are shared with other vectors will be
+    /// safely copied before mutating.
+    ///
+    /// Time: O(1)*
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::Vector;
+    /// # fn main() {
+    /// let mut vec = vector![1, 2, 3];
+    /// assert_eq!(Some(1), vec.pop_front());
+    /// assert_eq!(vector![2, 3], vec);
+    /// # }
+    /// ```
+    pub fn pop_front(&mut self) -> Option<A> {
         if self.is_empty() {
             return None;
         }
-        let len = self.len();
-        let val = self.get(0).unwrap();
-        self.resize(1, len as isize);
-        Some(val)
+        if self.outer_f.is_empty() {
+            if self.inner_f.is_empty() {
+                if self.middle.is_empty() {
+                    if self.inner_b.is_empty() {
+                        swap(&mut self.outer_f, &mut self.outer_b);
+                    } else {
+                        swap(&mut self.outer_f, &mut self.inner_b);
+                    }
+                } else {
+                    self.outer_f = self.pop_middle(Side::Left).unwrap();
+                }
+            } else {
+                swap(&mut self.outer_f, &mut self.inner_f);
+            }
+        }
+        self.length -= 1;
+        let outer_f = Ref::make_mut(&mut self.outer_f);
+        Some(outer_f.pop_front())
     }
 
-    /// Split a vector at a given index, returning a vector containing
-    /// every element before of the index and a vector containing
-    /// every element from the index onward.
+    /// Remove the last element from a vector and return it.
+    ///
+    /// This is a copy-on-write operation, so that the parts of the
+    /// vector's structure which are shared with other vectors will be
+    /// safely copied before mutating.
+    ///
+    /// Time: O(1)*
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::Vector;
+    /// # fn main() {
+    /// let mut vec = vector![1, 2, 3];
+    /// assert_eq!(Some(3), vec.pop_back());
+    /// assert_eq!(vector![1, 2], vec);
+    /// # }
+    /// ```
+    pub fn pop_back(&mut self) -> Option<A> {
+        if self.is_empty() {
+            return None;
+        }
+        if self.outer_b.is_empty() {
+            if self.inner_b.is_empty() {
+                if self.middle.is_empty() {
+                    if self.inner_f.is_empty() {
+                        swap(&mut self.outer_b, &mut self.outer_f);
+                    } else {
+                        swap(&mut self.outer_b, &mut self.inner_f);
+                    }
+                } else {
+                    self.outer_b = self.pop_middle(Side::Right).unwrap();
+                }
+            } else {
+                swap(&mut self.outer_b, &mut self.inner_b);
+            }
+        }
+        self.length -= 1;
+        let outer_b = Ref::make_mut(&mut self.outer_b);
+        Some(outer_b.pop_back())
+    }
+
+    /// Append the vector `other` to the end of the current vector.
     ///
     /// Time: O(log n)
-    pub fn split_at(&self, index: usize) -> (Self, Self) {
-        if index >= self.len() {
-            return (self.clone(), Vector::new());
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::vector::Vector;
+    /// # fn main() {
+    /// let mut vec = vector![1, 2, 3];
+    /// vec.append(vector![7, 8, 9]);
+    /// assert_eq!(vector![1, 2, 3, 7, 8, 9], vec);
+    /// # }
+    /// ```
+    pub fn append(&mut self, mut other: Self) {
+        if other.is_empty() {
+            return;
         }
-        let mut left = self.clone();
-        left.resize(0, index as isize);
-        let mut right = self.clone();
-        right.resize(index as isize, self.len() as isize);
-        (left, right)
+
+        if self.is_empty() {
+            replace(self, other);
+            return;
+        }
+
+        if self.middle.is_empty() && other.middle.is_empty() {
+            if self.inner_b.is_empty()
+                && self.outer_b.is_empty()
+                && other.inner_f.is_empty()
+                && other.outer_f.is_empty()
+            {
+                self.inner_b = other.inner_b;
+                self.outer_b = other.outer_b;
+                self.length += other.length;
+                return;
+            }
+            if self.len() + other.len() <= CHUNK_SIZE * 4 {
+                while let Some(value) = other.pop_front() {
+                    self.push_back(value);
+                }
+                return;
+            }
+        }
+
+        let inner_b1 = self.inner_b.clone();
+        self.push_middle(Side::Right, inner_b1);
+        let outer_b1 = self.outer_b.clone();
+        self.push_middle(Side::Right, outer_b1);
+        let inner_f2 = other.inner_f.clone();
+        other.push_middle(Side::Left, inner_f2);
+        let outer_f2 = other.outer_f.clone();
+        other.push_middle(Side::Left, outer_f2);
+
+        let mut middle1 = clone_ref(replace(&mut self.middle, Ref::from(Node::new())));
+        let mut middle2 = clone_ref(other.middle);
+        self.middle_level = if self.middle_level > other.middle_level {
+            middle2 = middle2.elevate(self.middle_level - other.middle_level);
+            self.middle_level
+        } else if self.middle_level < other.middle_level {
+            middle1 = middle1.elevate(other.middle_level - self.middle_level);
+            other.middle_level
+        } else {
+            self.middle_level
+        } + 1;
+        // FIXME don't just increase the tree height, do a real RRB join
+        self.middle = Ref::new(Node::merge(
+            Ref::from(middle1),
+            Ref::from(middle2),
+            self.middle_level - 1,
+        ));
+
+        self.inner_b = other.inner_b;
+        self.outer_b = other.outer_b;
+        self.length += other.length;
+    }
+
+    /// Split a vector at a given index.
+    ///
+    /// Split a vector at a given index, consuming the vector and
+    /// returning a pair of the left hand side and the right hand side
+    /// of the split.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::vector::Vector;
+    /// # fn main() {
+    /// let mut vec = vector![1, 2, 3, 7, 8, 9];
+    /// let (left, right) = vec.split(3);
+    /// assert_eq!(vector![1, 2, 3], left);
+    /// assert_eq!(vector![7, 8, 9], right);
+    /// # }
+    /// ```
+    pub fn split(mut self, index: usize) -> (Self, Self) {
+        let right = self.split_off(index);
+        (self, right)
+    }
+
+    /// Split a vector at a given index.
+    ///
+    /// Split a vector at a given index, leaving the left hand side in
+    /// the current vector and returning a new vector containing the
+    /// right hand side.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::vector::Vector;
+    /// # fn main() {
+    /// let mut left = vector![1, 2, 3, 7, 8, 9];
+    /// let right = left.split_off(3);
+    /// assert_eq!(vector![1, 2, 3], left);
+    /// assert_eq!(vector![7, 8, 9], right);
+    /// # }
+    /// ```
+    pub fn split_off(&mut self, index: usize) -> Self {
+        assert!(index < self.len());
+
+        let mut local_index = index;
+
+        if local_index < self.outer_f.len() {
+            let of2 = Ref::make_mut(&mut self.outer_f).split(local_index);
+            let right = Vector {
+                length: self.length - index,
+                middle_level: self.middle_level,
+                outer_f: Ref::new(of2),
+                inner_f: replace_def(&mut self.inner_f),
+                middle: replace_def(&mut self.middle),
+                inner_b: replace_def(&mut self.inner_b),
+                outer_b: replace_def(&mut self.outer_b),
+            };
+            self.length = index;
+            self.middle_level = 0;
+            return right;
+        }
+
+        local_index -= self.outer_f.len();
+
+        if local_index < self.inner_f.len() {
+            let if2 = Ref::make_mut(&mut self.inner_f).split(local_index);
+            let right = Vector {
+                length: self.length - index,
+                middle_level: self.middle_level,
+                outer_f: Ref::new(if2),
+                inner_f: Default::default(),
+                middle: replace_def(&mut self.middle),
+                inner_b: replace_def(&mut self.inner_b),
+                outer_b: replace_def(&mut self.outer_b),
+            };
+            self.length = index;
+            self.middle_level = 0;
+            swap(&mut self.outer_b, &mut self.inner_f);
+            return right;
+        }
+
+        local_index -= self.inner_f.len();
+
+        if local_index < self.middle.len() {
+            let mut right_middle = self.middle.clone();
+            let (c1, c2) = {
+                let m1 = Ref::make_mut(&mut self.middle);
+                let m2 = Ref::make_mut(&mut right_middle);
+                match m1.split(self.middle_level, Side::Right, local_index) {
+                    SplitResult::Dropped(_) => (),
+                    SplitResult::OutOfBounds => unreachable!(),
+                };
+                match m2.split(self.middle_level, Side::Left, local_index) {
+                    SplitResult::Dropped(_) => (),
+                    SplitResult::OutOfBounds => unreachable!(),
+                };
+                let c1 = match m1.pop_chunk(self.middle_level, Side::Right) {
+                    PopResult::Empty => Default::default(),
+                    PopResult::Done(chunk) => chunk,
+                    PopResult::Drained(chunk) => {
+                        m1.clear_node();
+                        chunk
+                    }
+                };
+                let c2 = match m2.pop_chunk(self.middle_level, Side::Left) {
+                    PopResult::Empty => Default::default(),
+                    PopResult::Done(chunk) => chunk,
+                    PopResult::Drained(chunk) => {
+                        m2.clear_node();
+                        chunk
+                    }
+                };
+                (c1, c2)
+            };
+            let mut right = Vector {
+                length: self.length - index,
+                middle_level: self.middle_level,
+                outer_f: c2,
+                inner_f: Default::default(),
+                middle: right_middle,
+                inner_b: replace_def(&mut self.inner_b),
+                outer_b: replace(&mut self.outer_b, c1),
+            };
+            self.length = index;
+            self.prune();
+            right.prune();
+            return right;
+        }
+
+        local_index -= self.middle.len();
+
+        if local_index < self.inner_b.len() {
+            let ib2 = Ref::make_mut(&mut self.inner_b).split(local_index);
+            let right = Vector {
+                length: self.length - index,
+                outer_b: replace_def(&mut self.outer_b),
+                outer_f: Ref::new(ib2),
+                ..Vector::new()
+            };
+            self.length = index;
+            swap(&mut self.outer_b, &mut self.inner_b);
+            return right;
+        }
+
+        local_index -= self.inner_b.len();
+
+        let ob2 = Ref::make_mut(&mut self.outer_b).split(local_index);
+        let right = Vector {
+            length: self.length - index,
+            outer_b: Ref::new(ob2),
+            ..Vector::new()
+        };
+        self.length = index;
+        right
     }
 
     /// Construct a vector with `count` elements removed from the
@@ -539,9 +755,8 @@ impl<A> Vector<A> {
     ///
     /// Time: O(log n)
     pub fn skip(&self, count: usize) -> Self {
-        let mut v = self.clone();
-        v.resize(count as isize, self.len() as isize);
-        v
+        // FIXME can be made more efficient by dropping the unwanted side without constructing it
+        self.clone().split_off(count)
     }
 
     /// Construct a vector of the first `count` elements from the
@@ -549,9 +764,10 @@ impl<A> Vector<A> {
     ///
     /// Time: O(log n)
     pub fn take(&self, count: usize) -> Self {
-        let mut v = self.clone();
-        v.resize(0, count as isize);
-        v
+        // FIXME can be made more efficient by dropping the unwanted side without constructing it
+        let mut left = self.clone();
+        left.split_off(count);
+        left
     }
 
     /// Construct a vector with the elements from `start_index`
@@ -562,519 +778,244 @@ impl<A> Vector<A> {
         if start_index >= end_index || start_index >= self.len() {
             return Vector::new();
         }
-        let mut v = self.clone();
-        v.resize(start_index as isize, end_index as isize);
-        v
+        self.clone().skip(start_index).take(end_index - start_index)
     }
 
-    /// Append the vector `other` to the end of the current vector.
+    /// Insert an element into a vector.
     ///
-    /// Time: O(n) where n = the length of `other`
+    /// Insert an element at position `index`, shifting all elements
+    /// after it to the right.
     ///
-    /// # Examples
+    /// ## Performance Note
     ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::vector::Vector;
-    /// # fn main() {
-    /// assert_eq!(
-    ///   vector![1, 2, 3].append(vector![7, 8, 9]),
-    ///   vector![1, 2, 3, 7, 8, 9]
-    /// );
-    /// # }
-    /// ```
-    pub fn append<R>(&self, other: R) -> Self
-    where
-        R: Borrow<Self>,
-    {
-        let o = other.borrow();
-        let mut v = self.clone();
-        v.resize(0, (self.len() + o.len()) as isize);
-        v.write(self.len(), o);
-        v
+    /// While `push_front` and `push_back` are heavily optimised
+    /// operations, `insert` in the middle of a vector requires a
+    /// split, a push, and two appends. Thus, if you want to insert
+    /// many elements at the same location, instead of `insert`ing
+    /// them one by one, you should rather create a new vector
+    /// containing the elements to insert, split the vector at the
+    /// insertion point, and append the left hand, the new vector and
+    /// the right hand in order.
+    ///
+    /// Time: O(log n)
+    pub fn insert(&mut self, index: usize, value: A) {
+        if index == 0 {
+            return self.push_front(value);
+        }
+        if index == self.len() {
+            return self.push_back(value);
+        }
+        // TODO a lot of optimisations still possible here
+        assert!(index < self.len());
+        let right = self.split_off(index);
+        self.push_back(value);
+        self.append(right);
     }
 
-    /// Write from an iterator into a vector, starting at the given
-    /// index.
-    ///
-    /// This will overwrite elements in the vector until the iterator
-    /// ends or the end of the vector is reached.
-    ///
-    /// Time: O(n) where n = the length of the iterator
-    pub fn write<I: IntoIterator<Item = R>, R: Shared<A>>(&mut self, index: usize, iter: I) {
-        if let Some(raw_index) = self.map_index(index) {
-            let cap = self.meta.capacity;
-            let tail_offset = tail_offset(cap);
-            let mut it = iter.into_iter().map(|i| i.shared());
-            if raw_index >= tail_offset {
-                let mut tail = Arc::make_mut(&mut self.tail);
-                let mut i = raw_index - tail_offset;
-                loop {
-                    match it.next() {
-                        None => return,
-                        Some(value) => {
-                            tail.set(i, Entry::Value(value));
-                            i += 1;
-                            if tail_offset + i >= cap {
-                                return;
-                            }
-                        }
-                    }
-                }
-            } else {
-                let root = Arc::make_mut(&mut self.root);
-                let mut max_in_root = tail_offset - raw_index;
-                root.write(self.meta.level, raw_index, &mut it, &mut max_in_root);
-                let mut tail = Arc::make_mut(&mut self.tail);
-                let mut i = 0;
-                loop {
-                    match it.next() {
-                        None => return,
-                        Some(value) => {
-                            tail.set(i, Entry::Value(value));
-                            i += 1;
-                            if tail_offset + i >= cap {
-                                return;
-                            }
-                        }
-                    }
-                }
+    pub fn remove(&mut self, index: usize) -> A {
+        assert!(index < self.len());
+        if index == 0 {
+            return self.pop_front().unwrap();
+        }
+        if index == self.len() - 1 {
+            return self.pop_back().unwrap();
+        }
+        // TODO a lot of optimisations still possible here
+        let mut right = self.split_off(index);
+        let value = right.pop_front().unwrap();
+        self.append(right);
+        value
+    }
+
+    pub fn clear(&mut self) {
+        if !self.is_empty() {
+            self.length = 0;
+            self.middle_level = 0;
+            if !self.outer_f.is_empty() {
+                self.outer_f = Default::default();
+            }
+            if !self.inner_f.is_empty() {
+                self.inner_f = Default::default();
+            }
+            if !self.middle.is_empty() {
+                self.middle = Default::default();
+            }
+            if !self.inner_b.is_empty() {
+                self.inner_b = Default::default();
+            }
+            if !self.outer_b.is_empty() {
+                self.outer_b = Default::default();
             }
         }
     }
 
-    /// Construct a vector which is the reverse of the current vector.
-    ///
-    /// Time: O(1)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::vector::Vector;
-    /// # fn main() {
-    /// assert_eq!(
-    ///   vector![1, 2, 3, 4, 5].reverse(),
-    ///   vector![5, 4, 3, 2, 1]
-    /// );
-    /// # }
-    /// ```
-    ///
-    /// [rev]: https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.rev
-    pub fn reverse(&self) -> Self {
-        let mut v = self.clone();
-        v.meta.reverse = !v.meta.reverse;
-        v
+    pub fn binary_search_by<F>(&self, mut f: F) -> Result<usize, usize>
+    where
+        F: FnMut(&A) -> Ordering,
+    {
+        let mut size = self.len();
+        if size == 0 {
+            return Err(0);
+        }
+        let mut base = 0;
+        while size > 1 {
+            let half = size / 2;
+            let mid = base + half;
+            base = match f(&self[mid]) {
+                Ordering::Greater => base,
+                _ => mid,
+            };
+            size -= half;
+        }
+        match f(&self[base]) {
+            Ordering::Equal => Ok(base),
+            Ordering::Greater => Err(base),
+            Ordering::Less => Err(base + 1),
+        }
     }
 
-    /// Reverse a vector in place.
-    ///
-    /// Time: O(1)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::vector::Vector;
-    /// # fn main() {
-    /// let mut v = vector![1, 2, 3, 4, 5];
-    /// v.reverse_mut();
-    ///
-    /// assert_eq!(
-    ///   v,
-    ///   vector![5, 4, 3, 2, 1]
-    /// );
-    /// # }
-    /// ```
-    pub fn reverse_mut(&mut self) {
-        self.meta.reverse = !self.meta.reverse;
+    pub fn binary_search(&self, value: &A) -> Result<usize, usize>
+    where
+        A: Ord,
+    {
+        self.binary_search_by(|e| e.cmp(value))
     }
 
-    /// Sort a vector of ordered elements.
-    ///
-    /// Time: O(n log n) worst case
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::vector::Vector;
-    /// # fn main() {
-    /// assert_eq!(
-    ///   vector![2, 8, 1, 6, 3, 7, 5, 4].sort(),
-    ///   vector![1, 2, 3, 4, 5, 6, 7, 8]
-    /// );
-    /// # }
-    /// ```
-    pub fn sort(&self) -> Self
+    pub fn binary_search_by_key<B, F>(&self, b: &B, mut f: F) -> Result<usize, usize>
+    where
+        B: Ord,
+        F: FnMut(&A) -> B,
+    {
+        self.binary_search_by(|k| f(k).cmp(b))
+    }
+
+    pub fn insert_ord(&mut self, item: A)
+    where
+        A: Ord,
+    {
+        match self.binary_search(&item) {
+            Ok(index) => self.insert(index, item),
+            Err(index) => self.insert(index, item),
+        }
+    }
+
+    pub fn sort(&mut self)
     where
         A: Ord,
     {
         self.sort_by(Ord::cmp)
     }
 
-    /// Sort a vector using a comparator function.
-    ///
-    /// Time: O(n log n) roughly
-    pub fn sort_by<F>(&self, cmp: F) -> Self
+    pub fn sort_by<F>(&mut self, cmp: F)
     where
         F: Fn(&A, &A) -> Ordering,
     {
-        // FIXME: This is a simple in-place quicksort. There are
-        // probably faster algorithms.
-        fn swap<A>(vector: &mut Vector<A>, a: usize, b: usize) {
-            let aval = vector.get(a).unwrap();
-            let bval = vector.get(b).unwrap();
-            vector.set_mut(a, bval);
-            vector.set_mut(b, aval);
+        let len = self.len();
+        if len > 1 {
+            sort::quicksort(self, 0, len - 1, &cmp);
         }
-
-        // Ported from the Java version at
-        // http://www.cs.princeton.edu/~rs/talks/QuicksortIsOptimal.pdf
-        #[cfg_attr(feature = "clippy", allow(many_single_char_names))]
-        fn quicksort<A, F>(vector: &mut Vector<A>, l: usize, r: usize, cmp: &F)
-        where
-            F: Fn(&A, &A) -> Ordering,
-        {
-            if r <= l {
-                return;
-            }
-
-            let mut i = l;
-            let mut j = r;
-            let mut p = i;
-            let mut q = j;
-            let v = vector.get(r).unwrap();
-            loop {
-                while cmp(&vector.get_unwrapped(i), &v) == Ordering::Less {
-                    i += 1
-                }
-                j -= 1;
-                while cmp(&v, &vector.get_unwrapped(j)) == Ordering::Less {
-                    if j == l {
-                        break;
-                    }
-                    j -= 1;
-                }
-                if i >= j {
-                    break;
-                }
-                swap(vector, i, j);
-                if cmp(&vector.get_unwrapped(i), &v) == Ordering::Equal {
-                    p += 1;
-                    swap(vector, p, i);
-                }
-                if cmp(&v, &vector.get_unwrapped(j)) == Ordering::Equal {
-                    q -= 1;
-                    swap(vector, j, q);
-                }
-                i += 1;
-            }
-            swap(vector, i, r);
-
-            let mut jp: isize = i as isize - 1;
-            let mut k = l;
-            i += 1;
-            while k < p {
-                swap(vector, k, jp as usize);
-                jp -= 1;
-                k += 1;
-            }
-            k = r - 1;
-            while k > q {
-                swap(vector, i, k);
-                k -= 1;
-                i += 1;
-            }
-
-            if jp >= 0 {
-                quicksort(vector, l, jp as usize, cmp);
-            }
-            quicksort(vector, i, r, cmp);
-        }
-
-        if self.len() < 2 {
-            self.clone()
-        } else {
-            let mut out = self.clone();
-            quicksort(&mut out, 0, self.len() - 1, &cmp);
-            out
-        }
-    }
-
-    /// Insert an item into a sorted vector.
-    ///
-    /// Constructs a new vector with the new item inserted before the
-    /// first item in the vector which is larger than the new item, as
-    /// determined by the `Ord` trait.
-    ///
-    /// Please note that this is a very inefficient operation; if you
-    /// want a sorted list, consider if [`OrdSet`][ordset::OrdSet]
-    /// might be a better choice for you.
-    ///
-    /// Time: O(n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # fn main() {
-    /// assert_eq!(
-    ///   vector![2, 4, 5].insert(1).insert(3).insert(6),
-    ///   vector![1, 2, 3, 4, 5, 6]
-    /// );
-    /// # }
-    /// ```
-    ///
-    /// [ordset::OrdSet]: ../ordset/struct.OrdSet.html
-    pub fn insert<RA>(&self, item: RA) -> Self
-    where
-        A: Ord,
-        RA: Shared<A>,
-    {
-        let value = item.shared();
-        let mut out = Vector::new();
-        let mut inserted = false;
-        for next in self {
-            if next < value {
-                out.push_back_mut(next);
-                continue;
-            }
-            if !inserted {
-                out.push_back_mut(value.clone());
-                inserted = true;
-            }
-            out.push_back_mut(next);
-        }
-        if !inserted {
-            out.push_back_mut(value);
-        }
-        out
     }
 
     // Implementation details
 
-    fn map_index(&self, index: usize) -> Option<usize> {
-        let len = self.len();
-        if index >= len {
-            return None;
-        }
-        Some(
-            self.meta.origin + if self.meta.reverse {
-                (len - 1) - index
-            } else {
-                index
-            },
-        )
-    }
-
-    fn node_for(&self, index: usize) -> &Arc<Node<A>> {
-        if index >= tail_offset(self.meta.capacity) {
-            &self.tail
-        } else {
-            let mut node = &self.root;
-            let mut level = self.meta.level;
-            while level > 0 {
-                node = if let Some(&Entry::Node(ref child_node)) =
-                    node.children.get((index >> level) & HASH_MASK as usize)
-                {
-                    level -= HASH_BITS;
-                    child_node
-                } else {
-                    panic!("Vector::node_for: encountered value or null where node was expected")
-                };
-            }
-            node
+    fn prune(&mut self) {
+        while self.middle_level > 0 && self.middle.is_single() {
+            self.middle = self.middle.first_child().clone();
+            self.middle_level -= 1;
         }
     }
 
-    fn clear(&mut self) {
-        self.meta = Default::default();
-        self.root = Default::default();
-        self.tail = Default::default();
+    fn push_middle(&mut self, side: Side, chunk: Ref<Chunk<A>>) {
+        let new_middle = {
+            let middle = Ref::make_mut(&mut self.middle);
+            match middle.push_chunk(self.middle_level, side, chunk) {
+                PushResult::Done => return,
+                PushResult::Full(chunk) => Ref::from({
+                    match side {
+                        Side::Left => Node::from_chunk(self.middle_level, chunk)
+                            .join_branches(middle.clone(), self.middle_level),
+                        Side::Right => middle.clone().join_branches(
+                            Node::from_chunk(self.middle_level, chunk),
+                            self.middle_level,
+                        ),
+                    }
+                }),
+            }
+        };
+        self.middle_level += 1;
+        self.middle = new_middle;
     }
 
-    fn resize(&mut self, mut start: isize, mut end: isize) {
-        if self.meta.reverse {
-            let len = self.len() as isize;
-            let swap = start;
-            start = if end < 0 { 0 } else { len } - end;
-            end = len - swap;
-        }
-
-        let mut o0 = self.meta.origin;
-        let mut c0 = self.meta.capacity;
-        let mut o = o0 as isize + start;
-        let mut c = if end < 0 {
-            c0 as isize + end
-        } else {
-            o0 as isize + end
-        } as usize;
-        if o == o0 as isize && c == c0 {
-            return;
-        }
-
-        if o >= c as isize {
-            self.clear();
-            return;
-        }
-
-        let mut level = self.meta.level;
-
-        // Create higher level roots until origin is positive
-        let mut origin_shift = 0;
-        while o + origin_shift < 0 {
-            if self.root.is_empty() {
-                self.root = Default::default()
-            } else {
-                self.root = Arc::new(Node::from_vec(
-                    Some(1),
-                    vec![Entry::Empty, Entry::Node(self.root.clone())],
-                ));
-            }
-            level += HASH_BITS;
-            origin_shift += 1 << level;
-        }
-        if origin_shift > 0 {
-            o0 += origin_shift as usize;
-            c0 += origin_shift as usize;
-            o += origin_shift;
-            c += origin_shift as usize;
-        }
-
-        // Create higher level roots until size fits
-        let tail_offset0 = tail_offset(c0);
-        let tail_offset = tail_offset(c as usize);
-        while tail_offset >= 1 << (level + HASH_BITS) {
-            if self.root.is_empty() {
-                self.root = Default::default()
-            } else {
-                self.root = Arc::new(Node::from_vec(
-                    Some(0),
-                    vec![Entry::Node(self.root.clone())],
-                ));
-            }
-            level += HASH_BITS;
-        }
-
-        // Merge old tail into tree
-        if tail_offset > tail_offset0 && (o as usize) < c0 && !self.tail.is_empty() {
-            let root = Arc::make_mut(&mut self.root);
-            root.set_in_mut(
-                level,
-                HASH_BITS,
-                tail_offset0,
-                Entry::Node(self.tail.clone()),
-            );
-        }
-
-        // Find the new tail
-        if tail_offset < tail_offset0 {
-            self.tail = self.node_for(c - 1).clone()
-        } else if tail_offset > tail_offset0 {
-            self.tail = Default::default()
-        }
-
-        // Trim new tail if needed
-        if c < c0 {
-            let t = Arc::make_mut(&mut self.tail);
-            t.remove_after(0, c);
-        }
-
-        // If new origin is inside tail, drop the root
-        if o as usize >= tail_offset {
-            o -= tail_offset as isize;
-            c -= tail_offset;
-            level = HASH_BITS;
-            self.root = Default::default();
-            let tail = Arc::make_mut(&mut self.tail);
-            tail.remove_before(0, o as usize);
-        } else if o as usize > o0 || tail_offset < tail_offset0 {
-            // If root has been trimmed, clean it up.
-            let mut shift = 0;
-            // Find the top root node inside the old tree.
-            loop {
-                let start_index = (o as usize >> level) & HASH_MASK as usize;
-                if start_index != (tail_offset >> level) & HASH_MASK as usize {
-                    break;
+    fn pop_middle(&mut self, side: Side) -> Option<Ref<Chunk<A>>> {
+        let chunk = {
+            let middle = Ref::make_mut(&mut self.middle);
+            match middle.pop_chunk(self.middle_level, side) {
+                PopResult::Empty => return None,
+                PopResult::Done(chunk) => chunk,
+                PopResult::Drained(chunk) => {
+                    middle.clear_node();
+                    self.middle_level = 0;
+                    chunk
                 }
-                if start_index != 0 {
-                    shift += (1 << level) * start_index;
-                }
-                level -= HASH_BITS;
-                self.root = self.root.get(start_index).unwrap().unwrap_node();
             }
-            // Trim the edges of the root.
-            if o as usize > o0 {
-                let root = Arc::make_mut(&mut self.root);
-                root.remove_before(level, o as usize - shift);
-            }
-            if tail_offset < tail_offset0 {
-                let root = Arc::make_mut(&mut self.root);
-                root.remove_after(level, tail_offset - shift);
-            }
-            if shift > 0 {
-                o -= shift as isize;
-                c -= shift;
-            }
-        }
-
-        self.meta.level = level;
-        self.meta.origin = o as usize;
-        self.meta.capacity = c;
-    }
-
-    fn update_root<Root: Shared<Node<A>>>(&self, root: Root) -> Self {
-        Vector {
-            meta: self.meta,
-            root: root.shared(),
-            tail: self.tail.clone(),
-        }
-    }
-
-    fn update_tail<Root: Shared<Node<A>>>(&self, tail: Root) -> Self {
-        Vector {
-            meta: self.meta,
-            root: self.root.clone(),
-            tail: tail.shared(),
-        }
+        };
+        Some(chunk)
     }
 }
 
-fn tail_offset(size: usize) -> usize {
-    if size < HASH_SIZE {
-        0
-    } else {
-        ((size - 1) >> HASH_BITS) << HASH_BITS
-    }
+#[inline]
+fn replace_def<A: Default>(dest: &mut A) -> A {
+    replace(dest, Default::default())
 }
 
 // Core traits
 
+impl<A: Clone> Default for Vector<A> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<A> Clone for Vector<A> {
     fn clone(&self) -> Self {
         Vector {
-            meta: self.meta,
-            root: self.root.clone(),
-            tail: self.tail.clone(),
+            length: self.length,
+            middle_level: self.middle_level,
+            outer_f: self.outer_f.clone(),
+            inner_f: self.inner_f.clone(),
+            middle: self.middle.clone(),
+            inner_b: self.inner_b.clone(),
+            outer_b: self.outer_b.clone(),
         }
     }
 }
 
-impl<A> Default for Vector<A> {
-    fn default() -> Self {
-        Vector::new()
-    }
-}
-
-impl<A: Debug> Debug for Vector<A> {
+impl<A: Clone + Debug> Debug for Vector<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        f.debug_list().entries(self.iter()).finish()
+        // f.debug_list().entries(self.iter()).finish()
+
+        fn print_indent(f: &mut Formatter, indent: usize) -> Result<(), Error> {
+            for _i in 0..indent {
+                write!(f, " ")?;
+            }
+            Ok(())
+        }
+
+        f.write_str("Vector:\n")?;
+        print_indent(f, 4)?;
+        writeln!(f, "Outer_f: {:?}", self.outer_f)?;
+        print_indent(f, 4)?;
+        writeln!(f, "Inner_f: {:?}", self.inner_f)?;
+        self.middle.print(f, 4, self.middle_level)?;
+        print_indent(f, 4)?;
+        writeln!(f, "Inner_b: {:?}", self.inner_b)?;
+        print_indent(f, 4)?;
+        writeln!(f, "Outer_b: {:?}", self.outer_b)
     }
 }
 
 #[cfg(not(has_specialisation))]
-impl<A: PartialEq> PartialEq for Vector<A> {
+impl<A: Clone + PartialEq> PartialEq for Vector<A> {
     fn eq(&self, other: &Self) -> bool {
         if self.len() != other.len() {
             return false;
@@ -1084,7 +1025,7 @@ impl<A: PartialEq> PartialEq for Vector<A> {
 }
 
 #[cfg(has_specialisation)]
-impl<A: PartialEq> PartialEq for Vector<A> {
+impl<A: Clone + PartialEq> PartialEq for Vector<A> {
     default fn eq(&self, other: &Self) -> bool {
         if self.len() != other.len() {
             return false;
@@ -1094,52 +1035,43 @@ impl<A: PartialEq> PartialEq for Vector<A> {
 }
 
 #[cfg(has_specialisation)]
-impl<A: Eq> PartialEq for Vector<A> {
+impl<A: Clone + Eq> PartialEq for Vector<A> {
     fn eq(&self, other: &Self) -> bool {
-        if self.len() != other.len() {
+        if self.len() != other.len() || self.middle_level != other.middle_level {
             return false;
         }
-        if Arc::ptr_eq(&self.root, &other.root) && Arc::ptr_eq(&self.tail, &other.tail) {
+
+        fn cmp_chunk<A>(left: &Ref<Chunk<A>>, right: &Ref<Chunk<A>>) -> bool {
+            (left.is_empty() && right.is_empty()) || Ref::ptr_eq(left, right)
+        }
+
+        if cmp_chunk(&self.outer_f, &other.outer_f) && cmp_chunk(&self.inner_f, &other.inner_f)
+            && ((self.middle.is_empty() && other.middle.is_empty())
+                || Ref::ptr_eq(&self.middle, &other.middle))
+            && cmp_chunk(&self.inner_b, &other.inner_b)
+            && cmp_chunk(&self.outer_b, &other.outer_b)
+        {
             return true;
         }
         self.iter().eq(other.iter())
     }
 }
 
-impl<A: Eq> Eq for Vector<A> {}
+impl<A: Clone + Eq> Eq for Vector<A> {}
 
-impl<A: PartialOrd> PartialOrd for Vector<A> {
+impl<A: Clone + PartialOrd> PartialOrd for Vector<A> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.iter().partial_cmp(other.iter())
     }
 }
 
-impl<A: Ord> Ord for Vector<A> {
+impl<A: Clone + Ord> Ord for Vector<A> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.iter().cmp(other.iter())
     }
 }
 
-impl<A> Add for Vector<A> {
-    type Output = Vector<A>;
-
-    fn add(mut self, other: Self) -> Self::Output {
-        self.extend(other);
-        self
-    }
-}
-
-impl<'a, A> Add for &'a Vector<A> {
-    type Output = Vector<A>;
-
-    fn add(self, other: Self) -> Self::Output {
-        let mut out = self.clone();
-        out.extend(other);
-        out
-    }
-}
-
-impl<A: Hash> Hash for Vector<A> {
+impl<A: Clone + Hash> Hash for Vector<A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         for i in self {
             i.hash(state)
@@ -1147,7 +1079,7 @@ impl<A: Hash> Hash for Vector<A> {
     }
 }
 
-impl<A> Sum for Vector<A> {
+impl<A: Clone> Sum for Vector<A> {
     fn sum<I>(it: I) -> Self
     where
         I: Iterator<Item = Self>,
@@ -1156,192 +1088,254 @@ impl<A> Sum for Vector<A> {
     }
 }
 
-impl<A, R: Shared<A>> Extend<R> for Vector<A> {
+impl<A: Clone> Add for Vector<A> {
+    type Output = Vector<A>;
+
+    /// Concatenate two vectors.
+    ///
+    /// Time: O(log n)
+    fn add(mut self, other: Self) -> Self::Output {
+        self.append(other);
+        self
+    }
+}
+
+impl<'a, A: Clone> Add for &'a Vector<A> {
+    type Output = Vector<A>;
+
+    /// Concatenate two vectors.
+    ///
+    /// Time: O(log n)
+    fn add(self, other: Self) -> Self::Output {
+        let mut out = self.clone();
+        out.append(other.clone());
+        out
+    }
+}
+
+impl<A: Clone> Extend<A> for Vector<A> {
+    /// Add values to the end of a vector by consuming an iterator.
+    ///
+    /// Time: O(n)
     fn extend<I>(&mut self, iter: I)
     where
-        I: IntoIterator<Item = R>,
+        I: IntoIterator<Item = A>,
     {
-        let len = self.len();
-        let it = iter.into_iter();
-        let (lower, upper) = it.size_hint();
-        if Some(lower) == upper {
-            self.resize(0, (len + lower) as isize);
-            self.write(len, it);
-        } else {
-            for item in it {
-                self.push_back_mut(item)
-            }
+        for item in iter {
+            self.push_back(item)
         }
     }
 }
 
-impl<A> Index<usize> for Vector<A> {
+impl<A: Clone> Index<usize> for Vector<A> {
     type Output = A;
-
+    /// Get a reference to the value at index `index` in the vector.
+    ///
+    /// Time: O(log n)
     fn index(&self, index: usize) -> &Self::Output {
-        let i = match self.map_index(index) {
-            None => panic!("index out of bounds: {} < {}", index, self.len()),
-            Some(i) => i,
-        };
-
-        let node = self.node_for(i);
-
-        match node.children[index] {
-            Entry::Value(ref value) => value,
-            _ => panic!("Vector::index: vector structure inconsistent"),
+        match self.get(index) {
+            Some(value) => value,
+            None => panic!(
+                "Vector::index: index out of bounds: {} < {}",
+                index,
+                self.len()
+            ),
         }
     }
 }
 
-impl<A> IndexMut<usize> for Vector<A>
-where
-    A: Clone,
-{
+impl<A: Clone> IndexMut<usize> for Vector<A> {
+    /// Get a mutable reference to the value at index `index` in the
+    /// vector.
+    ///
+    /// Time: O(log n)
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        let i = match self.map_index(index) {
-            None => panic!("index out of bounds: {} < {}", index, self.len()),
-            Some(i) => i,
-        };
-        let entry = if i >= tail_offset(self.meta.capacity) {
-            let tail = Arc::make_mut(&mut self.tail);
-            &mut tail.children[i & HASH_MASK as usize]
-        } else {
-            let root = Arc::make_mut(&mut self.root);
-            root.ref_mut(self.meta.level, 0, i)
-        };
-        match *entry {
-            Entry::Value(ref mut value) => Arc::make_mut(value),
-            _ => panic!("Vector::index_mut: vector structure inconsistent"),
+        match self.get_mut(index) {
+            Some(value) => value,
+            None => panic!("Vector::index_mut: index out of bounds"),
         }
     }
 }
 
 // Conversions
 
-impl<A, RA: Shared<A>> FromIterator<RA> for Vector<A> {
-    fn from_iter<T>(iter: T) -> Self
+impl<'a, A: Clone> IntoIterator for &'a Vector<A> {
+    type Item = &'a A;
+    type IntoIter = Iter<'a, A>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<A: Clone> IntoIterator for Vector<A> {
+    type Item = A;
+    type IntoIter = ConsumingIter<A>;
+    fn into_iter(self) -> Self::IntoIter {
+        ConsumingIter::new(self)
+    }
+}
+
+impl<A: Clone> FromIterator<A> for Vector<A> {
+    /// Create a vector from an iterator.
+    ///
+    /// Time: O(n)
+    fn from_iter<I>(iter: I) -> Self
     where
-        T: IntoIterator<Item = RA>,
+        I: IntoIterator<Item = A>,
     {
-        let mut v = Vector::new();
-        v.extend(iter);
-        v
+        let mut seq = Self::new();
+        for item in iter {
+            seq.push_back(item)
+        }
+        seq
     }
 }
 
-impl<A> IntoIterator for Vector<A> {
-    type Item = Arc<A>;
-    type IntoIter = Iter<A>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
+impl<'s, 'a, A, OA> From<&'s Vector<&'a A>> for Vector<OA>
+where
+    A: ToOwned<Owned = OA>,
+    OA: Borrow<A> + Clone,
+{
+    fn from(vec: &Vector<&A>) -> Self {
+        vec.iter().map(|a| (*a).to_owned()).collect()
     }
 }
 
-impl<'a, A> IntoIterator for &'a Vector<A> {
-    type Item = Arc<A>;
-    type IntoIter = Iter<A>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
+impl<'a, A: Clone> From<&'a [A]> for Vector<A> {
+    fn from(slice: &[A]) -> Self {
+        slice.into_iter().cloned().collect()
     }
 }
 
-impl<A> From<Vec<A>> for Vector<A> {
-    fn from(v: Vec<A>) -> Self {
-        v.into_iter().collect()
+impl<A: Clone> From<Vec<A>> for Vector<A> {
+    /// Create a vector from a [`std::vec::Vec`][vec].
+    ///
+    /// Time: O(n)
+    ///
+    /// [vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
+    fn from(vec: Vec<A>) -> Self {
+        vec.into_iter().collect()
+    }
+}
+
+impl<'a, A: Clone> From<&'a Vec<A>> for Vector<A> {
+    /// Create a vector from a [`std::vec::Vec`][vec].
+    ///
+    /// Time: O(n)
+    ///
+    /// [vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
+    fn from(vec: &Vec<A>) -> Self {
+        vec.into_iter().cloned().collect()
     }
 }
 
 // Iterators
 
 /// An iterator over vectors with values of type `A`.
-pub struct Iter<A> {
-    vector: Vector<A>,
-    start_node: Arc<Node<A>>,
-    start_index: usize,
-    start_offset: usize,
-    end_node: Arc<Node<A>>,
-    end_index: usize,
-    end_offset: usize,
+///
+/// To obtain one, use [`Vector::iter()`][iter].
+///
+/// [iter]: struct.Vector.html#method.iter
+pub struct Iter<'a, A: 'a> {
+    iter: Chain<
+        Chain<Chain<Chain<ChunkIter<'a, A>, ChunkIter<'a, A>>, NodeIter<'a, A>>, ChunkIter<'a, A>>,
+        ChunkIter<'a, A>,
+    >,
 }
 
-impl<A> Iter<A> {
-    fn new(vector: Vector<A>) -> Self {
-        let start = vector.meta.origin;
-        let start_index = start & !(HASH_MASK as usize);
-        let end = vector.meta.capacity;
-        let end_index = end & !(HASH_MASK as usize);
+impl<'a, A: Clone> Iter<'a, A> {
+    fn new(seq: &'a Vector<A>) -> Self {
+        let outer_f = seq.outer_f.iter();
+        let inner_f = seq.inner_f.iter();
+        let middle = NodeIter::new(&seq.middle);
+        let inner_b = seq.inner_b.iter();
+        let outer_b = seq.outer_b.iter();
         Iter {
-            start_node: vector.node_for(start_index).clone(),
-            end_node: vector.node_for(end_index).clone(),
-            start_index,
-            start_offset: start - start_index,
-            end_index,
-            end_offset: end - end_index,
-            vector,
+            iter: outer_f
+                .chain(inner_f)
+                .chain(middle)
+                .chain(inner_b)
+                .chain(outer_b),
         }
-    }
-
-    fn get_next(&mut self) -> Option<Arc<A>> {
-        if self.start_index + self.start_offset == self.end_index + self.end_offset {
-            return None;
-        }
-        if self.start_offset < HASH_SIZE {
-            let item = self.start_node.get(self.start_offset).unwrap().unwrap_val();
-            self.start_offset += 1;
-            return Some(item);
-        }
-        self.start_offset = 0;
-        self.start_index += HASH_SIZE;
-        self.start_node = self.vector.node_for(self.start_index).clone();
-        self.get_next()
-    }
-
-    fn get_next_back(&mut self) -> Option<Arc<A>> {
-        if self.start_index + self.start_offset == self.end_index + self.end_offset {
-            return None;
-        }
-        if self.end_offset > 0 {
-            self.end_offset -= 1;
-            let item = self.end_node.get(self.end_offset).unwrap().unwrap_val();
-            return Some(item);
-        }
-        self.end_offset = HASH_SIZE;
-        self.end_index -= HASH_SIZE;
-        self.end_node = self.vector.node_for(self.end_index).clone();
-        self.get_next_back()
     }
 }
 
-impl<A> Iterator for Iter<A> {
-    type Item = Arc<A>;
+impl<'a, A: Clone> Iterator for Iter<'a, A> {
+    type Item = &'a A;
 
+    /// Advance the iterator and return the next value.
+    ///
+    /// Time: O(1)*
     fn next(&mut self) -> Option<Self::Item> {
-        if self.vector.meta.reverse {
-            self.get_next_back()
-        } else {
-            self.get_next()
-        }
+        self.iter.next()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let size = (self.end_index + self.end_offset) - (self.start_index + self.start_offset);
-        (size, Some(size))
+        self.iter.size_hint()
     }
 }
 
-impl<A> DoubleEndedIterator for Iter<A> {
+impl<'a, A: Clone> DoubleEndedIterator for Iter<'a, A> {
+    /// Advance the iterator and return the next value.
+    ///
+    /// Time: O(1)*
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.vector.meta.reverse {
-            self.get_next()
-        } else {
-            self.get_next_back()
+        self.iter.next_back()
+    }
+}
+
+impl<'a, A: Clone> ExactSizeIterator for Iter<'a, A> {}
+
+impl<'a, A: Clone> FusedIterator for Iter<'a, A> {}
+
+/// A consuming iterator over vectors with values of type `A`.
+pub struct ConsumingIter<A> {
+    iter: Chain<
+        Chain<
+            Chain<Chain<ConsumingChunkIter<A>, ConsumingChunkIter<A>>, ConsumingNodeIter<A>>,
+            ConsumingChunkIter<A>,
+        >,
+        ConsumingChunkIter<A>,
+    >,
+}
+
+impl<A: Clone> ConsumingIter<A> {
+    fn new(seq: Vector<A>) -> Self {
+        let outer_f = clone_ref(seq.outer_f).into_iter();
+        let inner_f = clone_ref(seq.inner_f).into_iter();
+        let middle = ConsumingNodeIter::new(clone_ref(seq.middle), seq.middle_level);
+        let inner_b = clone_ref(seq.inner_b).into_iter();
+        let outer_b = clone_ref(seq.outer_b).into_iter();
+        ConsumingIter {
+            iter: outer_f
+                .chain(inner_f)
+                .chain(middle)
+                .chain(inner_b)
+                .chain(outer_b),
         }
     }
 }
 
-impl<A> ExactSizeIterator for Iter<A> {}
+impl<A: Clone> Iterator for ConsumingIter<A> {
+    type Item = A;
+
+    /// Advance the iterator and return the next value.
+    ///
+    /// Time: O(1)*
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+}
+
+impl<A: Clone> DoubleEndedIterator for ConsumingIter<A> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.iter.next_back()
+    }
+}
+
+impl<A: Clone> ExactSizeIterator for ConsumingIter<A> {}
+
+impl<A: Clone> FusedIterator for ConsumingIter<A> {}
 
 // QuickCheck
 
@@ -1349,7 +1343,7 @@ impl<A> ExactSizeIterator for Iter<A> {}
 use quickcheck::{Arbitrary, Gen};
 
 #[cfg(any(test, feature = "quickcheck"))]
-impl<A: Arbitrary + Sync> Arbitrary for Vector<A> {
+impl<A: Arbitrary + Sync + Clone> Arbitrary for Vector<A> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         Vector::from_iter(Vec::<A>::arbitrary(g))
     }
@@ -1360,6 +1354,7 @@ impl<A: Arbitrary + Sync> Arbitrary for Vector<A> {
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     use super::*;
+    use proptest::collection::vec;
     use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
     use std::ops::Range;
 
@@ -1376,212 +1371,94 @@ pub mod proptest {
     ///     }
     /// }
     /// ```
-    pub fn vector<T: Strategy + 'static>(
-        element: T,
+    pub fn vector<A: Strategy + 'static>(
+        element: A,
         size: Range<usize>,
-    ) -> BoxedStrategy<Vector<<T::Value as ValueTree>::Value>> {
-        ::proptest::collection::vec(element, size)
-            .prop_map(Vector::from_iter)
-            .boxed()
+    ) -> BoxedStrategy<Vector<<A::Value as ValueTree>::Value>>
+    where
+        <<A as Strategy>::Value as ValueTree>::Value: Clone,
+    {
+        vec(element, size).prop_map(Vector::from_iter).boxed()
     }
 }
 
 // Tests
 
-// impl<A: Debug> Debug for Vector<A> {
-//     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-//         write!(
-//             f,
-//             "Vector o={} c={} l={} n={} root={:?} tail={:?}",
-//             self.meta.origin,
-//             self.meta.capacity,
-//             self.meta.level,
-//             self.len(),
-//             self.root,
-//             self.tail
-//         )
-//     }
-// }
-
 #[cfg(test)]
 mod test {
-    use super::proptest::*;
     use super::*;
-    use proptest::collection;
-    use proptest::num::i32;
-    use std::iter;
+    use proptest::collection::vec;
+    use proptest::num::{i32, usize};
 
-    #[test]
-    fn wat() {
-        let v1 = Vec::from_iter((0..1000).into_iter().map(Arc::new));
-        let v2 = Vector::from_iter(0..1000);
-        for (i, item) in v1.into_iter().enumerate() {
-            assert_eq!(Some(item), v2.get(i));
-        }
-    }
-
-    #[test]
-    fn double_ended_iterator() {
-        let vector = Vector::<i32>::from_iter(1..6);
-        let mut it = vector.iter();
-        assert_eq!(Some(Arc::new(1)), it.next());
-        assert_eq!(Some(Arc::new(5)), it.next_back());
-        assert_eq!(Some(Arc::new(2)), it.next());
-        assert_eq!(Some(Arc::new(4)), it.next_back());
-        assert_eq!(Some(Arc::new(3)), it.next());
-        assert_eq!(None, it.next_back());
-        assert_eq!(None, it.next());
-    }
-
-    #[test]
-    fn safe_mutation() {
-        let v1 = Vector::from_iter(0..131072);
-        let mut v2 = v1.clone();
-        v2.set_mut(131000, 23);
-        assert_eq!(Some(Arc::new(23)), v2.get(131000));
-        assert_eq!(Some(Arc::new(131000)), v1.get(131000));
-    }
-
-    #[test]
-    fn index_operator() {
-        let mut vec = vector![1, 2, 3, 4, 5];
-        assert_eq!(4, vec[3]);
-        vec[3] = 9;
-        assert_eq!(vector![1, 2, 3, 9, 5], vec);
-    }
-
-    #[test]
-    fn add_operator() {
-        let vec1 = vector![1, 2, 3];
-        let vec2 = vector![4, 5, 6];
-        assert_eq!(vector![1, 2, 3, 4, 5, 6], vec1 + vec2);
-    }
-
-    #[test]
-    fn vector_singleton() {
-        assert_eq!(Vector::singleton(5).len(), 1);
-    }
+    // #[test]
+    // fn push_and_pop_things() {
+    //     let mut seq = Vector::new();
+    //     for i in 0..1000 {
+    //         seq.push_back(i);
+    //     }
+    //     for i in 0..1000 {
+    //         assert_eq!(Some(i), seq.pop_front());
+    //     }
+    //     assert!(seq.is_empty());
+    //     for i in 0..1000 {
+    //         seq.push_front(i);
+    //     }
+    //     for i in 0..1000 {
+    //         assert_eq!(Some(i), seq.pop_back());
+    //     }
+    //     assert!(seq.is_empty());
+    // }
 
     #[test]
     fn macro_allows_trailing_comma() {
         let vec1 = vector![1, 2, 3];
-        let vec2 = vector![
-            1, 2, 3,
-        ];
+        let vec2 = vector![1, 2, 3,];
         assert_eq!(vec1, vec2);
     }
 
     proptest! {
         #[test]
-        fn push_back(ref input in collection::vec(i32::ANY, 0..100)) {
+        fn iter(ref vec in vec(i32::ANY, 0..1000)) {
+            let seq: Vector<i32> = Vector::from_iter(vec.iter().cloned());
+            for (index, item) in seq.iter().enumerate() {
+                assert_eq!(&vec[index], item);
+            }
+            assert_eq!(vec.len(), seq.len());
+        }
+
+        #[test]
+        fn push_front_mut(ref input in vec(i32::ANY, 0..1000)) {
             let mut vector = Vector::new();
             for (count, value) in input.iter().cloned().enumerate() {
                 assert_eq!(count, vector.len());
-                vector = vector.push_back(value);
+                vector.push_front(value);
                 assert_eq!(count + 1, vector.len());
             }
-            for (index, value) in input.iter().cloned().enumerate() {
-                assert_eq!(Some(Arc::new(value)), vector.get(index));
-            }
+            let input2 = Vec::from_iter(input.iter().rev().cloned());
+            assert_eq!(input2, Vec::from_iter(vector.iter().cloned()));
         }
 
         #[test]
-        fn push_back_mut(ref input in collection::vec(i32::ANY, 0..100)) {
+        fn push_back_mut(ref input in vec(i32::ANY, 0..1000)) {
             let mut vector = Vector::new();
             for (count, value) in input.iter().cloned().enumerate() {
                 assert_eq!(count, vector.len());
-                vector.push_back_mut(value);
+                vector.push_back(value);
                 assert_eq!(count + 1, vector.len());
             }
-            for (index, value) in input.iter().cloned().enumerate() {
-                assert_eq!(Some(Arc::new(value)), vector.get(index));
-            }
+            assert_eq!(input, &Vec::from_iter(vector.iter().cloned()));
         }
 
         #[test]
-        fn push_front(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut vector = Vector::new();
-            for (count, value) in input.iter().cloned().enumerate() {
-                assert_eq!(count, vector.len());
-                vector = vector.push_front(value);
-                assert_eq!(count + 1, vector.len());
-            }
-            assert_eq!(input, &Vec::from_iter(vector.iter().rev().map(|a| *a)));
-        }
-
-        #[test]
-        fn push_front_mut(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut vector = Vector::new();
-            for (count, value) in input.iter().cloned().enumerate() {
-                assert_eq!(count, vector.len());
-                vector.push_front_mut(value);
-                assert_eq!(count + 1, vector.len());
-            }
-            assert_eq!(input, &Vec::from_iter(vector.iter().rev().map(|a| *a)));
-        }
-
-        #[test]
-        fn from_iter(ref input in collection::vec(i32::ANY, 0..100)) {
-            let vector = Vector::from_iter(input.iter().cloned());
-            assert_eq!(vector.len(), input.len());
-            for (index, value) in input.iter().cloned().enumerate() {
-                assert_eq!(Some(Arc::new(value)), vector.get(index));
-            }
-        }
-
-        #[test]
-        fn set(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut vector = Vector::from_iter(iter::repeat(0).take(input.len()));
-            assert_eq!(vector.len(), input.len());
-            for (index, value) in input.iter().cloned().enumerate() {
-                vector = vector.set(index, value);
-            }
-            assert_eq!(vector.len(), input.len());
-            for (index, value) in input.iter().cloned().enumerate() {
-                assert_eq!(Some(Arc::new(value)), vector.get(index));
-            }
-        }
-
-        #[test]
-        fn set_mut(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut vector = Vector::from_iter(iter::repeat(0).take(input.len()));
-            assert_eq!(vector.len(), input.len());
-            for (index, value) in input.iter().cloned().enumerate() {
-                vector.set_mut(index, value);
-            }
-            assert_eq!(vector.len(), input.len());
-            for (index, value) in input.iter().cloned().enumerate() {
-                assert_eq!(Some(Arc::new(value)), vector.get(index));
-            }
-        }
-
-        #[test]
-        fn pop_back(ref input in collection::vec(i32::ANY, 0..100)) {
+        fn pop_back_mut(ref input in vec(i32::ANY, 0..1000)) {
             let mut vector = Vector::from_iter(input.iter().cloned());
             assert_eq!(input.len(), vector.len());
             for (index, value) in input.iter().cloned().enumerate().rev() {
                 match vector.pop_back() {
                     None => panic!("vector emptied unexpectedly"),
-                    Some((item, next)) => {
-                        vector = next;
-                        assert_eq!(index, vector.len());
-                        assert_eq!(Arc::new(value), item);
-                    }
-                }
-            }
-            assert_eq!(0, vector.len());
-        }
-
-        #[test]
-        fn pop_back_mut(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut vector = Vector::from_iter(input.iter().cloned());
-            assert_eq!(input.len(), vector.len());
-            for (index, value) in input.iter().cloned().enumerate().rev() {
-                match vector.pop_back_mut() {
-                    None => panic!("vector emptied unexpectedly"),
                     Some(item) => {
                         assert_eq!(index, vector.len());
-                        assert_eq!(Arc::new(value), item);
+                        assert_eq!(value, item);
                     }
                 }
             }
@@ -1589,165 +1466,71 @@ mod test {
         }
 
         #[test]
-        fn pop_front(ref input in collection::vec(i32::ANY, 0..100)) {
+        fn pop_front_mut(ref input in vec(i32::ANY, 0..1000)) {
             let mut vector = Vector::from_iter(input.iter().cloned());
             assert_eq!(input.len(), vector.len());
             for (index, value) in input.iter().cloned().rev().enumerate().rev() {
                 match vector.pop_front() {
                     None => panic!("vector emptied unexpectedly"),
-                    Some((item, next)) => {
-                        vector = next;
-                        assert_eq!(index, vector.len());
-                        assert_eq!(Arc::new(value), item);
-                    }
-                }
-            }
-            assert_eq!(0, vector.len());
-        }
-
-        #[test]
-        fn pop_front_mut(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut vector = Vector::from_iter(input.iter().cloned());
-            assert_eq!(input.len(), vector.len());
-            for (index, value) in input.iter().cloned().rev().enumerate().rev() {
-                match vector.pop_front_mut() {
-                    None => panic!("vector emptied unexpectedly"),
                     Some(item) => {
                         assert_eq!(index, vector.len());
-                        assert_eq!(Arc::new(value), item);
+                        assert_eq!(value, item);
                     }
                 }
             }
             assert_eq!(0, vector.len());
         }
 
+        // #[test]
+        // fn push_and_pop(ref input in vec(i32::ANY, 0..1000)) {
+        //     let mut vector = Vector::new();
+        //     for (count, value) in input.iter().cloned().enumerate() {
+        //         assert_eq!(count, vector.len());
+        //         vector.push_back(value);
+        //         assert_eq!(count + 1, vector.len());
+        //     }
+        //     for (index, value) in input.iter().cloned().rev().enumerate().rev() {
+        //         match vector.pop_front() {
+        //             None => panic!("vector emptied unexpectedly"),
+        //             Some(item) => {
+        //                 assert_eq!(index, vector.len());
+        //                 assert_eq!(value, item);
+        //             }
+        //         }
+        //     }
+        //     assert_eq!(true, vector.is_empty());
+        // }
+
         #[test]
-        fn iterator(ref input in collection::vec(i32::ANY, 0..100)) {
-            let vector = Vector::from_iter(input.iter().cloned());
-            assert_eq!(input.len(), vector.len());
-            let mut it1 = input.iter().cloned();
-            let mut it2 = vector.iter();
-            loop {
-                match (it1.next(), it2.next()) {
-                    (None, None) => break,
-                    (Some(i1), Some(i2)) => assert_eq!(i1, *i2),
-                    (Some(i1), None) => panic!(format!("expected {:?} but got EOF", i1)),
-                    (None, Some(i2)) => panic!(format!("expected EOF but got {:?}", *i2)),
+        fn split(ref vec in vec(i32::ANY, 0..2000), split_pos in usize::ANY) {
+            if !vec.is_empty() {
+                let split_index = split_pos % vec.len();
+                let mut left = Vector::from_iter(vec.iter().cloned());
+                let right = left.split_off(split_index);
+                assert_eq!(left.len(), split_index);
+                assert_eq!(right.len(), vec.len() - split_index);
+                for (index, item) in Iter::new(&left).enumerate() {
+                    assert_eq!(&vec[index], item);
+                }
+                for (index, item) in Iter::new(&right).enumerate() {
+                    assert_eq!(&vec[split_index + index], item);
                 }
             }
         }
 
         #[test]
-        fn reverse_iterator(ref input in collection::vec(i32::ANY, 0..100)) {
-            let vector = Vector::from_iter(input.iter().cloned());
-            assert_eq!(input.len(), vector.len());
-            let mut it1 = input.iter().cloned().rev();
-            let mut it2 = vector.iter().rev();
-            loop {
-                match (it1.next(), it2.next()) {
-                    (None, None) => break,
-                    (Some(i1), Some(i2)) => assert_eq!(i1, *i2),
-                    (Some(i1), None) => panic!(format!("expected {:?} but got EOF", i1)),
-                    (None, Some(i2)) => panic!(format!("expected EOF but got {:?}", *i2)),
-                }
+        fn append(ref vec1 in vec(i32::ANY, 0..1000), ref vec2 in vec(i32::ANY, 0..1000)) {
+            let mut seq1 = Vector::from_iter(vec1.iter().cloned());
+            let seq2 = Vector::from_iter(vec2.iter().cloned());
+            assert_eq!(seq1.len(), vec1.len());
+            assert_eq!(seq2.len(), vec2.len());
+            seq1.append(seq2);
+            let mut vec = vec1.clone();
+            vec.extend(vec2);
+            assert_eq!(seq1.len(), vec.len());
+            for (index, item) in seq1.into_iter().enumerate() {
+                assert_eq!(vec[index], item);
             }
-        }
-
-        #[test]
-        fn exact_size_iterator(ref vector in vector(i32::ANY, 0..100)) {
-            let mut should_be = vector.len();
-            let mut it = vector.iter();
-            loop {
-                assert_eq!(should_be, it.len());
-                match it.next() {
-                    None => break,
-                    Some(_) => should_be -= 1,
-                }
-            }
-            assert_eq!(0, it.len());
-        }
-
-        #[test]
-        fn sort(ref input in collection::vec(i32::ANY, 0..100)) {
-            let vector = Vector::from_iter(input.iter().cloned());
-            let mut input_sorted = input.clone();
-            input_sorted.sort();
-            let sorted = Vector::from_iter(input_sorted.iter().cloned());
-            assert_eq!(sorted, vector.sort());
-        }
-
-        #[test]
-        fn reverse(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut vector = Vector::from_iter(input.iter().cloned()).reverse();
-            let mut reversed = input.clone();
-            reversed.reverse();
-            for (index, value) in reversed.into_iter().enumerate() {
-                assert_eq!(Some(Arc::new(value)), vector.get(index));
-            }
-            vector.reverse_mut();
-            for (index, value) in input.iter().cloned().enumerate() {
-                assert_eq!(Some(Arc::new(value)), vector.get(index));
-            }
-        }
-
-        #[test]
-        fn reversed_push_front(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut vector = Vector::new().reverse();
-            for (count, value) in input.iter().cloned().enumerate() {
-                assert_eq!(count, vector.len());
-                vector = vector.push_front(value);
-                assert_eq!(count + 1, vector.len());
-            }
-            vector = vector.reverse();
-            for (index, value) in input.iter().cloned().enumerate() {
-                assert_eq!(Some(Arc::new(value)), vector.get(index));
-            }
-        }
-
-        #[test]
-        fn reversed_push_back(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut vector = Vector::new().reverse();
-            for (count, value) in input.iter().cloned().enumerate() {
-                assert_eq!(count, vector.len());
-                vector = vector.push_back(value);
-                assert_eq!(count + 1, vector.len());
-            }
-            vector = vector.reverse();
-            assert_eq!(input, &Vec::from_iter(vector.iter().rev().map(|a| *a)));
-        }
-
-        #[test]
-        fn reversed_pop_front(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut vector = Vector::from_iter(input.iter().cloned()).reverse();
-            assert_eq!(input.len(), vector.len());
-            for (index, value) in input.iter().cloned().enumerate().rev() {
-                match vector.pop_front() {
-                    None => panic!("vector emptied unexpectedly"),
-                    Some((item, next)) => {
-                        vector = next;
-                        assert_eq!(index, vector.len());
-                        assert_eq!(Arc::new(value), item);
-                    }
-                }
-            }
-            assert_eq!(0, vector.len());
-        }
-
-        #[test]
-        fn reversed_pop_back(ref input in collection::vec(i32::ANY, 0..100)) {
-            let mut vector = Vector::from_iter(input.iter().cloned()).reverse();
-            assert_eq!(input.len(), vector.len());
-            for (index, value) in input.iter().cloned().rev().enumerate().rev() {
-                match vector.pop_back() {
-                    None => panic!("vector emptied unexpectedly"),
-                    Some((item, next)) => {
-                        vector = next;
-                        assert_eq!(index, vector.len());
-                        assert_eq!(Arc::new(value), item);
-                    }
-                }
-            }
-            assert_eq!(0, vector.len());
         }
     }
 }

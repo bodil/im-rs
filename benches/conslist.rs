@@ -4,49 +4,59 @@
 
 #![feature(test)]
 
-extern crate test;
 extern crate im;
+extern crate test;
 
 use std::iter::FromIterator;
 use test::Bencher;
 
 use im::conslist::ConsList;
 
-#[bench]
-fn conslist_cons(b: &mut Bencher) {
+fn conslist_cons(b: &mut Bencher, count: usize) {
     b.iter(|| {
         let mut l = ConsList::new();
-        for i in 0..1000 {
+        for i in 0..count {
             l = l.cons(i);
         }
     })
 }
 
 #[bench]
-fn conslist_uncons(b: &mut Bencher) {
-    let l = ConsList::from_iter(0..1001);
+fn conslist_cons_10(b: &mut Bencher) {
+    conslist_cons(b, 10)
+}
+
+#[bench]
+fn conslist_cons_100(b: &mut Bencher) {
+    conslist_cons(b, 100)
+}
+
+#[bench]
+fn conslist_cons_1000(b: &mut Bencher) {
+    conslist_cons(b, 1000)
+}
+
+fn conslist_uncons(b: &mut Bencher, count: usize) {
+    let l = ConsList::from_iter(0..(count + 1));
     b.iter(|| {
         let mut p = l.clone();
-        for _ in 0..1000 {
+        for _ in 0..count {
             p = p.tail().unwrap();
         }
     })
 }
 
 #[bench]
-fn conslist_append(b: &mut Bencher) {
-    let size = Vec::from_iter((0..1000).into_iter().map(|i| ConsList::from_iter(0..i)));
-    b.iter(|| {
-        for item in &size {
-            item.append(item);
-        }
-    })
+fn conslist_uncons_10(b: &mut Bencher) {
+    conslist_uncons(b, 10)
 }
 
 #[bench]
-fn conslist_concat_using_sum(b: &mut Bencher) {
-    let list = ConsList::from_iter(0u32 .. 100);
-    let vec  = vec![list; 100];
+fn conslist_uncons_100(b: &mut Bencher) {
+    conslist_uncons(b, 100)
+}
 
-    b.iter::<ConsList<u32>, _>(|| vec.iter().map(ConsList::clone).sum())
+#[bench]
+fn conslist_uncons_1000(b: &mut Bencher) {
+    conslist_uncons(b, 1000)
 }
