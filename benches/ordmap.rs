@@ -42,7 +42,7 @@ fn reorder<A: Copy>(vec: &[A]) -> Vec<A> {
 fn ordmap_lookup_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size);
     let order = reorder(&keys);
-    let m = OrdMap::from_iter(keys.into_iter().map(|i| (i, 1)));
+    let m: OrdMap<i64, i64> = OrdMap::from_iter(keys.into_iter().map(|i| (i, 1)));
     b.iter(|| {
         for i in &order {
             m.get(i);
@@ -118,7 +118,7 @@ fn ordmap_insert_mut_1000(b: &mut Bencher) {
 fn ordmap_remove_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size);
     let order = reorder(&keys);
-    let map = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
+    let map: OrdMap<i64, i64> = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
     b.iter(|| {
         let mut m = map.clone();
         for i in &order {
@@ -171,7 +171,7 @@ fn ordmap_remove_mut_1000(b: &mut Bencher) {
 
 #[bench]
 fn ordmap_remove_min(b: &mut Bencher) {
-    let map = OrdMap::from_iter((0..1000).into_iter().map(|i| (i, i)));
+    let map: OrdMap<i64, i64> = OrdMap::from_iter((0..1000).into_iter().map(|i| (i, i)));
     b.iter(|| {
         let mut m = map.clone();
         assert!(!m.is_empty());
@@ -184,7 +184,7 @@ fn ordmap_remove_min(b: &mut Bencher) {
 
 #[bench]
 fn ordmap_remove_max(b: &mut Bencher) {
-    let map = OrdMap::from_iter((0..1000).into_iter().map(|i| (i, i)));
+    let map: OrdMap<i64, i64> = OrdMap::from_iter((0..1000).into_iter().map(|i| (i, i)));
     b.iter(|| {
         let mut m = map.clone();
         assert!(!m.is_empty());
@@ -198,7 +198,7 @@ fn ordmap_remove_max(b: &mut Bencher) {
 fn ordmap_insert_once_n(size: usize, b: &mut Bencher) {
     let mut keys = random_keys(size + 1);
     let key = keys.pop().unwrap();
-    let map = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
+    let map: OrdMap<i64, i64> = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
     b.iter(|| map.insert(key, key))
 }
 
@@ -225,7 +225,7 @@ fn ordmap_insert_once_10000(b: &mut Bencher) {
 fn ordmap_remove_once_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size + 1);
     let key = keys[0];
-    let map = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
+    let map: OrdMap<i64, i64> = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
     b.iter(|| map.remove(&key))
 }
 
@@ -252,7 +252,7 @@ fn ordmap_remove_once_10000(b: &mut Bencher) {
 fn ordmap_lookup_once_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size + 1);
     let key = keys[0];
-    let map = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
+    let map: OrdMap<i64, i64> = OrdMap::from_iter(keys.into_iter().map(|i| (i, i)));
     b.iter(|| map.get(&key))
 }
 

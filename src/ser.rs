@@ -9,7 +9,6 @@ use std::hash::{BuildHasher, Hash};
 use std::marker::PhantomData;
 use std::ops::Deref;
 
-use conslist::ConsList;
 use hashmap::HashMap;
 use hashset::HashSet;
 use ordmap::OrdMap;
@@ -121,33 +120,9 @@ where
     }
 }
 
-// ConsList
-
-impl<'de, A: Deserialize<'de>> Deserialize<'de> for ConsList<A> {
-    fn deserialize<D>(des: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        des.deserialize_seq(SeqVisitor::<'de, ConsList<A>, A>::new())
-    }
-}
-
-impl<A: Serialize> Serialize for ConsList<A> {
-    fn serialize<S>(&self, ser: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut s = ser.serialize_seq(Some(self.len()))?;
-        for i in self.iter() {
-            s.serialize_element(i.deref())?;
-        }
-        s.end()
-    }
-}
-
 // Set
 
-impl<'de, A: Deserialize<'de> + Ord> Deserialize<'de> for OrdSet<A> {
+impl<'de, A: Deserialize<'de> + Ord + Clone> Deserialize<'de> for OrdSet<A> {
     fn deserialize<D>(des: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -156,7 +131,7 @@ impl<'de, A: Deserialize<'de> + Ord> Deserialize<'de> for OrdSet<A> {
     }
 }
 
-impl<A: Ord + Serialize> Serialize for OrdSet<A> {
+impl<A: Ord + Clone + Serialize> Serialize for OrdSet<A> {
     fn serialize<S>(&self, ser: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -171,7 +146,9 @@ impl<A: Ord + Serialize> Serialize for OrdSet<A> {
 
 // Map
 
-impl<'de, K: Deserialize<'de> + Ord, V: Deserialize<'de>> Deserialize<'de> for OrdMap<K, V> {
+impl<'de, K: Deserialize<'de> + Ord + Clone, V: Deserialize<'de> + Clone> Deserialize<'de>
+    for OrdMap<K, V>
+{
     fn deserialize<D>(des: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -180,7 +157,7 @@ impl<'de, K: Deserialize<'de> + Ord, V: Deserialize<'de>> Deserialize<'de> for O
     }
 }
 
-impl<K: Serialize + Ord, V: Serialize> Serialize for OrdMap<K, V> {
+impl<K: Serialize + Ord + Clone, V: Serialize + Clone> Serialize for OrdMap<K, V> {
     fn serialize<S>(&self, ser: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -195,8 +172,11 @@ impl<K: Serialize + Ord, V: Serialize> Serialize for OrdMap<K, V> {
 
 // HashMap
 
-impl<'de, K: Deserialize<'de> + Hash + Eq, V: Deserialize<'de>, S: BuildHasher + Default>
-    Deserialize<'de> for HashMap<K, V, S>
+impl<'de, K, V, S> Deserialize<'de> for HashMap<K, V, S>
+where
+    K: Deserialize<'de> + Hash + Eq + Clone,
+    V: Deserialize<'de> + Clone,
+    S: BuildHasher + Default,
 {
     fn deserialize<D>(des: D) -> Result<Self, D::Error>
     where
@@ -206,8 +186,11 @@ impl<'de, K: Deserialize<'de> + Hash + Eq, V: Deserialize<'de>, S: BuildHasher +
     }
 }
 
-impl<K: Serialize + Hash + Eq, V: Serialize, S: BuildHasher + Default> Serialize
-    for HashMap<K, V, S>
+impl<K, V, S> Serialize for HashMap<K, V, S>
+where
+    K: Serialize + Hash + Eq + Clone,
+    V: Serialize + Clone,
+    S: BuildHasher + Default,
 {
     fn serialize<Ser>(&self, ser: Ser) -> Result<Ser::Ok, Ser::Error>
     where
@@ -223,7 +206,7 @@ impl<K: Serialize + Hash + Eq, V: Serialize, S: BuildHasher + Default> Serialize
 
 // HashSet
 
-impl<'de, A: Deserialize<'de> + Hash + Eq, S: BuildHasher + Default> Deserialize<'de>
+impl<'de, A: Deserialize<'de> + Hash + Eq + Clone, S: BuildHasher + Default> Deserialize<'de>
     for HashSet<A, S>
 {
     fn deserialize<D>(des: D) -> Result<Self, D::Error>
@@ -234,7 +217,7 @@ impl<'de, A: Deserialize<'de> + Hash + Eq, S: BuildHasher + Default> Deserialize
     }
 }
 
-impl<A: Serialize + Hash + Eq, S: BuildHasher + Default> Serialize for HashSet<A, S> {
+impl<A: Serialize + Hash + Eq + Clone, S: BuildHasher + Default> Serialize for HashSet<A, S> {
     fn serialize<Ser>(&self, ser: Ser) -> Result<Ser::Ok, Ser::Error>
     where
         Ser: Serializer,
@@ -276,21 +259,15 @@ impl<A: Clone + Serialize> Serialize for Vector<A> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use conslist::proptest::conslist;
     use hashmap::proptest::hash_map;
     use hashset::proptest::hash_set;
     use ordmap::proptest::ord_map;
     use ordset::proptest::ord_set;
     use proptest::num::i32;
     use serde_json::{from_str, to_string};
-    // use vector::proptest::vector;
+    use vector::proptest::vector;
 
     proptest! {
-        #[test]
-        fn ser_conslist(ref v in conslist(i32::ANY, 0..100)) {
-            assert_eq!(v, &from_str::<ConsList<i32>>(&to_string(&v).unwrap()).unwrap());
-        }
-
         #[test]
         fn ser_ordset(ref v in ord_set(i32::ANY, 0..100)) {
             assert_eq!(v, &from_str::<OrdSet<i32>>(&to_string(&v).unwrap()).unwrap());
@@ -311,9 +288,9 @@ mod test {
             assert_eq!(v, &from_str::<HashSet<i32>>(&to_string(&v).unwrap()).unwrap());
         }
 
-        // #[test]
-        // fn ser_vector(ref v in vector(i32::ANY, 0..100)) {
-        //     assert_eq!(v, &from_str::<Vector<i32>>(&to_string(&v).unwrap()).unwrap());
-        // }
+        #[test]
+        fn ser_vector(ref v in vector(i32::ANY, 0..100)) {
+            assert_eq!(v, &from_str::<Vector<i32>>(&to_string(&v).unwrap()).unwrap());
+        }
     }
 }

@@ -238,8 +238,6 @@ mod sort;
 mod util;
 
 #[macro_use]
-pub mod conslist;
-#[macro_use]
 pub mod ordmap;
 #[macro_use]
 pub mod hashmap;
@@ -260,7 +258,6 @@ pub mod btree {
     pub use nodes::btree::{DiffItem, DiffIter, Iter};
 }
 
-pub use conslist::ConsList;
 pub use hashmap::HashMap;
 pub use hashset::HashSet;
 pub use ordmap::OrdMap;
@@ -346,32 +343,30 @@ macro_rules! get_in {
 
 #[cfg(test)]
 mod lib_test {
-    // use std::sync::Arc;
+    #[test]
+    fn set_in() {
+        let vector = vector![1, 2, 3, 4, 5];
+        assert_eq!(vector![1, 2, 23, 4, 5], set_in!(vector, 2, 23));
+        let hashmap = hashmap![1 => 1, 2 => 2, 3 => 3];
+        assert_eq!(hashmap![1 => 1, 2 => 23, 3 => 3], set_in!(hashmap, 2, 23));
+        let ordmap = ordmap![1 => 1, 2 => 2, 3 => 3];
+        assert_eq!(ordmap![1 => 1, 2 => 23, 3 => 3], set_in!(ordmap, 2, 23));
 
-    // #[test]
-    // fn set_in() {
-    //     let vector = vector![1, 2, 3, 4, 5];
-    //     assert_eq!(vector![1, 2, 23, 4, 5], set_in!(vector, 2, 23));
-    //     let hashmap = hashmap![1 => 1, 2 => 2, 3 => 3];
-    //     assert_eq!(hashmap![1 => 1, 2 => 23, 3 => 3], set_in!(hashmap, 2, 23));
-    //     let ordmap = ordmap![1 => 1, 2 => 2, 3 => 3];
-    //     assert_eq!(ordmap![1 => 1, 2 => 23, 3 => 3], set_in!(ordmap, 2, 23));
+        let vecs = vector![vector![1, 2, 3], vector![4, 5, 6], vector![7, 8, 9]];
+        let vecs_target = vector![vector![1, 2, 3], vector![4, 5, 23], vector![7, 8, 9]];
+        assert_eq!(vecs_target, set_in!(vecs, 1 => 2, 23));
+    }
 
-    //     let vecs = vector![vector![1, 2, 3], vector![4, 5, 6], vector![7, 8, 9]];
-    //     let vecs_target = vector![vector![1, 2, 3], vector![4, 5, 23], vector![7, 8, 9]];
-    //     assert_eq!(vecs_target, set_in!(vecs, 1 => 2, 23));
-    // }
+    #[test]
+    fn get_in() {
+        let vector = vector![1, 2, 3, 4, 5];
+        assert_eq!(Some(&3), get_in!(vector, 2));
+        let hashmap = hashmap![1 => 1, 2 => 2, 3 => 3];
+        assert_eq!(Some(&2), get_in!(hashmap, &2));
+        let ordmap = ordmap![1 => 1, 2 => 2, 3 => 3];
+        assert_eq!(Some(&2), get_in!(ordmap, &2));
 
-    // #[test]
-    // fn get_in() {
-    //     let vector = vector![1, 2, 3, 4, 5];
-    //     assert_eq!(Some(Arc::new(3)), get_in!(vector, 2));
-    //     let hashmap = hashmap![1 => 1, 2 => 2, 3 => 3];
-    //     assert_eq!(Some(Arc::new(2)), get_in!(hashmap, &2));
-    //     let ordmap = ordmap![1 => 1, 2 => 2, 3 => 3];
-    //     assert_eq!(Some(Arc::new(2)), get_in!(ordmap, &2));
-
-    //     let vecs = vector![vector![1, 2, 3], vector![4, 5, 6], vector![7, 8, 9]];
-    //     assert_eq!(Some(Arc::new(6)), get_in!(vecs, 1 => 2));
-    // }
+        let vecs = vector![vector![1, 2, 3], vector![4, 5, 6], vector![7, 8, 9]];
+        assert_eq!(Some(&6), get_in!(vecs, 1 => 2));
+    }
 }

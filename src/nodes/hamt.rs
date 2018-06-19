@@ -3,10 +3,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::borrow::Borrow;
-use std::sync::Arc;
+use std::iter::FusedIterator;
 
 use bits::{bitpos, index, Bitmap, HASH_BITS, HASH_SIZE};
 use shared::Shared;
+use util::Ref;
 
 pub trait HashValue: Clone {
     type Key: Eq;
@@ -20,7 +21,7 @@ pub struct Node<A> {
     datamap: Bitmap,
     nodemap: Bitmap,
     data: Vec<Entry<A>>,
-    nodes: Vec<Arc<Node<A>>>,
+    nodes: Vec<Ref<Node<A>>>,
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -32,7 +33,7 @@ pub struct CollisionNode<A> {
 #[derive(PartialEq, Eq, Clone)]
 pub enum Entry<A> {
     Value(A, Bitmap),
-    Collision(Arc<CollisionNode<A>>),
+    Collision(Ref<CollisionNode<A>>),
 }
 
 enum SizePredicate {
@@ -43,7 +44,10 @@ enum SizePredicate {
 
 impl<A: HashValue> Node<A> {
     #[inline]
-    pub fn iter(root: Arc<Self>, size: usize) -> Iter<A> {
+    pub fn iter<'a>(root: &'a Self, size: usize) -> Iter<'a, A>
+    where
+        A: 'a,
+    {
         Iter::new(root, size)
     }
 
@@ -83,7 +87,7 @@ impl<A: HashValue> Node<A> {
             datamap: 0,
             data: Vec::new(),
             nodemap: bitpos,
-            nodes: vec![Arc::new(node)],
+            nodes: vec![Ref::new(node)],
         }
     }
 
@@ -282,7 +286,7 @@ impl<A: HashValue> Node<A> {
             if shift + HASH_BITS >= HASH_SIZE {
                 return Node::singleton(
                     bitpos(hash1, shift),
-                    Entry::Collision(Arc::new(CollisionNode::new(hash1, value1, value2))),
+                    Entry::Collision(Ref::new(CollisionNode::new(hash1, value1, value2))),
                 );
             }
             // Pass the values down a level.
@@ -329,12 +333,12 @@ impl<A: HashValue> Node<A> {
                     None
                 },
                 Entry::Collision(ref mut coll_ref) => {
-                    let coll = Arc::make_mut(coll_ref);
+                    let coll = Ref::make_mut(coll_ref);
                     coll.get_mut(key)
                 }
             }
         } else if self.nodemap & bitpos != 0 {
-            let child = Arc::make_mut(&mut self.nodes[node_index]);
+            let child = Ref::make_mut(&mut self.nodes[node_index]);
             child.get_mut(hash, shift + HASH_BITS, key)
         } else {
             None
@@ -362,7 +366,7 @@ impl<A: HashValue> Node<A> {
                             );
                             (
                                 true,
-                                self.update_value(bitpos, Entry::Collision(Arc::new(coll))),
+                                self.update_value(bitpos, Entry::Collision(Ref::new(coll))),
                             )
                         } else {
                             let node = Node::merge_values(
@@ -372,7 +376,7 @@ impl<A: HashValue> Node<A> {
                                 hash2,
                                 shift + HASH_BITS,
                             );
-                            (true, self.value_to_node(bitpos, Arc::new(node)))
+                            (true, self.value_to_node(bitpos, Ref::new(node)))
                         }
                     }
                 }
@@ -381,7 +385,7 @@ impl<A: HashValue> Node<A> {
                     let (added, new_coll) = coll.insert(value);
                     (
                         added,
-                        self.update_value(bitpos, Entry::Collision(Arc::new(new_coll))),
+                        self.update_value(bitpos, Entry::Collision(Ref::new(new_coll))),
                     )
                 }
             }
@@ -390,7 +394,7 @@ impl<A: HashValue> Node<A> {
             let index = self.node_index(bitpos);
             let child = &self.nodes[index];
             let (added, new_child) = child.insert(hash, shift + HASH_BITS, value);
-            (added, self.update_node(bitpos, Arc::new(new_child)))
+            (added, self.update_node(bitpos, Ref::new(new_child)))
         } else {
             // New value
             (true, self.insert_value(bitpos, Entry::Value(value, hash)))
@@ -415,7 +419,7 @@ impl<A: HashValue> Node<A> {
                 }
                 // There's already a collision here.
                 Entry::Collision(ref mut collision) => {
-                    let coll = Arc::make_mut(collision);
+                    let coll = Ref::make_mut(collision);
                     return coll.insert_mut(value);
                 }
             }
@@ -431,7 +435,7 @@ impl<A: HashValue> Node<A> {
                         Entry::Value(value, hash),
                         Entry::Value(value2, hash2),
                     );
-                    self.update_value_mut(bitpos, Entry::Collision(Arc::new(coll)));
+                    self.update_value_mut(bitpos, Entry::Collision(Ref::new(coll)));
                     return true;
                 } else {
                     let node = Node::merge_values(
@@ -441,7 +445,7 @@ impl<A: HashValue> Node<A> {
                         hash2,
                         shift + HASH_BITS,
                     );
-                    self.value_to_node_mut(bitpos, Arc::new(node));
+                    self.value_to_node_mut(bitpos, Ref::new(node));
                     return true;
                 }
             }
@@ -449,7 +453,7 @@ impl<A: HashValue> Node<A> {
         } else if self.nodemap & bitpos != 0 {
             // Child node
             let index = self.node_index(bitpos);
-            let child = Arc::make_mut(&mut self.nodes[index]);
+            let child = Ref::make_mut(&mut self.nodes[index]);
             child.insert_mut(hash, shift + HASH_BITS, value)
         } else {
             // New value
@@ -478,7 +482,7 @@ impl<A: HashValue> Node<A> {
                     None => None,
                     Some((value, next_coll)) => Some((
                         value,
-                        self.update_value(pos, Entry::Collision(Arc::new(next_coll))),
+                        self.update_value(pos, Entry::Collision(Ref::new(next_coll))),
                     )),
                 },
             }
@@ -524,7 +528,7 @@ impl<A: HashValue> Node<A> {
                     return None;
                 },
                 Entry::Collision(ref mut collisions) => {
-                    let mut coll = Arc::make_mut(collisions);
+                    let mut coll = Ref::make_mut(collisions);
                     return coll.remove_mut(key);
                 }
             }
@@ -536,7 +540,7 @@ impl<A: HashValue> Node<A> {
             let removed;
             let remaining;
             {
-                let child = Arc::make_mut(&mut self.nodes[index]);
+                let child = Ref::make_mut(&mut self.nodes[index]);
                 match child.remove_mut(hash, shift + HASH_BITS, key) {
                     None => return None,
                     Some(value) => match child.size_predicate() {
@@ -675,20 +679,26 @@ impl<A: HashValue> CollisionNode<A> {
     }
 }
 
-// Iterators
+// Ref iterator
 
-pub struct Iter<A> {
+pub struct Iter<'a, A>
+where
+    A: 'a,
+{
     count: usize,
-    stack: Vec<(Arc<Node<A>>, usize)>,
-    node: Arc<Node<A>>,
+    stack: Vec<(&'a Node<A>, usize)>,
+    node: &'a Node<A>,
     index: usize,
     nodes: bool,
-    collision: Option<Arc<CollisionNode<A>>>,
+    collision: Option<&'a CollisionNode<A>>,
     coll_index: usize,
 }
 
-impl<A> Iter<A> {
-    fn new(root: Arc<Node<A>>, size: usize) -> Self {
+impl<'a, A> Iter<'a, A>
+where
+    A: 'a,
+{
+    pub fn new(root: &'a Node<A>, size: usize) -> Self {
         Iter {
             count: size,
             stack: Vec::with_capacity((HASH_SIZE / HASH_BITS) + 1),
@@ -701,7 +711,95 @@ impl<A> Iter<A> {
     }
 }
 
-impl<A: Clone> Iterator for Iter<A> {
+impl<'a, A> Iterator for Iter<'a, A>
+where
+    A: 'a,
+{
+    type Item = &'a A;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(ref coll) = self.collision {
+            if coll.data.len() > self.coll_index {
+                let value = &coll.data[self.coll_index];
+                self.coll_index += 1;
+                self.count -= 1;
+                return Some(value);
+            }
+        }
+        self.collision = None;
+        if !self.nodes {
+            if self.node.data.len() > self.index {
+                match self.node.data[self.index] {
+                    Entry::Value(ref value, _) => {
+                        self.index += 1;
+                        self.count -= 1;
+                        return Some(value);
+                    }
+                    Entry::Collision(ref coll) => {
+                        self.index += 1;
+                        self.collision = Some(coll);
+                        self.coll_index = 0;
+                    }
+                }
+                return self.next();
+            }
+            self.index = 0;
+            self.nodes = true;
+        }
+        if self.node.nodes.len() > self.index {
+            self.stack.push((self.node, self.index + 1));
+            self.node = &self.node.nodes[self.index];
+            self.index = 0;
+            self.nodes = false;
+            return self.next();
+        }
+        match self.stack.pop() {
+            None => None,
+            Some((node, index)) => {
+                self.node = node;
+                self.index = index;
+                self.nodes = true;
+                self.next()
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.count, Some(self.count))
+    }
+}
+
+impl<'a, A> ExactSizeIterator for Iter<'a, A> where A: 'a {}
+
+impl<'a, A> FusedIterator for Iter<'a, A> where A: 'a {}
+
+// Consuming iterator
+
+pub struct ConsumingIter<A> {
+    count: usize,
+    stack: Vec<(Ref<Node<A>>, usize)>,
+    node: Ref<Node<A>>,
+    index: usize,
+    nodes: bool,
+    collision: Option<Ref<CollisionNode<A>>>,
+    coll_index: usize,
+}
+
+impl<A> ConsumingIter<A> {
+    pub fn new(root: Ref<Node<A>>, size: usize) -> Self {
+        ConsumingIter {
+            count: size,
+            stack: Vec::with_capacity((HASH_SIZE / HASH_BITS) + 1),
+            node: root,
+            index: 0,
+            nodes: false,
+            collision: None,
+            coll_index: 0,
+        }
+    }
+}
+
+impl<A: Clone> Iterator for ConsumingIter<A> {
     type Item = A;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -756,4 +854,6 @@ impl<A: Clone> Iterator for Iter<A> {
     }
 }
 
-impl<A: Clone> ExactSizeIterator for Iter<A> {}
+impl<A: Clone> ExactSizeIterator for ConsumingIter<A> {}
+
+impl<A: Clone> FusedIterator for ConsumingIter<A> {}

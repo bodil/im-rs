@@ -5,7 +5,8 @@
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::ops::IndexMut;
-use std::sync::Arc;
+
+use util::Ref;
 
 use self::Insert::*;
 use self::InsertAction::*;
@@ -24,7 +25,7 @@ pub trait BTreeValue: Clone {
     fn cmp_keys(&self, other: &Self) -> Ordering;
 }
 
-pub struct Node<A>(Arc<NodeData<A>>);
+pub struct Node<A>(Ref<NodeData<A>>);
 
 struct NodeData<A> {
     count: usize,
@@ -105,7 +106,7 @@ impl<A> Default for Node<A> {
     fn default() -> Self {
         let mut children = Vec::with_capacity(NODE_SIZE + 1);
         children.push(None);
-        Node(Arc::new(NodeData {
+        Node(Ref::new(NodeData {
             count: 0,
             keys: Vec::with_capacity(NODE_SIZE),
             children,
@@ -149,7 +150,7 @@ impl<A> Node<A> {
         let mut children = Vec::with_capacity(NODE_SIZE + 1);
         children.push(None);
         children.push(None);
-        Node(Arc::new(NodeData {
+        Node(Ref::new(NodeData {
             count: 1,
             keys,
             children,
@@ -164,7 +165,7 @@ impl<A> Node<A> {
         let mut children = Vec::with_capacity(NODE_SIZE + 1);
         children.push(Some(left));
         children.push(Some(right));
-        Node(Arc::new(NodeData {
+        Node(Ref::new(NodeData {
             count,
             keys,
             children,
@@ -173,12 +174,12 @@ impl<A> Node<A> {
 
     #[inline]
     fn wrap(data: NodeData<A>) -> Self {
-        Node(Arc::new(data))
+        Node(Ref::new(data))
     }
 
     #[inline]
     pub fn ptr_eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
+        Ref::ptr_eq(&self.0, &other.0)
     }
 
     pub fn min(&self) -> Option<&A> {
@@ -225,7 +226,7 @@ impl<A: BTreeValue> Node<A> {
         if self.0.keys.is_empty() {
             return None;
         }
-        let node = Arc::make_mut(&mut self.0);
+        let node = Ref::make_mut(&mut self.0);
         // Perform a binary search, resulting in either a match or
         // the index of the first higher key, meaning we search the
         // child to the left of it.
@@ -347,7 +348,7 @@ impl<A: BTreeValue> Node<A> {
     }
 
     fn pop_min_mut(&mut self) -> (A, Option<Node<A>>) {
-        let node = Arc::make_mut(&mut self.0);
+        let node = Ref::make_mut(&mut self.0);
         let pair = node.keys.remove(0);
         let child = node.children.remove(0);
         node.count -= 1 + Node::maybe_len(&child);
@@ -363,7 +364,7 @@ impl<A: BTreeValue> Node<A> {
     }
 
     fn pop_max_mut(&mut self) -> (A, Option<Node<A>>) {
-        let node = Arc::make_mut(&mut self.0);
+        let node = Ref::make_mut(&mut self.0);
         let pair = node.keys.pop().unwrap();
         let child = node.children.pop().unwrap();
         node.count -= 1 + Node::maybe_len(&child);
@@ -379,7 +380,7 @@ impl<A: BTreeValue> Node<A> {
     }
 
     fn push_min_mut(&mut self, child: Option<Node<A>>, pair: A) {
-        let node = Arc::make_mut(&mut self.0);
+        let node = Ref::make_mut(&mut self.0);
         node.count += 1 + Node::maybe_len(&child);
         node.keys.insert(0, pair);
         node.children.insert(0, child);
@@ -394,7 +395,7 @@ impl<A: BTreeValue> Node<A> {
     }
 
     fn push_max_mut(&mut self, child: Option<Node<A>>, pair: A) {
-        let node = Arc::make_mut(&mut self.0);
+        let node = Ref::make_mut(&mut self.0);
         node.count += 1 + Node::maybe_len(&child);
         node.keys.push(pair);
         node.children.push(child);
@@ -608,7 +609,7 @@ impl<A: BTreeValue> Node<A> {
 
     pub fn insert_mut(&mut self, value: A) -> Insert<A> {
         if self.0.keys.is_empty() {
-            let node = Arc::make_mut(&mut self.0);
+            let node = Ref::make_mut(&mut self.0);
             node.keys.push(value);
             node.children.push(None);
             node.count += 1;
@@ -620,7 +621,7 @@ impl<A: BTreeValue> Node<A> {
                 if value.ptr_eq(&self.0.keys[index]) {
                     return Insert::NoChange;
                 } else {
-                    let mut node = Arc::make_mut(&mut self.0);
+                    let mut node = Ref::make_mut(&mut self.0);
                     node.keys[index] = value;
                     return Insert::JustInc;
                 }
@@ -628,7 +629,7 @@ impl<A: BTreeValue> Node<A> {
             // Key is adjacent to some key in node
             Err(index) => {
                 let mut has_room = self.has_room();
-                let mut node = Arc::make_mut(&mut self.0);
+                let mut node = Ref::make_mut(&mut self.0);
                 let action = match node.children[index] {
                     // No child at location, this is the target node.
                     None => InsertAt,
@@ -742,14 +743,14 @@ impl<A: BTreeValue> Node<A> {
         };
         match action {
             RemoveAction::DeleteAt(index) => {
-                let mut node = Arc::make_mut(&mut self.0);
+                let mut node = Ref::make_mut(&mut self.0);
                 let pair = node.keys.remove(index);
                 node.children.remove(index);
                 node.count -= 1;
                 Remove::Removed(pair)
             }
             RemoveAction::PullUp(target_index, pull_to, child_index) => {
-                let mut node = Arc::make_mut(&mut self.0);
+                let mut node = Ref::make_mut(&mut self.0);
                 let mut children = &mut node.children;
                 let mut update = None;
                 let mut pair;
@@ -784,7 +785,7 @@ impl<A: BTreeValue> Node<A> {
                 } else {
                     unreachable!()
                 };
-                let mut node = Arc::make_mut(&mut self.0);
+                let mut node = Ref::make_mut(&mut self.0);
                 let pair = node.keys.remove(index);
                 let new_child = match merged_child.remove_mut(key) {
                     Remove::NoChange | Remove::Removed(_) => merged_child,
@@ -801,11 +802,12 @@ impl<A: BTreeValue> Node<A> {
                 }
             }
             RemoveAction::StealFromLeft(index) => {
-                let mut node = Arc::make_mut(&mut self.0);
+                let mut node = Ref::make_mut(&mut self.0);
                 let mut update = None;
                 let mut out_pair;
                 {
-                    let mut children = node.children
+                    let mut children = node
+                        .children
                         .index_mut(index - 1..index + 1)
                         .iter_mut()
                         .map(|n| {
@@ -851,7 +853,7 @@ impl<A: BTreeValue> Node<A> {
                 Remove::Removed(out_pair)
             }
             RemoveAction::StealFromRight(index) => {
-                let mut node = Arc::make_mut(&mut self.0);
+                let mut node = Ref::make_mut(&mut self.0);
                 let mut update = None;
                 let mut out_pair;
                 {
@@ -904,7 +906,7 @@ impl<A: BTreeValue> Node<A> {
                 } else {
                     unreachable!()
                 };
-                let mut node = Arc::make_mut(&mut self.0);
+                let mut node = Ref::make_mut(&mut self.0);
                 let mut update;
                 let mut out_pair;
                 {
@@ -938,7 +940,7 @@ impl<A: BTreeValue> Node<A> {
                 Remove::Removed(out_pair)
             }
             RemoveAction::ContinueDown(index) => {
-                let mut node = Arc::make_mut(&mut self.0);
+                let mut node = Ref::make_mut(&mut self.0);
                 let mut update = None;
                 let mut out_pair;
                 if let Some(&mut Some(ref mut child)) = node.children.get_mut(index) {
@@ -968,52 +970,181 @@ impl<A: BTreeValue> Node<A> {
 
 // Iterator
 
-enum IterItem<A> {
-    Consider(Node<A>),
-    Yield(A),
+enum IterItem<'a, A: 'a> {
+    Consider(&'a Node<A>),
+    Yield(&'a A),
 }
 
-pub struct Iter<A> {
-    fwd_last: Option<A>,
-    fwd_stack: Vec<IterItem<A>>,
-    back_last: Option<A>,
-    back_stack: Vec<IterItem<A>>,
+pub struct Iter<'a, A: 'a> {
+    fwd_last: Option<&'a A>,
+    fwd_stack: Vec<IterItem<'a, A>>,
+    back_last: Option<&'a A>,
+    back_stack: Vec<IterItem<'a, A>>,
     remaining: usize,
 }
 
-fn push_node<A: Clone>(stack: &mut Vec<IterItem<A>>, maybe_node: &Option<Node<A>>) {
-    if let Some(ref node) = *maybe_node {
-        stack.push(IterItem::Consider(node.clone()))
-    }
-}
-
-fn push<A: Clone>(stack: &mut Vec<IterItem<A>>, node: &Node<A>) {
-    for n in 0..node.0.keys.len() {
-        let i = node.0.keys.len() - n;
-        push_node(stack, &node.0.children[i]);
-        stack.push(IterItem::Yield(node.0.keys[i - 1].clone()));
-    }
-    push_node(stack, &node.0.children[0]);
-}
-
-impl<A: Clone> Iter<A> {
-    pub fn new(root: &Node<A>) -> Self {
+impl<'a, A: 'a + Clone> Iter<'a, A> {
+    pub fn new(root: &'a Node<A>) -> Self {
         Iter {
             fwd_last: None,
-            fwd_stack: vec![IterItem::Consider(root.clone())],
+            fwd_stack: vec![IterItem::Consider(root)],
             back_last: None,
-            back_stack: vec![IterItem::Consider(root.clone())],
+            back_stack: vec![IterItem::Consider(root)],
             remaining: root.len(),
         }
     }
 
+    fn push_node(stack: &mut Vec<IterItem<'a, A>>, maybe_node: &'a Option<Node<A>>) {
+        if let Some(ref node) = *maybe_node {
+            stack.push(IterItem::Consider(node))
+        }
+    }
+
+    fn push(stack: &mut Vec<IterItem<'a, A>>, node: &'a Node<A>) {
+        for n in 0..node.0.keys.len() {
+            let i = node.0.keys.len() - n;
+            Iter::push_node(stack, &node.0.children[i]);
+            stack.push(IterItem::Yield(&node.0.keys[i - 1]));
+        }
+        Iter::push_node(stack, &node.0.children[0]);
+    }
+
+    fn push_fwd(&mut self, node: &'a Node<A>) {
+        Iter::push(&mut self.fwd_stack, node)
+    }
+
+    fn push_node_back(&mut self, maybe_node: &'a Option<Node<A>>) {
+        if let Some(ref node) = *maybe_node {
+            self.back_stack.push(IterItem::Consider(node))
+        }
+    }
+
+    fn push_back(&mut self, node: &'a Node<A>) {
+        for i in 0..node.0.keys.len() {
+            self.push_node_back(&node.0.children[i]);
+            self.back_stack.push(IterItem::Yield(&node.0.keys[i]));
+        }
+        self.push_node_back(&node.0.children[node.0.keys.len()]);
+    }
+}
+
+impl<'a, A> Iterator for Iter<'a, A>
+where
+    A: 'a + BTreeValue,
+{
+    type Item = &'a A;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.fwd_stack.pop() {
+                None => {
+                    self.remaining = 0;
+                    return None;
+                }
+                Some(IterItem::Consider(node)) => self.push_fwd(&node),
+                Some(IterItem::Yield(value)) => {
+                    if let Some(ref last) = self.back_last {
+                        if value.cmp_keys(last) != Ordering::Less {
+                            self.fwd_stack.clear();
+                            self.back_stack.clear();
+                            self.remaining = 0;
+                            return None;
+                        }
+                    }
+                    self.remaining -= 1;
+                    self.fwd_last = Some(value);
+                    return Some(value);
+                }
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.remaining, Some(self.remaining))
+    }
+}
+
+impl<'a, A> DoubleEndedIterator for Iter<'a, A>
+where
+    A: 'a + BTreeValue,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.back_stack.pop() {
+                None => {
+                    self.remaining = 0;
+                    return None;
+                }
+                Some(IterItem::Consider(node)) => self.push_back(&node),
+                Some(IterItem::Yield(value)) => {
+                    if let Some(ref last) = self.fwd_last {
+                        if value.cmp_keys(last) != Ordering::Greater {
+                            self.fwd_stack.clear();
+                            self.back_stack.clear();
+                            self.remaining = 0;
+                            return None;
+                        }
+                    }
+                    self.remaining -= 1;
+                    self.back_last = Some(value);
+                    return Some(value);
+                }
+            }
+        }
+    }
+}
+
+impl<'a, A: 'a + BTreeValue> ExactSizeIterator for Iter<'a, A> {}
+
+// Consuming iterator
+
+enum ConsumingIterItem<A> {
+    Consider(Node<A>),
+    Yield(A),
+}
+
+pub struct ConsumingIter<A> {
+    fwd_last: Option<A>,
+    fwd_stack: Vec<ConsumingIterItem<A>>,
+    back_last: Option<A>,
+    back_stack: Vec<ConsumingIterItem<A>>,
+    remaining: usize,
+}
+
+impl<A: Clone> ConsumingIter<A> {
+    pub fn new(root: &Node<A>) -> Self {
+        ConsumingIter {
+            fwd_last: None,
+            fwd_stack: vec![ConsumingIterItem::Consider(root.clone())],
+            back_last: None,
+            back_stack: vec![ConsumingIterItem::Consider(root.clone())],
+            remaining: root.len(),
+        }
+    }
+
+    fn push_node(stack: &mut Vec<ConsumingIterItem<A>>, maybe_node: &Option<Node<A>>) {
+        if let Some(ref node) = *maybe_node {
+            stack.push(ConsumingIterItem::Consider(node.clone()))
+        }
+    }
+
+    fn push(stack: &mut Vec<ConsumingIterItem<A>>, node: &Node<A>) {
+        for n in 0..node.0.keys.len() {
+            let i = node.0.keys.len() - n;
+            ConsumingIter::push_node(stack, &node.0.children[i]);
+            stack.push(ConsumingIterItem::Yield(node.0.keys[i - 1].clone()));
+        }
+        ConsumingIter::push_node(stack, &node.0.children[0]);
+    }
+
     fn push_fwd(&mut self, node: &Node<A>) {
-        push(&mut self.fwd_stack, node)
+        ConsumingIter::push(&mut self.fwd_stack, node)
     }
 
     fn push_node_back(&mut self, maybe_node: &Option<Node<A>>) {
         if let Some(ref node) = *maybe_node {
-            self.back_stack.push(IterItem::Consider(node.clone()))
+            self.back_stack
+                .push(ConsumingIterItem::Consider(node.clone()))
         }
     }
 
@@ -1021,13 +1152,13 @@ impl<A: Clone> Iter<A> {
         for i in 0..node.0.keys.len() {
             self.push_node_back(&node.0.children[i]);
             self.back_stack
-                .push(IterItem::Yield(node.0.keys[i].clone()));
+                .push(ConsumingIterItem::Yield(node.0.keys[i].clone()));
         }
         self.push_node_back(&node.0.children[node.0.keys.len()]);
     }
 }
 
-impl<A> Iterator for Iter<A>
+impl<A> Iterator for ConsumingIter<A>
 where
     A: BTreeValue,
 {
@@ -1040,8 +1171,8 @@ where
                     self.remaining = 0;
                     return None;
                 }
-                Some(IterItem::Consider(node)) => self.push_fwd(&node),
-                Some(IterItem::Yield(value)) => {
+                Some(ConsumingIterItem::Consider(node)) => self.push_fwd(&node),
+                Some(ConsumingIterItem::Yield(value)) => {
                     if let Some(ref last) = self.back_last {
                         if value.cmp_keys(last) != Ordering::Less {
                             self.fwd_stack.clear();
@@ -1063,7 +1194,7 @@ where
     }
 }
 
-impl<A> DoubleEndedIterator for Iter<A>
+impl<A> DoubleEndedIterator for ConsumingIter<A>
 where
     A: BTreeValue,
 {
@@ -1074,8 +1205,8 @@ where
                     self.remaining = 0;
                     return None;
                 }
-                Some(IterItem::Consider(node)) => self.push_back(&node),
-                Some(IterItem::Yield(value)) => {
+                Some(ConsumingIterItem::Consider(node)) => self.push_back(&node),
+                Some(ConsumingIterItem::Yield(value)) => {
                     if let Some(ref last) = self.fwd_last {
                         if value.cmp_keys(last) != Ordering::Greater {
                             self.fwd_stack.clear();
@@ -1093,83 +1224,83 @@ where
     }
 }
 
-impl<A: BTreeValue> ExactSizeIterator for Iter<A> {}
+impl<A: BTreeValue> ExactSizeIterator for ConsumingIter<A> {}
 
 // DiffIter
 
-pub struct DiffIter<A> {
-    old_stack: Vec<IterItem<A>>,
-    new_stack: Vec<IterItem<A>>,
+pub struct DiffIter<'a, A: 'a> {
+    old_stack: Vec<IterItem<'a, A>>,
+    new_stack: Vec<IterItem<'a, A>>,
 }
 
 #[derive(PartialEq, Eq)]
-pub enum DiffItem<A> {
-    Add(A),
-    Update { old: A, new: A },
-    Remove(A),
+pub enum DiffItem<'a, A: 'a> {
+    Add(&'a A),
+    Update { old: &'a A, new: &'a A },
+    Remove(&'a A),
 }
 
-impl<A> DiffIter<A> {
-    pub fn new(old: &Node<A>, new: &Node<A>) -> Self {
+impl<'a, A: 'a> DiffIter<'a, A> {
+    pub fn new(old: &'a Node<A>, new: &'a Node<A>) -> Self {
         DiffIter {
             old_stack: if old.0.keys.is_empty() {
                 Vec::new()
             } else {
-                vec![IterItem::Consider(old.clone())]
+                vec![IterItem::Consider(old)]
             },
             new_stack: if new.0.keys.is_empty() {
                 Vec::new()
             } else {
-                vec![IterItem::Consider(new.clone())]
+                vec![IterItem::Consider(new)]
             },
         }
     }
 }
 
-impl<A: PartialEq> Iterator for DiffIter<A>
+impl<'a, A> Iterator for DiffIter<'a, A>
 where
-    A: BTreeValue,
+    A: 'a + BTreeValue + PartialEq,
 {
-    type Item = DiffItem<A>;
+    type Item = DiffItem<'a, A>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match (self.old_stack.pop(), self.new_stack.pop()) {
                 (None, None) => return None,
                 (None, Some(new)) => match new {
-                    IterItem::Consider(new) => push(&mut self.new_stack, &new),
+                    IterItem::Consider(new) => Iter::push(&mut self.new_stack, &new),
                     IterItem::Yield(new) => return Some(DiffItem::Add(new)),
                 },
                 (Some(old), None) => match old {
-                    IterItem::Consider(old) => push(&mut self.old_stack, &old),
+                    IterItem::Consider(old) => Iter::push(&mut self.old_stack, &old),
                     IterItem::Yield(old) => return Some(DiffItem::Remove(old)),
                 },
                 (Some(old), Some(new)) => match (old, new) {
                     (IterItem::Consider(old), IterItem::Consider(new)) => {
-                        if !Arc::ptr_eq(&old.0, &new.0) {
+                        if !Ref::ptr_eq(&old.0, &new.0) {
                             match old.0.keys[0].cmp_keys(&new.0.keys[0]) {
                                 Ordering::Less => {
-                                    push(&mut self.old_stack, &old);
+                                    Iter::push(&mut self.old_stack, &old);
                                     self.new_stack.push(IterItem::Consider(new));
                                 }
                                 Ordering::Greater => {
                                     self.old_stack.push(IterItem::Consider(old));
-                                    push(&mut self.new_stack, &new);
+                                    Iter::push(&mut self.new_stack, &new);
                                 }
                                 Ordering::Equal => {
-                                    push(&mut self.old_stack, &old);
-                                    push(&mut self.new_stack, &new);
+                                    Iter::push(&mut self.old_stack, &old);
+                                    Iter::push(&mut self.new_stack, &new);
                                 }
                             }
                         }
                     }
                     (IterItem::Consider(old), IterItem::Yield(new)) => {
-                        push(&mut self.old_stack, &old);
+                        Iter::push(&mut self.old_stack, &old);
                         self.new_stack.push(IterItem::Yield(new));
                     }
                     (IterItem::Yield(old), IterItem::Consider(new)) => {
                         self.old_stack.push(IterItem::Yield(old));
-                        push(&mut self.new_stack, &new);
+                        Iter::push(&mut self.new_stack, &new);
                     }
                     (IterItem::Yield(old), IterItem::Yield(new)) => match old.cmp_keys(&new) {
                         Ordering::Less => {
