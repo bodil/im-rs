@@ -115,6 +115,11 @@ fn hashmap_insert_mut_1000(b: &mut Bencher) {
     hashmap_insert_mut_n(1000, b)
 }
 
+#[bench]
+fn hashmap_insert_mut_10000(b: &mut Bencher) {
+    hashmap_insert_mut_n(10000, b)
+}
+
 fn hashmap_remove_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size);
     let order = reorder(&keys);

@@ -37,18 +37,23 @@ fn std_hashmap_insert_n(size: usize, b: &mut Bencher) {
 }
 
 #[bench]
-fn std_hashmap_insert_10(b: &mut Bencher) {
+fn std_hashmap_insert_mut_10(b: &mut Bencher) {
     std_hashmap_insert_n(10, b)
 }
 
 #[bench]
-fn std_hashmap_insert_100(b: &mut Bencher) {
+fn std_hashmap_insert_mut_100(b: &mut Bencher) {
     std_hashmap_insert_n(100, b)
 }
 
 #[bench]
-fn std_hashmap_insert_1000(b: &mut Bencher) {
+fn std_hashmap_insert_mut_1000(b: &mut Bencher) {
     std_hashmap_insert_n(1000, b)
+}
+
+#[bench]
+fn std_hashmap_insert_mut_10000(b: &mut Bencher) {
+    std_hashmap_insert_n(10000, b)
 }
 
 fn std_btreemap_insert_n(size: usize, b: &mut Bencher) {
