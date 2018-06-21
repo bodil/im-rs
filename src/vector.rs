@@ -1423,10 +1423,10 @@ impl<A: Clone> FusedIterator for ConsumingIter<A> {}
 
 // QuickCheck
 
-#[cfg(any(test, feature = "quickcheck"))]
+#[cfg(all(not(feature = "no_arc"), any(test, feature = "quickcheck")))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(any(test, feature = "quickcheck"))]
+#[cfg(all(not(feature = "no_arc"), any(test, feature = "quickcheck")))]
 impl<A: Arbitrary + Sync + Clone> Arbitrary for Vector<A> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         Vector::from_iter(Vec::<A>::arbitrary(g))

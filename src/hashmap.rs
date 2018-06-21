@@ -1447,10 +1447,10 @@ where
 
 // QuickCheck
 
-#[cfg(any(test, feature = "quickcheck"))]
+#[cfg(all(not(feature = "no_arc"), any(test, feature = "quickcheck")))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(any(test, feature = "quickcheck"))]
+#[cfg(all(not(feature = "no_arc"), any(test, feature = "quickcheck")))]
 impl<K: Hash + Eq + Arbitrary + Sync, V: Arbitrary + Sync> Arbitrary for HashMap<K, V> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         HashMap::from(Vec::<(K, V)>::arbitrary(g))
