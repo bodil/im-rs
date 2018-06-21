@@ -307,8 +307,7 @@ where
     pub fn insert_mut(&mut self, a: A) {
         let hash = hash_key(&*self.hasher, &a);
         let root = Ref::make_mut(&mut self.root);
-        let added = root.insert_mut(hash, 0, Value(a));
-        if added {
+        if root.insert_mut(hash, 0, Value(a)) {
             self.size += 1
         }
     }

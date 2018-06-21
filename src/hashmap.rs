@@ -31,9 +31,10 @@ use std::collections::hash_map::RandomState;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::{FromIterator, Sum};
+use std::mem;
 use std::ops::{Add, Index, IndexMut};
 
-use bits::hash_key;
+use bits::{hash_key, Bitmap};
 use shared::Shared;
 use util::Ref;
 
@@ -318,14 +319,44 @@ where
     /// );
     /// # }
     /// ```
-    pub fn get<BK>(&self, k: &BK) -> Option<&V>
+    pub fn get<BK>(&self, key: &BK) -> Option<&V>
     where
         BK: Hash + Eq + Clone + ?Sized,
         K: Borrow<BK>,
     {
         self.root
-            .get(hash_key(&*self.hasher, k), 0, k)
+            .get(hash_key(&*self.hasher, key), 0, key)
             .map(|&(_, ref v)| v)
+    }
+
+    /// Get a mutable reference to the value for a key from a hash
+    /// map.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map = hashmap!{123 => "lol"};
+    /// assert_eq!(
+    ///   map.get(&123),
+    ///   Some(&"lol")
+    /// );
+    /// # }
+    /// ```
+    pub fn get_mut<BK>(&mut self, key: &BK) -> Option<&mut V>
+    where
+        BK: Hash + Eq + Clone + ?Sized,
+        K: Borrow<BK>,
+    {
+        let root = Ref::make_mut(&mut self.root);
+        match root.get_mut(hash_key(&*self.hasher, key), 0, key) {
+            None => None,
+            Some(&mut (_, ref mut value)) => Some(value),
+        }
     }
 
     /// Test for the presence of a key in a hash map.
@@ -422,9 +453,8 @@ where
     pub fn insert_mut(&mut self, k: K, v: V) {
         let hash = hash_key(&*self.hasher, &k);
         let root = Ref::make_mut(&mut self.root);
-        let added = root.insert_mut(hash, 0, (k, v));
-        if added {
-            self.size += 1
+        if root.insert_mut(hash, 0, (k, v)) {
+            self.size += 1;
         }
     }
 
@@ -978,6 +1008,167 @@ where
         RM: Borrow<Self>,
     {
         self.is_proper_submap_by(other.borrow(), PartialEq::eq)
+    }
+
+    pub fn entry(&mut self, key: K) -> Entry<'_, K, V, S> {
+        let hash = hash_key(&*self.hasher, &key);
+        if self.root.get(hash, 0, &key).is_some() {
+            Entry::Occupied(OccupiedEntry {
+                map: self,
+                hash,
+                key,
+            })
+        } else {
+            Entry::Vacant(VacantEntry {
+                map: self,
+                hash,
+                key,
+            })
+        }
+    }
+}
+
+// Entries
+
+pub enum Entry<'a, K, V, S>
+where
+    K: 'a + Hash + Eq + Clone,
+    V: 'a + Clone,
+    S: 'a + BuildHasher,
+{
+    Occupied(OccupiedEntry<'a, K, V, S>),
+    Vacant(VacantEntry<'a, K, V, S>),
+}
+
+impl<'a, K, V, S> Entry<'a, K, V, S>
+where
+    K: 'a + Hash + Eq + Clone,
+    V: 'a + Clone,
+    S: 'a + BuildHasher,
+{
+    pub fn or_insert(self, default: V) -> &'a mut V {
+        self.or_insert_with(|| default)
+    }
+
+    pub fn or_insert_with<F>(self, default: F) -> &'a mut V
+    where
+        F: FnOnce() -> V,
+    {
+        match self {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(default()),
+        }
+    }
+
+    pub fn or_default(self) -> &'a mut V
+    where
+        V: Default,
+    {
+        self.or_insert_with(Default::default)
+    }
+
+    pub fn key(&self) -> &K {
+        match self {
+            Entry::Occupied(entry) => entry.key(),
+            Entry::Vacant(entry) => entry.key(),
+        }
+    }
+
+    pub fn and_modify<F>(mut self, f: F) -> Self
+    where
+        F: FnOnce(&mut V),
+    {
+        match &mut self {
+            Entry::Occupied(ref mut entry) => f(entry.get_mut()),
+            Entry::Vacant(_) => (),
+        }
+        self
+    }
+}
+
+pub struct OccupiedEntry<'a, K, V, S>
+where
+    K: 'a + Hash + Eq + Clone,
+    V: 'a + Clone,
+    S: 'a + BuildHasher,
+{
+    map: &'a mut HashMap<K, V, S>,
+    hash: Bitmap,
+    key: K,
+}
+
+impl<'a, K, V, S> OccupiedEntry<'a, K, V, S>
+where
+    K: 'a + Hash + Eq + Clone,
+    V: 'a + Clone,
+    S: 'a + BuildHasher,
+{
+    pub fn key(&self) -> &K {
+        &self.key
+    }
+
+    pub fn remove_entry(self) -> (K, V) {
+        let root = Ref::make_mut(&mut self.map.root);
+        let result = root.remove_mut(self.hash, 0, &self.key);
+        self.map.size -= 1;
+        result.unwrap()
+    }
+
+    pub fn get(&self) -> &V {
+        &self.map.root.get(self.hash, 0, &self.key).unwrap().1
+    }
+
+    pub fn get_mut(&mut self) -> &mut V {
+        let root = Ref::make_mut(&mut self.map.root);
+        &mut root.get_mut(self.hash, 0, &self.key).unwrap().1
+    }
+
+    pub fn into_mut(self) -> &'a mut V {
+        let root = Ref::make_mut(&mut self.map.root);
+        &mut root.get_mut(self.hash, 0, &self.key).unwrap().1
+    }
+
+    pub fn insert(&mut self, value: V) -> V {
+        mem::replace(self.get_mut(), value)
+    }
+
+    pub fn remove(self) -> V {
+        self.remove_entry().1
+    }
+}
+
+pub struct VacantEntry<'a, K, V, S>
+where
+    K: 'a + Hash + Eq + Clone,
+    V: 'a + Clone,
+    S: 'a + BuildHasher,
+{
+    map: &'a mut HashMap<K, V, S>,
+    hash: Bitmap,
+    key: K,
+}
+
+impl<'a, K, V, S> VacantEntry<'a, K, V, S>
+where
+    K: 'a + Hash + Eq + Clone,
+    V: 'a + Clone,
+    S: 'a + BuildHasher,
+{
+    pub fn key(&self) -> &K {
+        &self.key
+    }
+
+    pub fn into_key(self) -> K {
+        self.key
+    }
+
+    pub fn insert(self, value: V) -> &'a mut V {
+        let root = Ref::make_mut(&mut self.map.root);
+        if root.insert_mut(self.hash, 0, (self.key.clone(), value)) {
+            self.map.size += 1;
+        }
+        // TODO root.insert_mut ought to return this reference
+        &mut root.get_mut(self.hash, 0, &self.key).unwrap().1
     }
 }
 
@@ -1573,6 +1764,25 @@ mod test {
             "y" => 2,
         };
         assert_eq!(map1, map2);
+    }
+
+    #[test]
+    fn entry_api() {
+        let mut map = hashmap!{"bar" => 5};
+        map.entry(&"foo").and_modify(|v| *v += 5).or_insert(1);
+        assert_eq!(1, map[&"foo"]);
+        map.entry(&"foo").and_modify(|v| *v += 5).or_insert(1);
+        assert_eq!(6, map[&"foo"]);
+        map.entry(&"bar").and_modify(|v| *v += 5).or_insert(1);
+        assert_eq!(10, map[&"bar"]);
+        assert_eq!(
+            10,
+            match map.entry(&"bar") {
+                Entry::Occupied(entry) => entry.remove(),
+                _ => panic!(),
+            }
+        );
+        assert!(!map.contains_key(&"bar"));
     }
 
     proptest! {

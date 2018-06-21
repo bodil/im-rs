@@ -22,6 +22,7 @@ use std::collections;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::{FromIterator, Iterator, Sum};
+use std::mem;
 use std::ops::{Add, Index, IndexMut};
 
 use hashmap::HashMap;
@@ -265,12 +266,20 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// );
     /// # }
     /// ```
-    pub fn get<BK>(&self, k: &BK) -> Option<&V>
+    pub fn get<BK>(&self, key: &BK) -> Option<&V>
     where
         BK: Ord + Clone + ?Sized,
         K: Borrow<BK>,
     {
-        self.root.lookup(k).map(|(_, v)| v)
+        self.root.lookup(key).map(|(_, v)| v)
+    }
+
+    fn get_mut<BK>(&mut self, key: &BK) -> Option<&mut V>
+    where
+        BK: Ord + Clone + ?Sized,
+        K: Borrow<BK>,
+    {
+        self.root.lookup_mut(key).map(|(_, v)| v)
     }
 
     /// Test for the presence of a key in a map.
@@ -995,6 +1004,144 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     {
         self.is_proper_submap_by(other.borrow(), PartialEq::eq)
     }
+
+    pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
+        if self.contains_key(&key) {
+            Entry::Occupied(OccupiedEntry { map: self, key })
+        } else {
+            Entry::Vacant(VacantEntry { map: self, key })
+        }
+    }
+}
+
+// Entries
+
+pub enum Entry<'a, K, V>
+where
+    K: 'a + Ord + Clone,
+    V: 'a + Clone,
+{
+    Occupied(OccupiedEntry<'a, K, V>),
+    Vacant(VacantEntry<'a, K, V>),
+}
+
+impl<'a, K, V> Entry<'a, K, V>
+where
+    K: 'a + Ord + Clone,
+    V: 'a + Clone,
+{
+    pub fn or_insert(self, default: V) -> &'a mut V {
+        self.or_insert_with(|| default)
+    }
+
+    pub fn or_insert_with<F>(self, default: F) -> &'a mut V
+    where
+        F: FnOnce() -> V,
+    {
+        match self {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(default()),
+        }
+    }
+
+    pub fn or_default(self) -> &'a mut V
+    where
+        V: Default,
+    {
+        self.or_insert_with(Default::default)
+    }
+
+    pub fn key(&self) -> &K {
+        match self {
+            Entry::Occupied(entry) => entry.key(),
+            Entry::Vacant(entry) => entry.key(),
+        }
+    }
+
+    pub fn and_modify<F>(mut self, f: F) -> Self
+    where
+        F: FnOnce(&mut V),
+    {
+        match &mut self {
+            Entry::Occupied(ref mut entry) => f(entry.get_mut()),
+            Entry::Vacant(_) => (),
+        }
+        self
+    }
+}
+
+pub struct OccupiedEntry<'a, K, V>
+where
+    K: 'a + Ord + Clone,
+    V: 'a + Clone,
+{
+    map: &'a mut OrdMap<K, V>,
+    key: K,
+}
+
+impl<'a, K, V> OccupiedEntry<'a, K, V>
+where
+    K: 'a + Ord + Clone,
+    V: 'a + Clone,
+{
+    pub fn key(&self) -> &K {
+        &self.key
+    }
+
+    pub fn remove_entry(self) -> (K, V) {
+        self.map
+            .pop_with_key_mut(&self.key)
+            .expect("ordmap::OccupiedEntry::remove_entry: key has vanished!")
+    }
+
+    pub fn get(&self) -> &V {
+        self.map.get(&self.key).unwrap()
+    }
+
+    pub fn get_mut(&mut self) -> &mut V {
+        self.map.get_mut(&self.key).unwrap()
+    }
+
+    pub fn into_mut(self) -> &'a mut V {
+        self.map.get_mut(&self.key).unwrap()
+    }
+
+    pub fn insert(&mut self, value: V) -> V {
+        mem::replace(self.get_mut(), value)
+    }
+
+    pub fn remove(self) -> V {
+        self.remove_entry().1
+    }
+}
+
+pub struct VacantEntry<'a, K, V>
+where
+    K: 'a + Ord + Clone,
+    V: 'a + Clone,
+{
+    map: &'a mut OrdMap<K, V>,
+    key: K,
+}
+
+impl<'a, K, V> VacantEntry<'a, K, V>
+where
+    K: 'a + Ord + Clone,
+    V: 'a + Clone,
+{
+    pub fn key(&self) -> &K {
+        &self.key
+    }
+
+    pub fn into_key(self) -> K {
+        self.key
+    }
+
+    pub fn insert(self, value: V) -> &'a mut V {
+        self.map.insert_mut(self.key.clone(), value);
+        // TODO insert_mut ought to return this reference
+        self.map.get_mut(&self.key).unwrap()
+    }
 }
 
 // Core traits
@@ -1649,6 +1796,25 @@ mod test {
         assert_eq!(4, map[&3]);
         map[&3] = 8;
         assert_eq!(ordmap!{1 => 2, 3 => 8, 5 => 6}, map);
+    }
+
+    #[test]
+    fn entry_api() {
+        let mut map = ordmap!{"bar" => 5};
+        map.entry(&"foo").and_modify(|v| *v += 5).or_insert(1);
+        assert_eq!(1, map[&"foo"]);
+        map.entry(&"foo").and_modify(|v| *v += 5).or_insert(1);
+        assert_eq!(6, map[&"foo"]);
+        map.entry(&"bar").and_modify(|v| *v += 5).or_insert(1);
+        assert_eq!(10, map[&"bar"]);
+        assert_eq!(
+            10,
+            match map.entry(&"bar") {
+                Entry::Occupied(entry) => entry.remove(),
+                _ => panic!(),
+            }
+        );
+        assert!(!map.contains_key(&"bar"));
     }
 
     // FIXME these have to work!
