@@ -6,7 +6,6 @@ use std::borrow::Borrow;
 use std::iter::FusedIterator;
 
 use bits::{bitpos, index, Bitmap, HASH_BITS, HASH_SIZE};
-use shared::Shared;
 use util::Ref;
 
 pub trait HashValue: Clone {
@@ -125,12 +124,12 @@ impl<A: HashValue> Node<A> {
 
     fn update_node<RN>(&self, bitpos: Bitmap, node: RN) -> Self
     where
-        RN: Shared<Node<A>>,
+        Ref<Node<A>>: From<RN>
     {
         let index = self.node_index(bitpos);
         let mut new_nodes = Vec::with_capacity(self.nodes.len());
         new_nodes.extend(self.nodes.iter().cloned().take(index));
-        new_nodes.push(node.shared());
+        new_nodes.push(From::from(node));
         new_nodes.extend(self.nodes.iter().cloned().skip(index + 1));
         Node {
             nodemap: self.nodemap,
@@ -200,7 +199,7 @@ impl<A: HashValue> Node<A> {
 
     fn value_to_node<RN>(&self, bitpos: Bitmap, node: RN) -> Self
     where
-        RN: Shared<Node<A>>,
+        Ref<Node<A>>: From<RN>
     {
         let old_index = self.data_index(bitpos);
         let new_index = self.node_index(bitpos);
@@ -211,7 +210,7 @@ impl<A: HashValue> Node<A> {
 
         let mut new_nodes = Vec::with_capacity(self.nodes.len() + 1);
         new_nodes.extend(self.nodes.iter().cloned().take(new_index));
-        new_nodes.push(node.shared());
+        new_nodes.push(From::from(node));
         new_nodes.extend(self.nodes.iter().cloned().skip(new_index));
 
         Node {
@@ -224,13 +223,13 @@ impl<A: HashValue> Node<A> {
 
     fn value_to_node_mut<RN>(&mut self, bitpos: Bitmap, node: RN)
     where
-        RN: Shared<Node<A>>,
+        Ref<Node<A>>: From<RN>
     {
         let old_index = self.data_index(bitpos);
         let new_index = self.node_index(bitpos);
         self.data.remove(old_index);
         self.datamap ^= bitpos;
-        self.nodes.insert(new_index, node.shared());
+        self.nodes.insert(new_index, From::from(node));
         self.nodemap |= bitpos;
     }
 

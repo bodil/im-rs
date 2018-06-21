@@ -24,7 +24,6 @@ use std::ops::{Add, Deref, Mul};
 use bits::hash_key;
 use nodes::hamt::{ConsumingIter as ConsumingNodeIter, HashValue, Iter as NodeIter, Node};
 use ordset::OrdSet;
-use shared::Shared;
 use util::Ref;
 
 /// Construct a set from a sequence of values.
@@ -230,12 +229,12 @@ where
     #[inline]
     pub fn with_hasher<RS>(hasher: RS) -> Self
     where
-        RS: Shared<S>,
+        Ref<S>: From<RS>,
     {
         HashSet {
             size: 0,
             root: Ref::new(Node::new()),
-            hasher: hasher.shared(),
+            hasher: From::from(hasher),
         }
     }
 

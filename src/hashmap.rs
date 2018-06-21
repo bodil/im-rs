@@ -35,7 +35,6 @@ use std::mem;
 use std::ops::{Add, Index, IndexMut};
 
 use bits::{hash_key, Bitmap};
-use shared::Shared;
 use util::Ref;
 
 use nodes::hamt::{HashValue, Node};
@@ -244,12 +243,12 @@ where
     #[inline]
     pub fn with_hasher<RS>(hasher: RS) -> Self
     where
-        RS: Shared<S>,
+        Ref<S>: From<RS>
     {
         HashMap {
             size: 0,
             root: Ref::new(Node::new()),
-            hasher: hasher.shared(),
+            hasher: From::from(hasher),
         }
     }
 

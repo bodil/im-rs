@@ -249,7 +249,6 @@ pub mod hashset;
 pub mod vector;
 
 pub mod iter;
-pub mod shared;
 
 #[cfg(any(test, feature = "serde"))]
 pub mod ser;
