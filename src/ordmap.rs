@@ -27,7 +27,9 @@ use std::ops::{Add, Index, IndexMut};
 
 use hashmap::HashMap;
 
-use nodes::btree::{BTreeValue, ConsumingIter, DiffIter, Insert, Iter, Node, Remove};
+use nodes::btree::{BTreeValue, Insert, Node, Remove};
+
+pub use nodes::btree::{ConsumingIter, DiffItem, DiffIter, Iter};
 
 /// Construct a map from a sequence of key/value pairs.
 ///

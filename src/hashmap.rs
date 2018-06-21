@@ -38,7 +38,9 @@ use bits::{hash_key, Bitmap};
 use shared::Shared;
 use util::Ref;
 
-use nodes::hamt::{ConsumingIter, HashValue, Iter, Node};
+use nodes::hamt::{HashValue, Node};
+
+pub use nodes::hamt::{ConsumingIter, Iter};
 
 /// Construct a hash map from a sequence of key/value pairs.
 ///
