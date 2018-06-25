@@ -1631,10 +1631,10 @@ pub mod proptest {
         key: K,
         value: V,
         size: Range<usize>,
-    ) -> BoxedStrategy<OrdMap<<K::Value as ValueTree>::Value, <V::Value as ValueTree>::Value>>
+    ) -> BoxedStrategy<OrdMap<<K::Tree as ValueTree>::Value, <V::Tree as ValueTree>::Value>>
     where
-        <K::Value as ValueTree>::Value: Ord + Clone,
-        <V::Value as ValueTree>::Value: Clone,
+        <K::Tree as ValueTree>::Value: Ord + Clone,
+        <V::Tree as ValueTree>::Value: Clone,
     {
         ::proptest::collection::vec((key, value), size.clone())
             .prop_map(OrdMap::from)

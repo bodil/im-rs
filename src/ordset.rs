@@ -799,9 +799,9 @@ pub mod proptest {
     pub fn ord_set<A: Strategy + 'static>(
         element: A,
         size: Range<usize>,
-    ) -> BoxedStrategy<OrdSet<<A::Value as ValueTree>::Value>>
+    ) -> BoxedStrategy<OrdSet<<A::Tree as ValueTree>::Value>>
     where
-        <A::Value as ValueTree>::Value: Ord + Clone,
+        <A::Tree as ValueTree>::Value: Ord + Clone,
     {
         ::proptest::collection::vec(element, size.clone())
             .prop_map(OrdSet::from)

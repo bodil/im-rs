@@ -1458,9 +1458,9 @@ pub mod proptest {
     pub fn vector<A: Strategy + 'static>(
         element: A,
         size: Range<usize>,
-    ) -> BoxedStrategy<Vector<<A::Value as ValueTree>::Value>>
+    ) -> BoxedStrategy<Vector<<A::Tree as ValueTree>::Value>>
     where
-        <<A as Strategy>::Value as ValueTree>::Value: Clone,
+        <A::Tree as ValueTree>::Value: Clone,
     {
         vec(element, size).prop_map(Vector::from_iter).boxed()
     }

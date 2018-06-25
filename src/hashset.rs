@@ -835,9 +835,9 @@ pub mod proptest {
     pub fn hash_set<A: Strategy + 'static>(
         element: A,
         size: Range<usize>,
-    ) -> BoxedStrategy<HashSet<<A::Value as ValueTree>::Value>>
+    ) -> BoxedStrategy<HashSet<<A::Tree as ValueTree>::Value>>
     where
-        <A::Value as ValueTree>::Value: Hash + Eq + Clone,
+        <A::Tree as ValueTree>::Value: Hash + Eq + Clone,
     {
         ::proptest::collection::vec(element, size.clone())
             .prop_map(HashSet::from)
