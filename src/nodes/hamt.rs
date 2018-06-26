@@ -41,6 +41,12 @@ enum SizePredicate {
     Many,
 }
 
+impl<A: HashValue> Default for Node<A> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<A: HashValue> Node<A> {
     #[inline]
     pub fn iter<'a>(root: &'a Self, size: usize) -> Iter<'a, A>
@@ -124,7 +130,7 @@ impl<A: HashValue> Node<A> {
 
     fn update_node<RN>(&self, bitpos: Bitmap, node: RN) -> Self
     where
-        Ref<Node<A>>: From<RN>
+        Ref<Node<A>>: From<RN>,
     {
         let index = self.node_index(bitpos);
         let mut new_nodes = Vec::with_capacity(self.nodes.len());
@@ -199,7 +205,7 @@ impl<A: HashValue> Node<A> {
 
     fn value_to_node<RN>(&self, bitpos: Bitmap, node: RN) -> Self
     where
-        Ref<Node<A>>: From<RN>
+        Ref<Node<A>>: From<RN>,
     {
         let old_index = self.data_index(bitpos);
         let new_index = self.node_index(bitpos);
@@ -223,7 +229,7 @@ impl<A: HashValue> Node<A> {
 
     fn value_to_node_mut<RN>(&mut self, bitpos: Bitmap, node: RN)
     where
-        Ref<Node<A>>: From<RN>
+        Ref<Node<A>>: From<RN>,
     {
         let old_index = self.data_index(bitpos);
         let new_index = self.node_index(bitpos);

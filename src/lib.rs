@@ -284,7 +284,7 @@ mod test;
 ///
 /// let expected = vector![vector![1, 2, 3], vector![4, 5, 1337]];
 ///
-/// assert_eq!(expected, set_in![vec_inside_vec, 1 => 2, 1337]);
+/// assert_eq!(expected, update_in![vec_inside_vec, 1 => 2, 1337]);
 /// # }
 /// ```
 ///
@@ -292,14 +292,14 @@ mod test;
 /// [HashMap]: ../hashmap/struct.HashMap.html
 /// [OrdMap]: ../ordmap/struct.OrdMap.html
 #[macro_export]
-macro_rules! set_in {
+macro_rules! update_in {
     ($target:expr, $path:expr => $($tail:tt) => *, $value:expr ) => {{
-        let inner = $target.get($path).expect("set_in! macro: key not found in target");
-        $target.set($path, set_in!(inner, $($tail) => *, $value))
+        let inner = $target.get($path).expect("update_in! macro: key not found in target");
+        $target.update($path, update_in!(inner, $($tail) => *, $value))
     }};
 
     ($target:expr, $path:expr, $value:expr) => {
-        $target.set($path, $value)
+        $target.update($path, $value)
     };
 }
 
@@ -339,17 +339,20 @@ macro_rules! get_in {
 #[cfg(test)]
 mod lib_test {
     #[test]
-    fn set_in() {
+    fn update_in() {
         let vector = vector![1, 2, 3, 4, 5];
-        assert_eq!(vector![1, 2, 23, 4, 5], set_in!(vector, 2, 23));
+        assert_eq!(vector![1, 2, 23, 4, 5], update_in!(vector, 2, 23));
         let hashmap = hashmap![1 => 1, 2 => 2, 3 => 3];
-        assert_eq!(hashmap![1 => 1, 2 => 23, 3 => 3], set_in!(hashmap, 2, 23));
+        assert_eq!(
+            hashmap![1 => 1, 2 => 23, 3 => 3],
+            update_in!(hashmap, 2, 23)
+        );
         let ordmap = ordmap![1 => 1, 2 => 2, 3 => 3];
-        assert_eq!(ordmap![1 => 1, 2 => 23, 3 => 3], set_in!(ordmap, 2, 23));
+        assert_eq!(ordmap![1 => 1, 2 => 23, 3 => 3], update_in!(ordmap, 2, 23));
 
         let vecs = vector![vector![1, 2, 3], vector![4, 5, 6], vector![7, 8, 9]];
         let vecs_target = vector![vector![1, 2, 3], vector![4, 5, 23], vector![7, 8, 9]];
-        assert_eq!(vecs_target, set_in!(vecs, 1 => 2, 23));
+        assert_eq!(vecs_target, update_in!(vecs, 1 => 2, 23));
     }
 
     #[test]

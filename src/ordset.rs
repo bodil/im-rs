@@ -10,7 +10,7 @@
 //!
 //! [ordmap::OrdMap]: ../ordmap/struct.OrdMap.html
 
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections;
 use std::fmt::{Debug, Error, Formatter};
@@ -47,7 +47,7 @@ macro_rules! ordset {
     ( $($x:expr),* ) => {{
         let mut l = $crate::ordset::OrdSet::new();
         $(
-            l = l.insert($x);
+            l.insert($x);
         )*
             l
     }};
@@ -56,40 +56,10 @@ macro_rules! ordset {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct Value<A>(A);
 
-impl<A> AsRef<A> for Value<A> {
-    fn as_ref(&self) -> &A {
-        &self.0
-    }
-}
-
-impl<A> AsMut<A> for Value<A> {
-    fn as_mut(&mut self) -> &mut A {
-        &mut self.0
-    }
-}
-
-impl<A> Borrow<A> for Value<A> {
-    fn borrow(&self) -> &A {
-        &self.0
-    }
-}
-
-impl<A> BorrowMut<A> for Value<A> {
-    fn borrow_mut(&mut self) -> &mut A {
-        &mut self.0
-    }
-}
-
 impl<A> Deref for Value<A> {
     type Target = A;
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl<A> From<A> for Value<A> {
-    fn from(a: A) -> Self {
-        Value(a)
     }
 }
 
@@ -233,7 +203,8 @@ impl<A: Ord + Clone> OrdSet<A> {
         }
     }
 
-    /// Insert a value into a set.
+    /// Construct a new set from the current set with the given value
+    /// added.
     ///
     /// Time: O(log n)
     ///
@@ -245,12 +216,12 @@ impl<A: Ord + Clone> OrdSet<A> {
     /// # fn main() {
     /// let set = ordset![456];
     /// assert_eq!(
-    ///   set.insert(123),
+    ///   set.update(123),
     ///   ordset![123, 456]
     /// );
     /// # }
     /// ```
-    pub fn insert(&self, a: A) -> Self {
+    pub fn update(&self, a: A) -> Self {
         match self.root.insert(Value(a)) {
             Insert::NoChange => self.clone(),
             Insert::JustInc => unreachable!(),
@@ -263,10 +234,6 @@ impl<A: Ord + Clone> OrdSet<A> {
 
     /// Insert a value into a set.
     ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// set's structure which are shared with other sets will be
-    /// safely copied before mutating.
-    ///
     /// Time: O(log n)
     ///
     /// # Examples
@@ -276,8 +243,8 @@ impl<A: Ord + Clone> OrdSet<A> {
     /// # use im::ordset::OrdSet;
     /// # fn main() {
     /// let mut set = ordset!{};
-    /// set.insert_mut(123);
-    /// set.insert_mut(456);
+    /// set.insert(123);
+    /// set.insert(456);
     /// assert_eq!(
     ///   set,
     ///   ordset![123, 456]
@@ -287,7 +254,7 @@ impl<A: Ord + Clone> OrdSet<A> {
     ///
     /// [insert]: #method.insert
     #[inline]
-    pub fn insert_mut(&mut self, a: A) {
+    pub fn insert(&mut self, a: A) {
         match self.root.insert_mut(Value(a)) {
             Insert::NoChange | Insert::JustInc => {}
             Insert::Update(root) => self.root = root,
@@ -306,10 +273,11 @@ impl<A: Ord + Clone> OrdSet<A> {
         self.root.lookup(a).is_some()
     }
 
-    /// Remove a value from a set.
+    /// Construct a new set with the given value removed if it's in
+    /// the set.
     ///
     /// Time: O(log n)
-    pub fn remove<BA>(&self, a: &BA) -> Self
+    pub fn without<BA>(&self, a: &BA) -> Self
     where
         BA: Ord + ?Sized,
         A: Borrow<BA>,
@@ -323,23 +291,26 @@ impl<A: Ord + Clone> OrdSet<A> {
 
     /// Remove a value from a set.
     ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// set's structure which are shared with other sets will be
-    /// safely copied before mutating.
-    ///
     /// Time: O(log n)
     #[inline]
-    pub fn remove_mut<BA>(&mut self, a: &BA)
+    pub fn remove<BA>(&mut self, a: &BA) -> Option<A>
     where
         BA: Ord + ?Sized,
         A: Borrow<BA>,
     {
-        if let Remove::Update(_, root) = self.root.remove_mut(a) {
-            self.root = root;
+        match self.root.remove_mut(a) {
+            Remove::Update(value, root) => {
+                self.root = root;
+                Some(value.0)
+            }
+            Remove::Removed(value) => Some(value.0),
+            Remove::NoChange => None,
         }
     }
 
     /// Construct the union of two sets.
+    ///
+    /// Time: O(n)
     pub fn union<RS>(&self, other: RS) -> Self
     where
         RS: Borrow<Self>,
@@ -347,10 +318,12 @@ impl<A: Ord + Clone> OrdSet<A> {
         other
             .borrow()
             .iter()
-            .fold(self.clone(), |set, item| set.insert(item.clone()))
+            .fold(self.clone(), |set, item| set.update(item.clone()))
     }
 
     /// Construct the union of multiple sets.
+    ///
+    /// Time: O(n)
     pub fn unions<I>(i: I) -> Self
     where
         I: IntoIterator<Item = Self>,
@@ -359,6 +332,8 @@ impl<A: Ord + Clone> OrdSet<A> {
     }
 
     /// Construct the difference between two sets.
+    ///
+    /// Time: O(n)
     pub fn difference<RS>(&self, other: RS) -> Self
     where
         RS: Borrow<Self>,
@@ -366,17 +341,19 @@ impl<A: Ord + Clone> OrdSet<A> {
         other
             .borrow()
             .iter()
-            .fold(self.clone(), |set, item| set.remove(&item))
+            .fold(self.clone(), |set, item| set.without(&item))
     }
 
     /// Construct the intersection of two sets.
+    ///
+    /// Time: O(n)
     pub fn intersection<RS>(&self, other: RS) -> Self
     where
         RS: Borrow<Self>,
     {
         other.borrow().iter().fold(OrdSet::new(), |set, item| {
             if self.contains(&item) {
-                set.insert(item.clone())
+                set.update(item.clone())
             } else {
                 set
             }
@@ -388,6 +365,8 @@ impl<A: Ord + Clone> OrdSet<A> {
     /// containing values which are larger than `split`.
     ///
     /// The `split` value itself is discarded.
+    ///
+    /// Time: O(n)
     pub fn split<BA>(&self, split: &BA) -> (Self, Self)
     where
         BA: Ord + ?Sized,
@@ -396,9 +375,9 @@ impl<A: Ord + Clone> OrdSet<A> {
         self.iter().fold(
             (OrdSet::new(), OrdSet::new()),
             |(less, greater), item| match (*item).borrow().cmp(split) {
-                Ordering::Less => (less.insert(item.clone()), greater),
+                Ordering::Less => (less.update(item.clone()), greater),
                 Ordering::Equal => (less, greater),
-                Ordering::Greater => (less, greater.insert(item.clone())),
+                Ordering::Greater => (less, greater.update(item.clone())),
             },
         )
     }
@@ -410,6 +389,8 @@ impl<A: Ord + Clone> OrdSet<A> {
     /// Returns a tuple of the two sets and a boolean which is true if
     /// the `split` value existed in the original set, and false
     /// otherwise.
+    ///
+    /// Time: O(n)
     pub fn split_member<BA>(&self, split: &BA) -> (Self, bool, Self)
     where
         BA: Ord + ?Sized,
@@ -418,15 +399,17 @@ impl<A: Ord + Clone> OrdSet<A> {
         self.iter().fold(
             (OrdSet::new(), false, OrdSet::new()),
             |(less, present, greater), item| match (*item).borrow().cmp(split) {
-                Ordering::Less => (less.insert(item.clone()), present, greater),
+                Ordering::Less => (less.update(item.clone()), present, greater),
                 Ordering::Equal => (less, true, greater),
-                Ordering::Greater => (less, present, greater.insert(item.clone())),
+                Ordering::Greater => (less, present, greater.update(item.clone())),
             },
         )
     }
 
     /// Test whether a set is a subset of another set, meaning that
     /// all values in our set must also be in the other set.
+    ///
+    /// Time: O(n)
     pub fn is_subset<RS>(&self, other: RS) -> bool
     where
         RS: Borrow<Self>,
@@ -438,6 +421,8 @@ impl<A: Ord + Clone> OrdSet<A> {
     /// Test whether a set is a proper subset of another set, meaning
     /// that all values in our set must also be in the other set. A
     /// proper subset must also be smaller than the other set.
+    ///
+    /// Time: O(n)
     pub fn is_proper_subset<RS>(&self, other: RS) -> bool
     where
         RS: Borrow<Self>,
@@ -448,44 +433,64 @@ impl<A: Ord + Clone> OrdSet<A> {
 
     /// Construct a set with only the `n` smallest values from a given
     /// set.
+    ///
+    /// Time: O(n)
     pub fn take(&self, n: usize) -> Self {
         self.iter().take(n).cloned().collect()
     }
 
     /// Construct a set with the `n` smallest values removed from a
     /// given set.
+    ///
+    /// Time: O(n)
     pub fn skip(&self, n: usize) -> Self {
         self.iter().skip(n).cloned().collect()
     }
 
     /// Remove the smallest value from a set, and return that value as
     /// well as the updated set.
-    pub fn pop_min(&self) -> (Option<A>, Self) {
+    ///
+    /// Time: O(log n)
+    pub fn without_min(&self) -> (Option<A>, Self) {
         match self.get_min() {
-            Some(v) => (Some(v.clone()), self.remove(&v)),
+            Some(v) => (Some(v.clone()), self.without(&v)),
             None => (None, self.clone()),
         }
     }
 
     /// Remove the largest value from a set, and return that value as
     /// well as the updated set.
-    pub fn pop_max(&self) -> (Option<A>, Self) {
+    ///
+    /// Time: O(log n)
+    pub fn without_max(&self) -> (Option<A>, Self) {
         match self.get_max() {
-            Some(v) => (Some(v.clone()), self.remove(&v)),
+            Some(v) => (Some(v.clone()), self.without(&v)),
             None => (None, self.clone()),
         }
     }
 
-    /// Discard the smallest value from a set, returning the updated
-    /// set.
-    pub fn remove_min(&self) -> Self {
-        self.pop_min().1
+    /// Remove the smallest value from a set.
+    ///
+    /// Time: O(log n)
+    pub fn remove_min(&mut self) -> Option<A> {
+        // FIXME implement this at the node level for better efficiency
+        let key = match self.get_min() {
+            None => return None,
+            Some(v) => v,
+        }.clone();
+        self.remove(&key)
     }
 
-    /// Discard the largest value from a set, returning the updated
-    /// set.
-    pub fn remove_max(&self) -> Self {
-        self.pop_max().1
+    /// Remove the largest value from a set.
+    ///
+    /// Time: O(log n)
+    pub fn remove_max(&mut self) -> Option<A> {
+        // FIXME implement this at the node level for better efficiency
+        let key = match self.get_max() {
+            None => return None,
+            Some(v) => v,
+        }.clone();
+        self.remove(&key)
     }
 }
 
@@ -587,7 +592,7 @@ where
         I: IntoIterator<Item = R>,
     {
         for value in iter {
-            self.insert_mut(From::from(value));
+            self.insert(From::from(value));
         }
     }
 }
@@ -665,7 +670,7 @@ where
     {
         let mut out = Self::new();
         for item in i {
-            out.insert_mut(From::from(item));
+            out.insert(From::from(item));
         }
         out
     }

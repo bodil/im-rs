@@ -66,7 +66,7 @@ macro_rules! hashmap {
     ( $( $key:expr => $value:expr ),* ) => {{
         let mut map = $crate::hashmap::HashMap::new();
         $({
-            map.insert_mut($key, $value);
+            map.insert($key, $value);
         })*;
         map
     }};
@@ -74,7 +74,7 @@ macro_rules! hashmap {
     ( $( $key:expr => $value:expr ,)* ) => {{
         let mut map = $crate::hashmap::HashMap::new();
         $({
-            map.insert_mut($key, $value);
+            map.insert($key, $value);
         })*;
         map
     }};
@@ -136,7 +136,7 @@ where
     /// Construct an empty hash map.
     #[inline]
     pub fn new() -> Self {
-        Default::default()
+        Self::default()
     }
 
     /// Construct a hash map with a single mapping.
@@ -156,7 +156,7 @@ where
     /// ```
     #[inline]
     pub fn singleton(k: K, v: V) -> HashMap<K, V> {
-        HashMap::new().insert(k, v)
+        HashMap::new().update(k, v)
     }
 }
 
@@ -243,7 +243,7 @@ where
     #[inline]
     pub fn with_hasher<RS>(hasher: RS) -> Self
     where
-        Ref<S>: From<RS>
+        Ref<S>: From<RS>,
     {
         HashMap {
             size: 0,
@@ -403,13 +403,13 @@ where
     /// # fn main() {
     /// let map = hashmap!{};
     /// assert_eq!(
-    ///   map.insert(123, "123"),
+    ///   map.update(123, "123"),
     ///   hashmap!{123 => "123"}
     /// );
     /// # }
     /// ```
     #[inline]
-    pub fn insert(&self, k: K, v: V) -> Self {
+    pub fn update(&self, k: K, v: V) -> Self {
         let (added, new_node) = self.root.insert(hash_key(&*self.hasher, &k), 0, (k, v));
         HashMap {
             root: Ref::new(new_node),
@@ -427,10 +427,6 @@ where
     /// If the map already has a mapping for the given key, the
     /// previous value is overwritten.
     ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// set's structure which are shared with other sets will be
-    /// safely copied before mutating.
-    ///
     /// Time: O(log n)
     ///
     /// # Examples
@@ -440,49 +436,21 @@ where
     /// # use im::hashmap::HashMap;
     /// # fn main() {
     /// let mut map = hashmap!{};
-    /// map.insert_mut(123, "123");
-    /// map.insert_mut(456, "456");
+    /// map.insert(123, "123");
+    /// map.insert(456, "456");
     /// assert_eq!(
     ///   map,
     ///   hashmap!{123 => "123", 456 => "456"}
     /// );
     /// # }
     /// ```
-    ///
-    /// [insert]: #method.insert
     #[inline]
-    pub fn insert_mut(&mut self, k: K, v: V) {
+    pub fn insert(&mut self, k: K, v: V) {
         let hash = hash_key(&*self.hasher, &k);
         let root = Ref::make_mut(&mut self.root);
         if root.insert_mut(hash, 0, (k, v)) {
             self.size += 1;
         }
-    }
-
-    /// Construct a new map by inserting a key/value mapping into a
-    /// map.
-    ///
-    /// This is an alias for [`insert`][insert].
-    ///
-    /// Time: O(log n)
-    ///
-    /// [insert]: #method.insert
-    #[inline]
-    pub fn set(&self, k: K, v: V) -> Self {
-        self.insert(k, v)
-    }
-
-    /// Insert a key/value mapping into a map, mutating it in place
-    /// when it is safe to do so.
-    ///
-    /// This is an alias for [`insert_mut`][insert_mut].
-    ///
-    /// Time: O(log n)
-    ///
-    /// [insert_mut]: #method.insert_mut
-    #[inline]
-    pub fn set_mut(&mut self, k: K, v: V) {
-        self.insert_mut(k, v)
     }
 
     /// Construct a new hash map by inserting a key/value mapping into
@@ -493,13 +461,13 @@ where
     /// and insert the result as the new value.
     ///
     /// Time: O(log n)
-    pub fn insert_with<F>(self, k: K, v: V, f: F) -> Self
+    pub fn update_with<F>(self, k: K, v: V, f: F) -> Self
     where
         F: FnOnce(V, V) -> V,
     {
         match self.pop_with_key(&k) {
-            None => self.insert(k, v),
-            Some((_, v2, m)) => m.insert(k, f(v2, v)),
+            None => self.update(k, v),
+            Some((_, v2, m)) => m.update(k, f(v2, v)),
         }
     }
 
@@ -511,15 +479,15 @@ where
     /// value, and insert the result as the new value.
     ///
     /// Time: O(log n)
-    pub fn insert_with_key<F>(self, k: K, v: V, f: F) -> Self
+    pub fn update_with_key<F>(self, k: K, v: V, f: F) -> Self
     where
         F: FnOnce(&K, V, V) -> V,
     {
         match self.pop_with_key(&k) {
-            None => self.insert(k, v),
+            None => self.update(k, v),
             Some((_, v2, m)) => {
                 let out_v = f(&k, v2, v);
-                m.insert(k, out_v)
+                m.update(k, out_v)
             }
         }
     }
@@ -533,15 +501,15 @@ where
     /// value, and insert the result as the new value.
     ///
     /// Time: O(log n)
-    pub fn insert_lookup_with_key<F>(self, k: K, v: V, f: F) -> (Option<V>, Self)
+    pub fn update_lookup_with_key<F>(self, k: K, v: V, f: F) -> (Option<V>, Self)
     where
         F: FnOnce(&K, &V, V) -> V,
     {
         match self.pop_with_key(&k) {
-            None => (None, self.insert(k, v)),
+            None => (None, self.update(k, v)),
             Some((_, v2, m)) => {
                 let out_v = f(&k, &v2, v);
-                (Some(v2), m.insert(k, out_v))
+                (Some(v2), m.update(k, out_v))
             }
         }
     }
@@ -550,81 +518,13 @@ where
     /// the current value and overwriting it with the function's
     /// return value.
     ///
-    /// Time: O(log n)
-    pub fn update<BK, F>(&self, k: &BK, f: F) -> Self
-    where
-        BK: Hash + Eq + Clone + ?Sized,
-        K: Borrow<BK>,
-        F: FnOnce(V) -> Option<V>,
-    {
-        match self.pop_with_key(k) {
-            None => self.clone(),
-            Some((k, v, m)) => match f(v) {
-                None => m,
-                Some(v) => m.insert(k, v),
-            },
-        }
-    }
-
-    /// Update the value for a given key by calling a function with
-    /// the key and the current value and overwriting it with the
-    /// function's return value.
-    ///
-    /// Time: O(log n)
-    pub fn update_with_key<BK, F>(&self, k: &BK, f: F) -> Self
-    where
-        BK: Hash + Eq + Clone + ?Sized,
-        K: Borrow<BK>,
-        F: FnOnce(&K, V) -> Option<V>,
-    {
-        match self.pop_with_key(k) {
-            None => self.clone(),
-            Some((k, v, m)) => match f(&k, v) {
-                None => m,
-                Some(v) => m.insert(k, v),
-            },
-        }
-    }
-
-    /// Update the value for a given key by calling a function with
-    /// the key and the current value and overwriting it with the
-    /// function's return value.
-    ///
-    /// If the key was not in the map, the function is never called
-    /// and the map is left unchanged.
-    ///
-    /// Return a tuple of the old value, if there was one, and the new
-    /// map.
-    ///
-    /// Time: O(log n)
-    pub fn update_lookup_with_key<BK, F>(&self, k: &BK, f: F) -> (Option<V>, Self)
-    where
-        BK: Hash + Eq + Clone + ?Sized,
-        K: Borrow<BK>,
-        F: FnOnce(&K, V) -> Option<V>,
-    {
-        match self.pop_with_key(k) {
-            None => (None, self.clone()),
-            Some((k, v, m)) => match f(&k, v.clone()) {
-                None => (Some(v), m),
-                Some(v2) => (Some(v), m.insert(k, v2)),
-            },
-        }
-    }
-
-    /// Update the value for a given key by calling a function with
-    /// the current value and overwriting it with the function's
-    /// return value.
-    ///
-    /// This is like the [`update`][update] method, except with more
-    /// control: the function gets an
-    /// [`Option<V>`][std::option::Option] and returns the same, so
-    /// that it can decide to delete a mapping instead of updating the
-    /// value, and decide what to do if the key isn't in the map.
+    /// The function gets an [`Option<V>`][std::option::Option] and
+    /// returns the same, so that it can decide to delete a mapping
+    /// instead of updating the value, and decide what to do if the
+    /// key isn't in the map.
     ///
     /// Time: O(log n)
     ///
-    /// [update]: #method.update
     /// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
     pub fn alter<F>(&self, f: F, k: K) -> Self
     where
@@ -633,16 +533,19 @@ where
         let pop = self.pop_with_key(&k);
         match (f(pop.as_ref().map(|&(_, ref v, _)| v.clone())), pop) {
             (None, None) => self.clone(),
-            (Some(v), None) => self.insert(k, v),
+            (Some(v), None) => self.update(k, v),
             (None, Some((_, _, m))) => m,
-            (Some(v), Some((_, _, m))) => m.insert(k, v),
+            (Some(v), Some((_, _, m))) => m.update(k, v),
         }
     }
 
-    /// Remove a key/value pair from a hash map, if it exists.
+    /// Construct a new map without the given key.
+    ///
+    /// Construct a map that's a copy of the current map, absent the
+    /// mapping for `key` if it's present.
     ///
     /// Time: O(log n)
-    pub fn remove<BK>(&self, k: &BK) -> Self
+    pub fn without<BK>(&self, k: &BK) -> Self
     where
         BK: Hash + Eq + Clone + ?Sized,
         K: Borrow<BK>,
@@ -651,37 +554,6 @@ where
             None => self.clone(),
             Some((_, _, map)) => map,
         }
-    }
-
-    /// Remove a key/value mapping from a map if it exists.
-    ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// set's structure which are shared with other sets will be
-    /// safely copied before mutating.
-    ///
-    /// Time: O(log n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::hashmap::HashMap;
-    /// # fn main() {
-    /// let mut map = hashmap!{123 => "123", 456 => "456"};
-    /// map.remove_mut(&123);
-    /// map.remove_mut(&456);
-    /// assert!(map.is_empty());
-    /// # }
-    /// ```
-    ///
-    /// [remove]: #method.remove
-    #[inline]
-    pub fn remove_mut<BK>(&mut self, k: &BK)
-    where
-        BK: Hash + Eq + Clone + ?Sized,
-        K: Borrow<BK>,
-    {
-        self.pop_with_key_mut(k);
     }
 
     /// Remove a key/value pair from a map, if it exists, and return
@@ -704,12 +576,26 @@ where
     /// safely copied before mutating.
     ///
     /// Time: O(log n)
-    pub fn pop_mut<BK>(&mut self, k: &BK) -> Option<V>
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let mut map = hashmap!{123 => "123", 456 => "456"};
+    /// assert_eq!(Some("123"), map.remove(&123));
+    /// assert_eq!(Some("456"), map.remove(&456));
+    /// assert_eq!(None, map.remove(&789));
+    /// assert!(map.is_empty());
+    /// # }
+    /// ```
+    pub fn remove<BK>(&mut self, k: &BK) -> Option<V>
     where
         BK: Hash + Eq + Clone + ?Sized,
         K: Borrow<BK>,
     {
-        self.pop_with_key_mut(k).map(|(_, v)| v)
+        self.remove_with_key(k).map(|(_, v)| v)
     }
 
     /// Remove a key/value pair from a map, if it exists, and return
@@ -739,12 +625,22 @@ where
     /// Remove a key/value pair from a map, if it exists, and return
     /// the removed key and value.
     ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// set's structure which are shared with other sets will be
-    /// safely copied before mutating.
-    ///
     /// Time: O(log n)
-    pub fn pop_with_key_mut<BK>(&mut self, k: &BK) -> Option<(K, V)>
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let mut map = hashmap!{123 => "123", 456 => "456"};
+    /// assert_eq!(Some((123, "123")), map.remove_with_key(&123));
+    /// assert_eq!(Some((456, "456")), map.remove_with_key(&456));
+    /// assert_eq!(None, map.remove_with_key(&789));
+    /// assert!(map.is_empty());
+    /// # }
+    /// ```
+    pub fn remove_with_key<BK>(&mut self, k: &BK) -> Option<(K, V)>
     where
         BK: Hash + Eq + Clone + ?Sized,
         K: Borrow<BK>,
@@ -787,9 +683,11 @@ where
         RM: Borrow<Self>,
     {
         other.borrow().iter().fold(self.clone(), |m, (k, v)| {
-            m.insert(
+            m.update(
                 k.clone(),
-                self.get(&k).map(|v1| f(&k, v1, v)).unwrap_or(v.clone()),
+                self.get(&k)
+                    .map(|v1| f(&k, v1, v))
+                    .unwrap_or_else(|| v.clone()),
             )
         })
     }
@@ -801,7 +699,7 @@ where
         S: Default,
         I: IntoIterator<Item = Self>,
     {
-        i.into_iter().fold(Default::default(), |a, b| a.union(&b))
+        i.into_iter().fold(Self::default(), |a, b| a.union(&b))
     }
 
     /// Construct the union of a sequence of maps, using a function to
@@ -814,7 +712,7 @@ where
         F: Fn(&V, &V) -> V,
     {
         i.into_iter()
-            .fold(Default::default(), |a, b| a.union_with(&b, &f))
+            .fold(Self::default(), |a, b| a.union_with(&b, &f))
     }
 
     /// Construct the union of a sequence of maps, using a function to
@@ -827,7 +725,7 @@ where
         F: Fn(&K, &V, &V) -> V,
     {
         i.into_iter()
-            .fold(Default::default(), |a, b| a.union_with_key(&b, &f))
+            .fold(Self::default(), |a, b| a.union_with_key(&b, &f))
     }
 
     /// Construct the difference between two maps by discarding keys
@@ -869,7 +767,7 @@ where
                 None => m,
                 Some((k, v1, m)) => match f(&k, &v1, &v2) {
                     None => m,
-                    Some(v) => m.insert(k, v),
+                    Some(v) => m.update(k, v),
                 },
             })
     }
@@ -913,7 +811,7 @@ where
             self.get(&k)
                 .map(|v1| {
                     let out_v = f(k, v1, v2);
-                    m.insert(k.clone(), out_v)
+                    m.update(k.clone(), out_v)
                 })
                 .unwrap_or(m)
         })
@@ -950,8 +848,8 @@ where
                 None => (l, r, m),
                 Some((k, vl, ml)) => (
                     ml,
-                    r.remove(&k),
-                    combine(&k, vl, vr).map(|v| m.insert(k, v)).unwrap_or(m),
+                    r.without(&k),
+                    combine(&k, vl, vr).map(|v| m.update(k, v)).unwrap_or(m),
                 ),
             },
         );
@@ -1295,7 +1193,7 @@ where
         HashMap {
             size: 0,
             root: Ref::new(Node::new()),
-            hasher: Default::default(),
+            hasher: Ref::<S>::default(),
         }
     }
 }
@@ -1336,7 +1234,7 @@ where
     where
         I: Iterator<Item = Self>,
     {
-        it.fold(Default::default(), |a, b| a + b)
+        it.fold(Self::default(), |a, b| a + b)
     }
 }
 
@@ -1351,7 +1249,7 @@ where
         I: IntoIterator<Item = (RK, RV)>,
     {
         for (key, value) in iter {
-            self.insert_mut(From::from(key), From::from(value));
+            self.insert(From::from(key), From::from(value));
         }
     }
 }
@@ -1507,9 +1405,9 @@ where
     where
         T: IntoIterator<Item = (K, V)>,
     {
-        let mut map: Self = Default::default();
+        let mut map = Self::default();
         for (k, v) in i {
-            map.insert_mut(k, v);
+            map.insert(k, v);
         }
         map
     }
@@ -1702,7 +1600,7 @@ mod test {
     fn safe_mutation() {
         let v1: HashMap<usize, usize> = HashMap::from_iter((0..131072).into_iter().map(|i| (i, i)));
         let mut v2 = v1.clone();
-        v2.set_mut(131000, 23);
+        v2.insert(131000, 23);
         assert_eq!(Some(&23), v2.get(&131000));
         assert_eq!(Some(&131000), v1.get(&131000));
     }
@@ -1734,12 +1632,12 @@ mod test {
         }
         let mut map: HashMap<i16, i16, _> = HashMap::with_hasher(hasher);
         for (k, v) in &m {
-            map = map.insert(*k, *v);
+            map = map.update(*k, *v);
         }
         for k in m.keys() {
             let l = map.len();
             assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
-            map = map.remove(k);
+            map = map.without(k);
             assert_eq!(None, map.get(k));
             assert_eq!(l - 1, map.len());
         }
@@ -1788,10 +1686,10 @@ mod test {
 
     proptest! {
         #[test]
-        fn insert_and_length(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..100)) {
+        fn update_and_length(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..100)) {
             let mut map: HashMap<i16, i16, BuildHasherDefault<LolHasher>> = Default::default();
             for (index, (k, v)) in m.iter().enumerate() {
-                map = map.insert(*k, *v);
+                map = map.update(*k, *v);
                 assert_eq!(Some(v), map.get(k));
                 assert_eq!(index + 1, map.len());
             }
@@ -1826,6 +1724,40 @@ mod test {
         }
 
         #[test]
+        fn without(ref pairs in collection::vec((i16::ANY, i16::ANY), 0..100)) {
+            let hasher: BuildHasherDefault<LolHasher> = Default::default();
+            let mut m: collections::HashMap<i16, i16, _> =
+                collections::HashMap::with_hasher(hasher.clone());
+            for &(ref k, ref v) in pairs {
+                m.insert(*k, *v);
+            }
+            let mut map: HashMap<i16, i16, _> = HashMap::with_hasher(hasher);
+            for (k, v) in &m {
+                map = map.update(*k, *v);
+            }
+            for k in m.keys() {
+                let l = map.len();
+                assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
+                map = map.without(k);
+                assert_eq!(None, map.get(k));
+                assert_eq!(l - 1, map.len());
+            }
+        }
+
+        #[test]
+        fn insert(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..100)) {
+            let mut mut_map: HashMap<i16, i16, BuildHasherDefault<LolHasher>> = Default::default();
+            let mut map: HashMap<i16, i16, BuildHasherDefault<LolHasher>> = Default::default();
+            for (count, (k, v)) in m.iter().enumerate() {
+                map = map.update(*k, *v);
+                mut_map.insert(*k, *v);
+                assert_eq!(count + 1, map.len());
+                assert_eq!(count + 1, mut_map.len());
+            }
+            assert_eq!(map, mut_map);
+        }
+
+        #[test]
         fn remove(ref pairs in collection::vec((i16::ANY, i16::ANY), 0..100)) {
             let hasher: BuildHasherDefault<LolHasher> = Default::default();
             let mut m: collections::HashMap<i16, i16, _> =
@@ -1835,46 +1767,12 @@ mod test {
             }
             let mut map: HashMap<i16, i16, _> = HashMap::with_hasher(hasher);
             for (k, v) in &m {
-                map = map.insert(*k, *v);
+                map.insert(*k, *v);
             }
             for k in m.keys() {
                 let l = map.len();
                 assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
-                map = map.remove(k);
-                assert_eq!(None, map.get(k));
-                assert_eq!(l - 1, map.len());
-            }
-        }
-
-        #[test]
-        fn insert_mut(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..100)) {
-            let mut mut_map: HashMap<i16, i16, BuildHasherDefault<LolHasher>> = Default::default();
-            let mut map: HashMap<i16, i16, BuildHasherDefault<LolHasher>> = Default::default();
-            for (count, (k, v)) in m.iter().enumerate() {
-                map = map.insert(*k, *v);
-                mut_map.insert_mut(*k, *v);
-                assert_eq!(count + 1, map.len());
-                assert_eq!(count + 1, mut_map.len());
-            }
-            assert_eq!(map, mut_map);
-        }
-
-        #[test]
-        fn remove_mut(ref pairs in collection::vec((i16::ANY, i16::ANY), 0..100)) {
-            let hasher: BuildHasherDefault<LolHasher> = Default::default();
-            let mut m: collections::HashMap<i16, i16, _> =
-                collections::HashMap::with_hasher(hasher.clone());
-            for &(ref k, ref v) in pairs {
-                m.insert(*k, *v);
-            }
-            let mut map: HashMap<i16, i16, _> = HashMap::with_hasher(hasher);
-            for (k, v) in &m {
-                map.insert_mut(*k, *v);
-            }
-            for k in m.keys() {
-                let l = map.len();
-                assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
-                map.remove_mut(k);
+                map.remove(k);
                 assert_eq!(None, map.get(k));
                 assert_eq!(l - 1, map.len());
             }
@@ -1886,7 +1784,7 @@ mod test {
             let index = *input.keys().nth(index_rand % input.len()).unwrap();
             let map1: HashMap<_, _> = HashMap::from_iter(input.clone());
             let (val, map2) = map1.pop(&index).unwrap();
-            let map3 = map2.insert(index, val);
+            let map3 = map2.update(index, val);
             for key in map2.keys() {
                 assert!(*key != index);
             }

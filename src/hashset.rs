@@ -12,7 +12,7 @@
 //!
 //! [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections::hash_map::RandomState;
 use std::collections::{self, BTreeSet};
@@ -47,7 +47,7 @@ macro_rules! hashset {
     ( $($x:expr),* ) => {{
         let mut l = $crate::hashset::HashSet::new();
         $(
-            l.insert_mut($x);
+            l.insert($x);
         )*
             l
     }};
@@ -55,7 +55,7 @@ macro_rules! hashset {
     ( $($x:expr ,)* ) => {{
         let mut l = $crate::hashset::HashSet::new();
         $(
-            l.insert_mut($x);
+            l.insert($x);
         )*
             l
     }};
@@ -79,40 +79,10 @@ pub struct HashSet<A, S = RandomState> {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct Value<A>(A);
 
-impl<A> AsRef<A> for Value<A> {
-    fn as_ref(&self) -> &A {
-        &self.0
-    }
-}
-
-impl<A> AsMut<A> for Value<A> {
-    fn as_mut(&mut self) -> &mut A {
-        &mut self.0
-    }
-}
-
-impl<A> Borrow<A> for Value<A> {
-    fn borrow(&self) -> &A {
-        &self.0
-    }
-}
-
-impl<A> BorrowMut<A> for Value<A> {
-    fn borrow_mut(&mut self) -> &mut A {
-        &mut self.0
-    }
-}
-
 impl<A> Deref for Value<A> {
     type Target = A;
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl<A> From<A> for Value<A> {
-    fn from(a: A) -> Self {
-        Value(a)
     }
 }
 
@@ -139,7 +109,7 @@ where
 {
     /// Construct an empty set.
     pub fn new() -> Self {
-        Default::default()
+        Self::default()
     }
 
     /// Construct a set with a single value.
@@ -156,7 +126,7 @@ where
     /// # }
     /// ```
     pub fn singleton(a: A) -> Self {
-        HashSet::new().insert(a)
+        HashSet::new().update(a)
     }
 }
 
@@ -258,13 +228,14 @@ where
     /// Items will not come out in insertion order or sort order.
     /// They will, however, come out in the same order every time for
     /// the same set.
-    pub fn iter<'a>(&'a self) -> Iter<'a, A> {
+    pub fn iter(&self) -> Iter<'_, A> {
         Iter {
             it: NodeIter::new(&self.root, self.size),
         }
     }
 
-    /// Insert a value into a set.
+    /// Construct a new set from the current set with the given value
+    /// added.
     ///
     /// Time: O(log n)
     ///
@@ -277,12 +248,12 @@ where
     /// # fn main() {
     /// let set = hashset![123];
     /// assert_eq!(
-    ///   set.insert(456),
+    ///   set.update(456),
     ///   hashset![123, 456]
     /// );
     /// # }
     /// ```
-    pub fn insert(&self, a: A) -> Self {
+    pub fn update(&self, a: A) -> Self {
         let (added, new_node) = self.root.insert(hash_key(&*self.hasher, &a), 0, Value(a));
         HashSet {
             root: Ref::new(new_node),
@@ -297,13 +268,9 @@ where
 
     /// Insert a value into a set.
     ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// set's structure which are shared with other sets will be
-    /// safely copied before mutating.
-    ///
     /// Time: O(log n)
     #[inline]
-    pub fn insert_mut(&mut self, a: A) {
+    pub fn insert(&mut self, a: A) {
         let hash = hash_key(&*self.hasher, &a);
         let root = Ref::make_mut(&mut self.root);
         if root.insert_mut(hash, 0, Value(a)) {
@@ -322,10 +289,11 @@ where
         self.root.get(hash_key(&*self.hasher, a), 0, a).is_some()
     }
 
-    /// Remove a value from a set if it exists.
+    /// Construct a new set with the given value removed if it's in
+    /// the set.
     ///
     /// Time: O(log n)
-    pub fn remove<BA>(&self, a: &BA) -> Self
+    pub fn without<BA>(&self, a: &BA) -> Self
     where
         BA: Hash + Eq + ?Sized,
         A: Borrow<BA>,
@@ -342,12 +310,8 @@ where
 
     /// Remove a value from a set if it exists.
     ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// set's structure which are shared with other sets will be
-    /// safely copied before mutating.
-    ///
     /// Time: O(log n)
-    pub fn remove_mut<BA>(&mut self, a: &BA)
+    pub fn remove<BA>(&mut self, a: &BA)
     where
         BA: Hash + Eq + Clone + ?Sized,
         A: Borrow<BA>,
@@ -360,6 +324,8 @@ where
     }
 
     /// Construct the union of two sets.
+    ///
+    /// Time: O(n)
     pub fn union<RS>(&self, other: RS) -> Self
     where
         RS: Borrow<Self>,
@@ -367,19 +333,23 @@ where
         other
             .borrow()
             .iter()
-            .fold(self.clone(), |set, a| set.insert(a.clone()))
+            .fold(self.clone(), |set, a| set.update(a.clone()))
     }
 
     /// Construct the union of multiple sets.
+    ///
+    /// Time: O(n)
     pub fn unions<I>(i: I) -> Self
     where
         I: IntoIterator<Item = Self>,
         S: Default,
     {
-        i.into_iter().fold(Default::default(), |a, b| a.union(&b))
+        i.into_iter().fold(Self::default(), |a, b| a.union(&b))
     }
 
     /// Construct the difference between two sets.
+    ///
+    /// Time: O(n)
     pub fn difference<RS>(&self, other: RS) -> Self
     where
         RS: Borrow<Self>,
@@ -387,17 +357,19 @@ where
         other
             .borrow()
             .iter()
-            .fold(self.clone(), |set, a| set.remove(&a))
+            .fold(self.clone(), |set, a| set.without(&a))
     }
 
     /// Construct the intersection of two sets.
+    ///
+    /// Time: O(n)
     pub fn intersection<RS>(&self, other: RS) -> Self
     where
         RS: Borrow<Self>,
     {
         other.borrow().iter().fold(self.new_from(), |set, a| {
             if self.contains(&a) {
-                set.insert(a.clone())
+                set.update(a.clone())
             } else {
                 set
             }
@@ -406,6 +378,8 @@ where
 
     /// Test whether a set is a subset of another set, meaning that
     /// all values in our set must also be in the other set.
+    ///
+    /// Time: O(n)
     pub fn is_subset<RS>(&self, other: RS) -> bool
     where
         RS: Borrow<Self>,
@@ -417,6 +391,8 @@ where
     /// Test whether a set is a proper subset of another set, meaning
     /// that all values in our set must also be in the other set. A
     /// proper subset must also be smaller than the other set.
+    ///
+    /// Time: O(n)
     pub fn is_proper_subset<RS>(&self, other: RS) -> bool
     where
         RS: Borrow<Self>,
@@ -509,7 +485,7 @@ where
 {
     fn default() -> Self {
         HashSet {
-            hasher: Default::default(),
+            hasher: Ref::<S>::default(),
             root: Ref::new(Node::new()),
             size: 0,
         }
@@ -573,7 +549,7 @@ where
     where
         I: Iterator<Item = Self>,
     {
-        it.fold(Default::default(), |a, b| a + b)
+        it.fold(Self::default(), |a, b| a + b)
     }
 }
 
@@ -587,7 +563,7 @@ where
         I: IntoIterator<Item = R>,
     {
         for value in iter {
-            self.insert_mut(From::from(value));
+            self.insert(From::from(value));
         }
     }
 }
@@ -669,9 +645,9 @@ where
     where
         T: IntoIterator<Item = RA>,
     {
-        let mut set: Self = Default::default();
+        let mut set = Self::default();
         for value in i {
-            set.insert_mut(From::from(value))
+            set.insert(From::from(value))
         }
         set
     }

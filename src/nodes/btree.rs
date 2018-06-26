@@ -140,7 +140,7 @@ impl<A> Node<A> {
 
     #[inline]
     pub fn new() -> Self {
-        Default::default()
+        Self::default()
     }
 
     #[inline]

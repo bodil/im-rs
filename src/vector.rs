@@ -48,6 +48,9 @@ use std::iter::{Chain, FromIterator, FusedIterator};
 use std::mem::{replace, swap};
 use std::ops::{Add, Index, IndexMut};
 
+#[cfg(has_range_bound)]
+use std::ops::{Bound, RangeBounds};
+
 use nodes::chunk::{
     Chunk, ConsumingIter as ConsumingChunkIter, Iter as ChunkIter, IterMut as ChunkIterMut,
     CHUNK_SIZE,
@@ -289,23 +292,32 @@ impl<A: Clone> Vector<A> {
     ///
     /// Time: O(log n)
     #[inline]
-    pub fn head(&self) -> Option<&A> {
+    pub fn front(&self) -> Option<&A> {
         self.get(0)
     }
 
-    /// Get the vector without the first element.
+    /// Get a mutable reference to the first element of a vector.
     ///
     /// If the vector is empty, `None` is returned.
     ///
     /// Time: O(log n)
-    pub fn tail(&self) -> Option<Vector<A>> {
-        if self.is_empty() {
-            None
-        } else {
-            let mut v = self.clone();
-            v.pop_front();
-            Some(v)
-        }
+    #[inline]
+    pub fn front_mut(&mut self) -> Option<&mut A> {
+        self.get_mut(0)
+    }
+
+    /// Get the first element of a vector.
+    ///
+    /// If the vector is empty, `None` is returned.
+    ///
+    /// This is an alias for the [`front`][front] method.
+    ///
+    /// Time: O(log n)
+    ///
+    /// [front]: #method.front
+    #[inline]
+    pub fn head(&self) -> Option<&A> {
+        self.get(0)
     }
 
     /// Get the last element of a vector.
@@ -313,7 +325,7 @@ impl<A: Clone> Vector<A> {
     /// If the vector is empty, `None` is returned.
     ///
     /// Time: O(log n)
-    pub fn last(&self) -> Option<&A> {
+    pub fn back(&self) -> Option<&A> {
         if self.is_empty() {
             None
         } else {
@@ -321,19 +333,76 @@ impl<A: Clone> Vector<A> {
         }
     }
 
-    /// Get the vector without the last element.
+    /// Get a mutable reference to the last element of a vector.
     ///
     /// If the vector is empty, `None` is returned.
     ///
     /// Time: O(log n)
-    pub fn init(&self) -> Option<Vector<A>> {
+    pub fn back_mut(&mut self) -> Option<&mut A> {
         if self.is_empty() {
             None
         } else {
-            let mut v = self.clone();
-            v.pop_back();
-            Some(v)
+            let len = self.len();
+            self.get_mut(len - 1)
         }
+    }
+
+    /// Get the index of a given element in the vector.
+    ///
+    /// Searches the vector for the first occurrence of a given value,
+    /// and returns the index of the value if it's there. Otherwise,
+    /// it returns `None`.
+    ///
+    /// Time: O(n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::Vector;
+    /// # fn main() {
+    /// let mut vec = vector![1, 2, 3, 4, 5];
+    /// assert_eq!(Some(2), vec.index_of(&3));
+    /// assert_eq!(None, vec.index_of(&31337));
+    /// # }
+    /// ```
+    pub fn index_of(&self, value: &A) -> Option<usize>
+    where
+        A: PartialEq,
+    {
+        for (index, item) in self.iter().enumerate() {
+            if value == item {
+                return Some(index);
+            }
+        }
+        None
+    }
+
+    /// Test if a given element is in the vector.
+    ///
+    /// Searches the vector for the first occurrence of a given value,
+    /// and returns `true if it's there. If it's nowhere to be found
+    /// in the vector, it returns `false`.
+    ///
+    /// Time: O(n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::Vector;
+    /// # fn main() {
+    /// let mut vec = vector![1, 2, 3, 4, 5];
+    /// assert_eq!(true, vec.contains(&3));
+    /// assert_eq!(false, vec.contains(&31337));
+    /// # }
+    /// ```
+    #[inline]
+    pub fn contains(&self, value: &A) -> bool
+    where
+        A: PartialEq,
+    {
+        self.index_of(value).is_some()
     }
 
     /// Create a new vector with the value at index `index` updated.
@@ -349,10 +418,10 @@ impl<A: Clone> Vector<A> {
     /// # use im::Vector;
     /// # fn main() {
     /// let mut vec = vector![1, 2, 3];
-    /// assert_eq!(vector![1, 5, 3], vec.set(1, 5));
+    /// assert_eq!(vector![1, 5, 3], vec.update(1, 5));
     /// # }
     /// ```
-    pub fn set(&self, index: usize, value: A) -> Self {
+    pub fn update(&self, index: usize, value: A) -> Self {
         let mut out = self.clone();
         out[index] = value;
         out
@@ -362,13 +431,9 @@ impl<A: Clone> Vector<A> {
     ///
     /// Panics if the index is out of bounds.
     ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// vector's structure which are shared with other vectors will be
-    /// safely copied before mutating.
-    ///
     /// Time: O(log n)
     #[inline]
-    pub fn set_mut(&mut self, index: usize, value: A) {
+    pub fn set(&mut self, index: usize, value: A) {
         self[index] = value;
     }
 
@@ -380,10 +445,6 @@ impl<A: Clone> Vector<A> {
     }
 
     /// Push a value to the front of a vector.
-    ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// vector's structure which are shared with other vectors will be
-    /// safely copied before mutating.
     ///
     /// Time: O(1)*
     ///
@@ -415,10 +476,6 @@ impl<A: Clone> Vector<A> {
 
     /// Push a value to the back of a vector.
     ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// vector's structure which are shared with other vectors will be
-    /// safely copied before mutating.
-    ///
     /// Time: O(1)*
     ///
     /// # Examples
@@ -448,10 +505,6 @@ impl<A: Clone> Vector<A> {
     }
 
     /// Remove the first element from a vector and return it.
-    ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// vector's structure which are shared with other vectors will be
-    /// safely copied before mutating.
     ///
     /// Time: O(1)*
     ///
@@ -491,10 +544,6 @@ impl<A: Clone> Vector<A> {
     }
 
     /// Remove the last element from a vector and return it.
-    ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// vector's structure which are shared with other vectors will be
-    /// safely copied before mutating.
     ///
     /// Time: O(1)*
     ///
@@ -597,7 +646,6 @@ impl<A: Clone> Vector<A> {
         } else {
             self.middle_level
         } + 1;
-        // FIXME don't just increase the tree height, do a real RRB join
         self.middle = Ref::new(Node::merge(
             Ref::from(middle1),
             Ref::from(middle2),
@@ -607,6 +655,32 @@ impl<A: Clone> Vector<A> {
         self.inner_b = other.inner_b;
         self.outer_b = other.outer_b;
         self.length += other.length;
+        self.prune();
+    }
+
+    /// Retain only the elements specified by the predicate.
+    ///
+    /// Remove all elements for which the provided function `f`
+    /// returns false from the vector.
+    ///
+    /// Time: O(n)
+    // FIXME will actually be O(n log n) without the focus optimisation
+    pub fn retain<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&A) -> bool,
+    {
+        let len = self.len();
+        let mut del = 0;
+        for i in 0..len {
+            if !f(&self[i]) {
+                del += 1;
+            } else if del > 0 {
+                self.swap(i - del, i);
+            }
+        }
+        if del > 0 {
+            self.split_off(len - del);
+        }
     }
 
     /// Split a vector at a given index.
@@ -624,12 +698,12 @@ impl<A: Clone> Vector<A> {
     /// # use im::vector::Vector;
     /// # fn main() {
     /// let mut vec = vector![1, 2, 3, 7, 8, 9];
-    /// let (left, right) = vec.split(3);
+    /// let (left, right) = vec.split_at(3);
     /// assert_eq!(vector![1, 2, 3], left);
     /// assert_eq!(vector![7, 8, 9], right);
     /// # }
     /// ```
-    pub fn split(mut self, index: usize) -> (Self, Self) {
+    pub fn split_at(mut self, index: usize) -> (Self, Self) {
         let right = self.split_off(index);
         (self, right)
     }
@@ -683,7 +757,7 @@ impl<A: Clone> Vector<A> {
                 length: self.length - index,
                 middle_level: self.middle_level,
                 outer_f: Ref::new(if2),
-                inner_f: Default::default(),
+                inner_f: Ref::<Chunk<A>>::default(),
                 middle: replace_def(&mut self.middle),
                 inner_b: replace_def(&mut self.inner_b),
                 outer_b: replace_def(&mut self.outer_b),
@@ -710,7 +784,7 @@ impl<A: Clone> Vector<A> {
                     SplitResult::OutOfBounds => unreachable!(),
                 };
                 let c1 = match m1.pop_chunk(self.middle_level, Side::Right) {
-                    PopResult::Empty => Default::default(),
+                    PopResult::Empty => Ref::<Chunk<A>>::default(),
                     PopResult::Done(chunk) => chunk,
                     PopResult::Drained(chunk) => {
                         m1.clear_node();
@@ -718,7 +792,7 @@ impl<A: Clone> Vector<A> {
                     }
                 };
                 let c2 = match m2.pop_chunk(self.middle_level, Side::Left) {
-                    PopResult::Empty => Default::default(),
+                    PopResult::Empty => Ref::<Chunk<A>>::default(),
                     PopResult::Done(chunk) => chunk,
                     PopResult::Drained(chunk) => {
                         m2.clear_node();
@@ -731,7 +805,7 @@ impl<A: Clone> Vector<A> {
                 length: self.length - index,
                 middle_level: self.middle_level,
                 outer_f: c2,
-                inner_f: Default::default(),
+                inner_f: Ref::<Chunk<A>>::default(),
                 middle: right_middle,
                 inner_b: replace_def(&mut self.inner_b),
                 outer_b: replace(&mut self.outer_b, c1),
@@ -794,15 +868,35 @@ impl<A: Clone> Vector<A> {
         self.split_off(len);
     }
 
-    /// Construct a vector with the elements from `start_index`
-    /// until `end_index` in the current vector.
+    #[cfg(has_range_bound)]
+    /// Extract a slice from a vector.
+    ///
+    /// Remove the elements from `start_index` until `end_index` in
+    /// the current vector and return the removed slice as a new
+    /// vector.
     ///
     /// Time: O(log n)
-    pub fn slice(&self, start_index: usize, end_index: usize) -> Self {
+    pub fn slice<R>(&mut self, range: R) -> Self
+    where
+        R: RangeBounds<usize>,
+    {
+        let start_index = match range.start_bound() {
+            Bound::Included(i) => *i,
+            Bound::Excluded(i) => *i + 1,
+            Bound::Unbounded => 0,
+        };
+        let end_index = match range.end_bound() {
+            Bound::Included(i) => *i + 1,
+            Bound::Excluded(i) => *i,
+            Bound::Unbounded => self.len(),
+        };
         if start_index >= end_index || start_index >= self.len() {
             return Vector::new();
         }
-        self.clone().skip(start_index).take(end_index - start_index)
+        let mut middle = self.split_off(start_index);
+        let right = middle.split_off(end_index - start_index);
+        self.append(right);
+        middle
     }
 
     /// Insert an element into a vector.
@@ -814,7 +908,7 @@ impl<A: Clone> Vector<A> {
     ///
     /// While `push_front` and `push_back` are heavily optimised
     /// operations, `insert` in the middle of a vector requires a
-    /// split, a push, and two appends. Thus, if you want to insert
+    /// split, a push, and an append. Thus, if you want to insert
     /// many elements at the same location, instead of `insert`ing
     /// them one by one, you should rather create a new vector
     /// containing the elements to insert, split the vector at the
@@ -836,6 +930,22 @@ impl<A: Clone> Vector<A> {
         self.append(right);
     }
 
+    /// Remove an element from a vector.
+    ///
+    /// Remove the element from position 'index', shifting all
+    /// elements after it to the left, and return the removec element.
+    ///
+    /// ## Performance Note
+    ///
+    /// While `pop_front` and `pop_back` are heavily optimised
+    /// operations, `remove` in the middle of a vector requires a
+    /// split, a pop, and an append. Thus, if you want to remove many
+    /// elements from the same location, instead of `remove`ing them
+    /// one by one, it is much better to use [`slice`][slice].
+    ///
+    /// Time: O(log n)
+    ///
+    /// [slice]: #method.slice
     pub fn remove(&mut self, index: usize) -> A {
         assert!(index < self.len());
         if index == 0 {
@@ -851,24 +961,30 @@ impl<A: Clone> Vector<A> {
         value
     }
 
+    /// Discard all elements from the vector.
+    ///
+    /// This leaves you with an empty vector, and all elements that
+    /// were previously inside it are dropped.
+    ///
+    /// Time: O(n)
     pub fn clear(&mut self) {
         if !self.is_empty() {
             self.length = 0;
             self.middle_level = 0;
             if !self.outer_f.is_empty() {
-                self.outer_f = Default::default();
+                self.outer_f = Ref::<Chunk<A>>::default();
             }
             if !self.inner_f.is_empty() {
-                self.inner_f = Default::default();
+                self.inner_f = Ref::<Chunk<A>>::default();
             }
             if !self.middle.is_empty() {
-                self.middle = Default::default();
+                self.middle = Ref::<Node<A>>::default();
             }
             if !self.inner_b.is_empty() {
-                self.inner_b = Default::default();
+                self.inner_b = Ref::<Chunk<A>>::default();
             }
             if !self.outer_b.is_empty() {
-                self.outer_b = Default::default();
+                self.outer_b = Ref::<Chunk<A>>::default();
             }
         }
     }

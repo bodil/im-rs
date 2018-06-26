@@ -56,7 +56,7 @@ macro_rules! ordmap {
     ( $( $key:expr => $value:expr ),* ) => {{
         let mut map = $crate::ordmap::OrdMap::new();
         $({
-            map.insert_mut($key, $value);
+            map.insert($key, $value);
         })*;
         map
     }};
@@ -222,7 +222,7 @@ impl<K, V> OrdMap<K, V> {
 
 impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// Get an iterator over the key/value pairs of a map.
-    pub fn iter<'a>(&'a self) -> Iter<'a, (K, V)> {
+    pub fn iter(&self) -> Iter<'_, (K, V)> {
         Iter::new(&self.root)
     }
 
@@ -242,12 +242,12 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     }
 
     /// Get an iterator over a map's keys.
-    pub fn keys<'a>(&'a self) -> Keys<'a, K, V> {
+    pub fn keys(&self) -> Keys<'_, K, V> {
         Keys { it: self.iter() }
     }
 
     /// Get an iterator over a map's values.
-    pub fn values<'a>(&'a self) -> Values<'a, K, V> {
+    pub fn values(&self) -> Values<'_, K, V> {
         Values { it: self.iter() }
     }
 
@@ -314,28 +314,6 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// Construct a new map by inserting a key/value mapping into a
     /// map.
     ///
-    /// This is an alias for [`insert`][insert].
-    ///
-    /// [insert]: #method.insert
-    #[inline]
-    pub fn set(&self, k: K, v: V) -> Self {
-        self.insert(k, v)
-    }
-
-    /// Insert a key/value mapping into a map, mutating it in place
-    /// when it is safe to do so.
-    ///
-    /// This is an alias for [`insert_mut`][insert_mut].
-    ///
-    /// [insert_mut]: #method.insert_mut
-    #[inline]
-    pub fn set_mut(&mut self, k: K, v: V) {
-        self.insert_mut(k, v)
-    }
-
-    /// Construct a new map by inserting a key/value mapping into a
-    /// map.
-    ///
     /// If the map already has a mapping for the given key, the
     /// previous value is overwritten.
     ///
@@ -349,12 +327,12 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// # fn main() {
     /// let map = ordmap!{};
     /// assert_eq!(
-    ///   map.insert(123, "123"),
+    ///   map.update(123, "123"),
     ///   ordmap!{123 => "123"}
     /// );
     /// # }
     /// ```
-    pub fn insert(&self, key: K, value: V) -> Self {
+    pub fn update(&self, key: K, value: V) -> Self {
         match self.root.insert((key, value)) {
             Insert::NoChange => self.clone(),
             Insert::JustInc => unreachable!(),
@@ -383,8 +361,8 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// # use im::ordmap::OrdMap;
     /// # fn main() {
     /// let mut map = ordmap!{};
-    /// map.insert_mut(123, "123");
-    /// map.insert_mut(456, "456");
+    /// map.insert(123, "123");
+    /// map.insert(456, "456");
     /// assert_eq!(
     ///   map,
     ///   ordmap!{123 => "123", 456 => "456"}
@@ -394,7 +372,7 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     ///
     /// [insert]: #method.insert
     #[inline]
-    pub fn insert_mut(&mut self, key: K, value: V) {
+    pub fn insert(&mut self, key: K, value: V) {
         match self.root.insert_mut((key, value)) {
             Insert::NoChange | Insert::JustInc => {}
             Insert::Update(root) => self.root = root,
@@ -410,11 +388,11 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// and insert the result as the new value.
     ///
     /// Time: O(log n)
-    pub fn insert_with<F>(self, k: K, v: V, f: F) -> Self
+    pub fn update_with<F>(self, k: K, v: V, f: F) -> Self
     where
         F: FnOnce(V, V) -> V,
     {
-        self.insert_with_key(k, v, |_, v1, v2| f(v1, v2))
+        self.update_with_key(k, v, |_, v1, v2| f(v1, v2))
     }
 
     /// Construct a new map by inserting a key/value mapping into a
@@ -425,15 +403,15 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// value, and insert the result as the new value.
     ///
     /// Time: O(log n)
-    pub fn insert_with_key<F>(self, k: K, v: V, f: F) -> Self
+    pub fn update_with_key<F>(self, k: K, v: V, f: F) -> Self
     where
         F: FnOnce(&K, V, V) -> V,
     {
         match self.pop_with_key(&k) {
-            None => self.insert(k, v),
+            None => self.update(k, v),
             Some((_, v2, m)) => {
                 let out_v = f(&k, v2, v);
-                m.insert(k, out_v)
+                m.update(k, out_v)
             }
         }
     }
@@ -447,15 +425,15 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// value, and insert the result as the new value.
     ///
     /// Time: O(log n)
-    pub fn insert_lookup_with_key<F>(self, k: K, v: V, f: F) -> (Option<V>, Self)
+    pub fn update_lookup_with_key<F>(self, k: K, v: V, f: F) -> (Option<V>, Self)
     where
         F: FnOnce(&K, &V, V) -> V,
     {
         match self.pop_with_key(&k) {
-            None => (None, self.insert(k, v)),
+            None => (None, self.update(k, v)),
             Some((_, v2, m)) => {
                 let out_v = f(&k, &v2, v);
-                (Some(v2), m.insert(k, out_v))
+                (Some(v2), m.update(k, out_v))
             }
         }
     }
@@ -464,81 +442,13 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// the current value and overwriting it with the function's
     /// return value.
     ///
-    /// Time: O(log n)
-    pub fn update<BK, F>(&self, k: &BK, f: F) -> Self
-    where
-        BK: Ord + Clone + ?Sized,
-        K: Borrow<BK>,
-        F: FnOnce(V) -> Option<V>,
-    {
-        match self.pop_with_key(k) {
-            None => self.clone(),
-            Some((k, v, m)) => match f(v) {
-                None => m,
-                Some(v) => m.insert(k, v),
-            },
-        }
-    }
-
-    /// Update the value for a given key by calling a function with
-    /// the key and the current value and overwriting it with the
-    /// function's return value.
-    ///
-    /// Time: O(log n)
-    pub fn update_with_key<BK, F>(&self, k: &BK, f: F) -> Self
-    where
-        BK: Ord + Clone + ?Sized,
-        K: Borrow<BK>,
-        F: FnOnce(&K, V) -> Option<V>,
-    {
-        match self.pop_with_key(k) {
-            None => self.clone(),
-            Some((k, v, m)) => match f(&k, v) {
-                None => m,
-                Some(v) => m.insert(k, v),
-            },
-        }
-    }
-
-    /// Update the value for a given key by calling a function with
-    /// the key and the current value and overwriting it with the
-    /// function's return value.
-    ///
-    /// If the key was not in the map, the function is never called
-    /// and the map is left unchanged.
-    ///
-    /// Return a tuple of the old value, if there was one, and the new
-    /// map.
-    ///
-    /// Time: O(log n)
-    pub fn update_lookup_with_key<BK, F>(&self, k: &BK, f: F) -> (Option<V>, Self)
-    where
-        BK: Ord + Clone + ?Sized,
-        K: Borrow<BK>,
-        F: FnOnce(&K, V) -> Option<V>,
-    {
-        match self.pop_with_key(k) {
-            None => (None, self.clone()),
-            Some((k, v, m)) => match f(&k, v.clone()) {
-                None => (Some(v), m),
-                Some(v2) => (Some(v), m.insert(k, v2)),
-            },
-        }
-    }
-
-    /// Update the value for a given key by calling a function with
-    /// the current value and overwriting it with the function's
-    /// return value.
-    ///
-    /// This is like the [`update`][update] method, except with more
-    /// control: the function gets an
-    /// [`Option<V>`][std::option::Option] and returns the same, so
-    /// that it can decide to delete a mapping instead of updating the
-    /// value, and decide what to do if the key isn't in the map.
+    /// The function gets an [`Option<V>`][std::option::Option] and
+    /// returns the same, so that it can decide to delete a mapping
+    /// instead of updating the value, and decide what to do if the
+    /// key isn't in the map.
     ///
     /// Time: O(log n)
     ///
-    /// [update]: #method.update
     /// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
     pub fn alter<F>(&self, f: F, k: K) -> Self
     where
@@ -547,16 +457,16 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
         let pop = self.pop_with_key(&k);
         match (f(pop.as_ref().map(|&(_, ref v, _)| v.clone())), pop) {
             (None, None) => self.clone(),
-            (Some(v), None) => self.insert(k, v),
+            (Some(v), None) => self.update(k, v),
             (None, Some((_, _, m))) => m,
-            (Some(v), Some((_, _, m))) => m.insert(k, v),
+            (Some(v), Some((_, _, m))) => m.update(k, v),
         }
     }
 
     /// Remove a key/value pair from a map, if it exists.
     ///
     /// Time: O(log n)
-    pub fn remove<BK>(&self, k: &BK) -> Self
+    pub fn without<BK>(&self, k: &BK) -> Self
     where
         BK: Ord + Clone + ?Sized,
         K: Borrow<BK>,
@@ -580,15 +490,15 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// # use im::ordmap::OrdMap;
     /// # fn main() {
     /// let mut map = ordmap!{123 => "123", 456 => "456"};
-    /// map.remove_mut(&123);
-    /// map.remove_mut(&456);
+    /// map.remove(&123);
+    /// map.remove(&456);
     /// assert!(map.is_empty());
     /// # }
     /// ```
     ///
     /// [remove]: #method.remove
     #[inline]
-    pub fn remove_mut<BK>(&mut self, k: &BK)
+    pub fn remove<BK>(&mut self, k: &BK)
     where
         BK: Ord + Clone + ?Sized,
         K: Borrow<BK>,
@@ -691,7 +601,7 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
         RM: Borrow<Self>,
     {
         other.borrow().iter().fold(self.clone(), |m, (k, v)| {
-            m.insert(
+            m.update(
                 k.clone(),
                 self.get(&*k)
                     .map(|v1| f(k, v1, v))
@@ -769,7 +679,7 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
                 None => m,
                 Some((k1, v1, m)) => match f(&k1, &v1, v2) {
                     None => m,
-                    Some(v) => m.insert(k1, v),
+                    Some(v) => m.update(k1, v),
                 },
             })
     }
@@ -809,7 +719,7 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     {
         other.borrow().iter().fold(ordmap![], |m, (k, v2)| {
             self.get(&*k)
-                .map(|v1| m.insert(k.clone(), f(k, v1, v2)))
+                .map(|v1| m.update(k.clone(), f(k, v1, v2)))
                 .unwrap_or(m)
         })
     }
@@ -845,8 +755,8 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
                 None => (l, r, m),
                 Some((k, vl, ml)) => (
                     ml,
-                    r.remove(&k),
-                    combine(&k, vl, vr).map(|v| m.insert(k, v)).unwrap_or(m),
+                    r.without(&k),
+                    combine(&k, vl, vr).map(|v| m.update(k, v)).unwrap_or(m),
                 ),
             },
         );
@@ -881,9 +791,9 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
         self.iter()
             .fold((ordmap![], None, ordmap![]), |(l, m, r), (k, v)| {
                 match k.borrow().cmp(split) {
-                    Ordering::Less => (l.insert(k.clone(), v.clone()), m, r),
+                    Ordering::Less => (l.update(k.clone(), v.clone()), m, r),
                     Ordering::Equal => (l, Some(v.clone()), r),
-                    Ordering::Greater => (l, m, r.insert(k.clone(), v.clone())),
+                    Ordering::Greater => (l, m, r.update(k.clone(), v.clone())),
                 }
             })
     }
@@ -1140,7 +1050,7 @@ where
     }
 
     pub fn insert(self, value: V) -> &'a mut V {
-        self.map.insert_mut(self.key.clone(), value);
+        self.map.insert(self.key.clone(), value);
         // TODO insert_mut ought to return this reference
         self.map.get_mut(&self.key).unwrap()
     }
@@ -1266,7 +1176,7 @@ where
     where
         I: Iterator<Item = Self>,
     {
-        it.fold(Default::default(), |a, b| a + b)
+        it.fold(Self::default(), |a, b| a + b)
     }
 }
 
@@ -1280,7 +1190,7 @@ where
         I: IntoIterator<Item = (RK, RV)>,
     {
         for (key, value) in iter {
-            self.insert_mut(From::from(key), From::from(value));
+            self.insert(From::from(key), From::from(value));
         }
     }
 }
@@ -1426,7 +1336,7 @@ where
     {
         let mut m = OrdMap::default();
         for (k, v) in i {
-            m.insert_mut(From::from(k), From::from(v));
+            m.insert(From::from(k), From::from(v));
         }
         m
     }
@@ -1491,7 +1401,7 @@ where
 {
     fn from(m: &'a [(RK, RV)]) -> OrdMap<K, V> {
         m.into_iter()
-            .map(|&(ref k, ref v)| (From::from(k.to_owned()), From::from(v.to_owned())))
+            .map(|&(ref k, ref v)| (k.to_owned(), v.to_owned()))
             .collect()
     }
 }
@@ -1502,9 +1412,7 @@ where
     V: Clone + From<RV>,
 {
     fn from(m: Vec<(RK, RV)>) -> OrdMap<K, V> {
-        m.into_iter()
-            .map(|(k, v)| (From::from(k), From::from(v)))
-            .collect()
+        m.into_iter().collect()
     }
 }
 
@@ -1519,7 +1427,7 @@ where
 {
     fn from(m: &'a Vec<(RK, RV)>) -> OrdMap<K, V> {
         m.into_iter()
-            .map(|&(ref k, ref v)| (From::from(k.to_owned()), From::from(v.to_owned())))
+            .map(|&(ref k, ref v)| (k.to_owned(), v.to_owned()))
             .collect()
     }
 }
@@ -1530,9 +1438,7 @@ where
     V: Clone + From<RV>,
 {
     fn from(m: collections::HashMap<RK, RV>) -> OrdMap<K, V> {
-        m.into_iter()
-            .map(|(k, v)| (From::from(k), From::from(v)))
-            .collect()
+        m.into_iter().collect()
     }
 }
 
@@ -1547,7 +1453,7 @@ where
 {
     fn from(m: &'a collections::HashMap<RK, RV>) -> OrdMap<K, V> {
         m.into_iter()
-            .map(|(k, v)| (From::from(k.to_owned()), From::from(v.to_owned())))
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
             .collect()
     }
 }
@@ -1558,9 +1464,7 @@ where
     V: Clone + From<RV>,
 {
     fn from(m: collections::BTreeMap<RK, RV>) -> OrdMap<K, V> {
-        m.into_iter()
-            .map(|(k, v)| (From::from(k), From::from(v)))
-            .collect()
+        m.into_iter().collect()
     }
 }
 
@@ -1575,7 +1479,7 @@ where
 {
     fn from(m: &'a collections::BTreeMap<RK, RV>) -> OrdMap<K, V> {
         m.into_iter()
-            .map(|(k, v)| (From::from(k.to_owned()), From::from(v.to_owned())))
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
             .collect()
     }
 }
@@ -1755,9 +1659,9 @@ mod test {
     #[test]
     fn insert_remove_single_mut() {
         let mut m = OrdMap::new();
-        m.insert_mut(0, 0);
+        m.insert(0, 0);
         assert_eq!(OrdMap::singleton(0, 0), m);
-        m.remove_mut(&0);
+        m.remove(&0);
         assert_eq!(OrdMap::new(), m);
     }
 
@@ -1787,7 +1691,7 @@ mod test {
     fn safe_mutation() {
         let v1 = OrdMap::from_iter((0..131072).into_iter().map(|i| (i, i)));
         let mut v2 = v1.clone();
-        v2.set_mut(131000, 23);
+        v2.insert(131000, 23);
         assert_eq!(Some(&23), v2.get(&131000));
         assert_eq!(Some(&131000), v1.get(&131000));
     }
@@ -1851,7 +1755,7 @@ mod test {
             }
             let index = vec[index_rand % vec.len()].0;
             let map1 = OrdMap::from_iter(vec.clone());
-            let map2 = map1.insert(index, new_val);
+            let map2 = map1.update(index, new_val);
             map2.iter().all(|(k, v)| if *k == index {
                 *v == new_val
             } else {
@@ -1868,7 +1772,7 @@ mod test {
             }
             let index = vec[index_rand % vec.len()].0;
             let map1: OrdMap<usize, usize> = OrdMap::from_iter(vec.clone());
-            let map2 = map1.remove(&index);
+            let map2 = map1.without(&index);
             map2.keys().all(|k| *k != index) && map1.len() == map2.len() + 1
         }
 
@@ -1883,10 +1787,10 @@ mod test {
             for (ins, key, val) in ops {
                 if ins {
                     tree.insert(key, val);
-                    map = map.insert(key, val)
+                    map = map.update(key, val)
                 } else {
                     tree.remove(&key);
-                    map = map.remove(&key)
+                    map = map.without(&key)
                 }
             }
             map.iter().map(|(k, v)| (*k, *v)).eq(tree.iter().map(|(k, v)| (*k, *v)))
@@ -1954,7 +1858,7 @@ mod test {
         fn insert_and_length(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
             let mut map: OrdMap<i16, i16> = OrdMap::new();
             for (k, v) in m.iter() {
-                map = map.insert(*k, *v)
+                map = map.update(*k, *v)
             }
             assert_eq!(m.len(), map.len());
         }
@@ -1998,7 +1902,7 @@ mod test {
             for k in m.keys() {
                 let l = map.len();
                 assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
-                map = map.remove(k);
+                map = map.without(k);
                 assert_eq!(None, map.get(k));
                 assert_eq!(l - 1, map.len());
             }
@@ -2009,8 +1913,8 @@ mod test {
             let mut mut_map = OrdMap::new();
             let mut map = OrdMap::new();
             for (k, v) in m.iter() {
-                map = map.insert(*k, *v);
-                mut_map.insert_mut(*k, *v);
+                map = map.update(*k, *v);
+                mut_map.insert(*k, *v);
             }
             assert_eq!(map, mut_map);
         }
@@ -2022,7 +1926,7 @@ mod test {
             for k in m.keys() {
                 let l = map.len();
                 assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
-                map.remove_mut(k);
+                map.remove(k);
                 assert_eq!(None, map.get(k));
                 assert_eq!(l - 1, map.len());
             }
@@ -2036,7 +1940,7 @@ mod test {
             let index = *input.keys().nth(index_rand % input.len()).unwrap();
             let map1 = OrdMap::from_iter(input.clone());
             let (val, map2): (i16, _) = map1.pop(&index).unwrap();
-            let map3 = map2.insert(index, val);
+            let map3 = map2.update(index, val);
             for key in map2.keys() {
                 assert!(*key != index);
             }

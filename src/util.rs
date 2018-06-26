@@ -35,7 +35,8 @@ where
     if a == b {
         return;
     }
-    // so sorry, but there's no implementation for this in std that's sufficiently generic
+    // so sorry, but there's no implementation for this in std that's
+    // sufficiently generic
     unsafe {
         let pa: *mut V::Output = &mut vector[a];
         let pb: *mut V::Output = &mut vector[b];

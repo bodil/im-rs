@@ -891,10 +891,10 @@ where
 impl<'a, A: Clone> Iter<'a, A> {
     pub fn new(root: &'a Node<A>) -> Self {
         Iter {
-            front_stack: Default::default(),
+            front_stack: Vec::default(),
             front_node: root,
             front_index: 0,
-            back_stack: Default::default(),
+            back_stack: Vec::default(),
             back_node: root,
             back_index: root.children.len() as isize - 1,
             remaining: root.len(),
