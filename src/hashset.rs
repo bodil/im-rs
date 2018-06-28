@@ -208,6 +208,13 @@ where
         }
     }
 
+    /// Get a reference to the set's [`BuildHasher`][BuildHasher].
+    ///
+    /// [BuildHasher]: https://doc.rust-lang.org/std/hash/trait.BuildHasher.html
+    pub fn hasher(&self) -> &Ref<S> {
+        &self.hasher
+    }
+
     /// Construct an empty hash set using the same hasher as the current hash set.
     #[inline]
     pub fn new_from<A1>(&self) -> HashSet<A1, S>
@@ -234,6 +241,49 @@ where
         }
     }
 
+    /// Test if a value is part of a set.
+    ///
+    /// Time: O(log n)
+    pub fn contains<BA>(&self, a: &BA) -> bool
+    where
+        BA: Hash + Eq + ?Sized,
+        A: Borrow<BA>,
+    {
+        self.root.get(hash_key(&*self.hasher, a), 0, a).is_some()
+    }
+
+    /// Insert a value into a set.
+    ///
+    /// Time: O(log n)
+    #[inline]
+    pub fn insert(&mut self, a: A) -> Option<A> {
+        let hash = hash_key(&*self.hasher, &a);
+        let root = Ref::make_mut(&mut self.root);
+        match root.insert(hash, 0, Value(a)) {
+            None => {
+                self.size += 1;
+                None
+            }
+            Some(Value(old_value)) => Some(old_value),
+        }
+    }
+
+    /// Remove a value from a set if it exists.
+    ///
+    /// Time: O(log n)
+    pub fn remove<BA>(&mut self, a: &BA) -> Option<A>
+    where
+        BA: Hash + Eq + ?Sized,
+        A: Borrow<BA>,
+    {
+        let root = Ref::make_mut(&mut self.root);
+        let result = root.remove(hash_key(&*self.hasher, a), 0, a);
+        if result.is_some() {
+            self.size -= 1;
+        }
+        result.map(|v| v.0)
+    }
+
     /// Construct a new set from the current set with the given value
     /// added.
     ///
@@ -254,39 +304,9 @@ where
     /// # }
     /// ```
     pub fn update(&self, a: A) -> Self {
-        let (added, new_node) = self.root.insert(hash_key(&*self.hasher, &a), 0, Value(a));
-        HashSet {
-            root: Ref::new(new_node),
-            size: if added {
-                self.size + 1
-            } else {
-                self.size
-            },
-            hasher: self.hasher.clone(),
-        }
-    }
-
-    /// Insert a value into a set.
-    ///
-    /// Time: O(log n)
-    #[inline]
-    pub fn insert(&mut self, a: A) {
-        let hash = hash_key(&*self.hasher, &a);
-        let root = Ref::make_mut(&mut self.root);
-        if root.insert_mut(hash, 0, Value(a)) {
-            self.size += 1
-        }
-    }
-
-    /// Test if a value is part of a set.
-    ///
-    /// Time: O(log n)
-    pub fn contains<BA>(&self, a: &BA) -> bool
-    where
-        BA: Hash + Eq + Clone + ?Sized,
-        A: Borrow<BA>,
-    {
-        self.root.get(hash_key(&*self.hasher, a), 0, a).is_some()
+        let mut out = self.clone();
+        out.insert(a);
+        out
     }
 
     /// Construct a new set with the given value removed if it's in
@@ -298,88 +318,121 @@ where
         BA: Hash + Eq + ?Sized,
         A: Borrow<BA>,
     {
-        self.root
-            .remove(hash_key(&*self.hasher, a), 0, a)
-            .map(|(_, node)| HashSet {
-                hasher: self.hasher.clone(),
-                size: self.size - 1,
-                root: Ref::new(node),
-            })
-            .unwrap_or_else(|| self.clone())
+        let mut out = self.clone();
+        out.remove(a);
+        out
     }
 
-    /// Remove a value from a set if it exists.
+    /// Filter out values from a set which don't satisfy a predicate.
     ///
-    /// Time: O(log n)
-    pub fn remove<BA>(&mut self, a: &BA)
+    /// This is slightly more efficient than filtering using an
+    /// iterator, in that it doesn't need to rehash the retained
+    /// values, but it still needs to reconstruct the entire tree
+    /// structure of the set.
+    ///
+    /// Time: O(n log n)
+    pub fn retain<F>(&mut self, mut f: F)
     where
-        BA: Hash + Eq + Clone + ?Sized,
-        A: Borrow<BA>,
+        F: FnMut(&A) -> bool,
     {
+        let old_root = self.root.clone();
         let root = Ref::make_mut(&mut self.root);
-        let result = root.remove_mut(hash_key(&*self.hasher, a), 0, a);
-        if result.is_some() {
-            self.size -= 1;
+        for (value, hash) in NodeIter::new(&old_root, self.size) {
+            if !f(value) && root.remove(hash, 0, value).is_some() {
+                self.size -= 1;
+            }
         }
     }
 
     /// Construct the union of two sets.
     ///
-    /// Time: O(n)
-    pub fn union<RS>(&self, other: RS) -> Self
-    where
-        RS: Borrow<Self>,
-    {
-        other
-            .borrow()
-            .iter()
-            .fold(self.clone(), |set, a| set.update(a.clone()))
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashset::HashSet;
+    /// # fn main() {
+    /// let set1 = hashset!{1, 2};
+    /// let set2 = hashset!{2, 3};
+    /// let expected = hashset!{1, 2, 3};
+    /// assert_eq!(expected, set1.union(set2));
+    /// # }
+    /// ```
+    pub fn union(mut self, other: Self) -> Self {
+        for value in other {
+            self.insert(value);
+        }
+        self
     }
 
     /// Construct the union of multiple sets.
     ///
-    /// Time: O(n)
+    /// Time: O(n log n)
     pub fn unions<I>(i: I) -> Self
     where
         I: IntoIterator<Item = Self>,
         S: Default,
     {
-        i.into_iter().fold(Self::default(), |a, b| a.union(&b))
+        i.into_iter().fold(Self::default(), |a, b| a.union(b))
     }
 
     /// Construct the difference between two sets.
     ///
-    /// Time: O(n)
-    pub fn difference<RS>(&self, other: RS) -> Self
-    where
-        RS: Borrow<Self>,
-    {
-        other
-            .borrow()
-            .iter()
-            .fold(self.clone(), |set, a| set.without(&a))
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashset::HashSet;
+    /// # fn main() {
+    /// let set1 = hashset!{1, 2};
+    /// let set2 = hashset!{2, 3};
+    /// let expected = hashset!{1, 3};
+    /// assert_eq!(expected, set1.difference(set2));
+    /// # }
+    /// ```
+    pub fn difference(mut self, other: Self) -> Self {
+        for value in other {
+            if self.remove(&value).is_none() {
+                self.insert(value);
+            }
+        }
+        self
     }
 
     /// Construct the intersection of two sets.
     ///
-    /// Time: O(n)
-    pub fn intersection<RS>(&self, other: RS) -> Self
-    where
-        RS: Borrow<Self>,
-    {
-        other.borrow().iter().fold(self.new_from(), |set, a| {
-            if self.contains(&a) {
-                set.update(a.clone())
-            } else {
-                set
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashset::HashSet;
+    /// # fn main() {
+    /// let set1 = hashset!{1, 2};
+    /// let set2 = hashset!{2, 3};
+    /// let expected = hashset!{2};
+    /// assert_eq!(expected, set1.intersection(set2));
+    /// # }
+    /// ```
+    pub fn intersection(self, other: Self) -> Self {
+        let mut out = self.new_from();
+        for value in other {
+            if self.contains(&value) {
+                out.insert(value);
             }
-        })
+        }
+        out
     }
 
     /// Test whether a set is a subset of another set, meaning that
     /// all values in our set must also be in the other set.
     ///
-    /// Time: O(n)
+    /// Time: O(n log n)
     pub fn is_subset<RS>(&self, other: RS) -> bool
     where
         RS: Borrow<Self>,
@@ -392,7 +445,7 @@ where
     /// that all values in our set must also be in the other set. A
     /// proper subset must also be smaller than the other set.
     ///
-    /// Time: O(n)
+    /// Time: O(n log n)
     pub fn is_proper_subset<RS>(&self, other: RS) -> bool
     where
         RS: Borrow<Self>,
@@ -500,7 +553,7 @@ where
     type Output = HashSet<A, S>;
 
     fn add(self, other: Self) -> Self::Output {
-        self.union(&other)
+        self.union(other)
     }
 }
 
@@ -512,7 +565,7 @@ where
     type Output = HashSet<A, S>;
 
     fn mul(self, other: Self) -> Self::Output {
-        self.intersection(&other)
+        self.intersection(other)
     }
 }
 
@@ -524,7 +577,7 @@ where
     type Output = HashSet<A, S>;
 
     fn add(self, other: Self) -> Self::Output {
-        self.union(other)
+        self.clone().union(other.clone())
     }
 }
 
@@ -536,7 +589,7 @@ where
     type Output = HashSet<A, S>;
 
     fn mul(self, other: Self) -> Self::Output {
-        self.intersection(other)
+        self.clone().intersection(other.clone())
     }
 }
 
@@ -617,7 +670,7 @@ where
     type Item = &'a A;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.it.next().map(Deref::deref)
+        self.it.next().map(|(v, _)| v.deref())
     }
 }
 
@@ -647,7 +700,7 @@ where
     {
         let mut set = Self::default();
         for value in i {
-            set.insert(From::from(value))
+            set.insert(From::from(value));
         }
         set
     }
@@ -827,16 +880,16 @@ pub mod proptest {
 #[cfg(test)]
 mod test {
     use super::proptest::*;
-    // use super::*;
+    use super::*;
 
-    // #[test]
-    // fn match_strings_with_string_slices() {
-    //     let mut set: HashSet<String> = From::from(&hashset!["foo", "bar"]);
-    //     set = set.remove("bar");
-    //     assert!(!set.contains("bar"));
-    //     set.remove_mut("foo");
-    //     assert!(!set.contains("foo"));
-    // }
+    #[test]
+    fn match_strings_with_string_slices() {
+        let mut set: HashSet<String> = From::from(&hashset!["foo", "bar"]);
+        set = set.without("bar");
+        assert!(!set.contains("bar"));
+        set.remove("foo");
+        assert!(!set.contains("foo"));
+    }
 
     #[test]
     fn macro_allows_trailing_comma() {

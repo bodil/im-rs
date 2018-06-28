@@ -4,6 +4,7 @@
 
 use std::borrow::Borrow;
 use std::cmp::Ordering;
+use std::mem;
 use std::ops::IndexMut;
 
 use util::Ref;
@@ -34,15 +35,15 @@ struct NodeData<A> {
 }
 
 pub enum Insert<A> {
-    NoChange,
-    JustInc,
+    Added,
+    Replaced(A),
     Update(Node<A>),
     Split(Node<A>, A, Node<A>),
 }
 
 enum InsertAction<A> {
-    NoAction,
-    IncAction,
+    AddedAction,
+    ReplacedAction(A),
     InsertAt,
     InsertSplit(Node<A>, A, Node<A>),
 }
@@ -266,64 +267,6 @@ impl<A: BTreeValue> Node<A> {
         Split(Node::wrap(left), new_keys.pop().unwrap(), Node::wrap(right))
     }
 
-    pub fn insert(&self, value: A) -> Insert<A> {
-        if self.0.keys.is_empty() {
-            return Insert::Update(Node::singleton(value));
-        }
-        match A::search_value(&self.0.keys, &value) {
-            // Key exists in node
-            Ok(index) => {
-                if value.ptr_eq(&self.0.keys[index]) {
-                    Insert::NoChange
-                } else {
-                    let mut new_data = (&*self.0).clone();
-                    new_data.keys[index] = value;
-                    Insert::Update(Node::wrap(new_data))
-                }
-            }
-            // Key is adjacent to some key in node
-            Err(index) => match self.0.children[index] {
-                // No child at location, this is the target node.
-                None => {
-                    if self.has_room() {
-                        let mut new_data = (&*self.0).clone();
-                        new_data.keys.insert(index, value);
-                        new_data.children.insert(index + 1, None);
-                        new_data.count += 1;
-                        Insert::Update(Node::wrap(new_data))
-                    } else {
-                        self.split(value, None, None)
-                    }
-                }
-                // Child at location, pass it on.
-                Some(ref node) => match node.insert(value) {
-                    Insert::NoChange => Insert::NoChange,
-                    Insert::JustInc => unreachable!(),
-                    Insert::Update(new_node) => {
-                        // We have an updated child; record it.
-                        let mut new_data = (&*self.0).clone();
-                        new_data.children[index] = Some(new_node);
-                        new_data.count += 1;
-                        Insert::Update(Node::wrap(new_data))
-                    }
-                    Insert::Split(left, median, right) => {
-                        // Child node split; insert it.
-                        if self.has_room() {
-                            let mut new_data = (&*self.0).clone();
-                            new_data.children[index] = Some(left);
-                            new_data.keys.insert(index, median);
-                            new_data.children.insert(index + 1, Some(right));
-                            new_data.count += 1;
-                            Insert::Update(Node::wrap(new_data))
-                        } else {
-                            self.split(median, Some(left), Some(right))
-                        }
-                    }
-                },
-            },
-        }
-    }
-
     fn merge(pair: A, left: &Node<A>, right: &Node<A>) -> Node<A> {
         let mut keys = Vec::with_capacity(NODE_SIZE);
         keys.extend(left.0.keys.iter().cloned());
@@ -339,15 +282,7 @@ impl<A: BTreeValue> Node<A> {
         })
     }
 
-    fn pop_min(&self) -> (Node<A>, A, Option<Node<A>>) {
-        let mut new_data = (&*self.0).clone();
-        let pair = new_data.keys.remove(0);
-        let child = new_data.children.remove(0);
-        new_data.count -= 1 + Node::maybe_len(&child);
-        (Node::wrap(new_data), pair, child)
-    }
-
-    fn pop_min_mut(&mut self) -> (A, Option<Node<A>>) {
+    fn pop_min(&mut self) -> (A, Option<Node<A>>) {
         let node = Ref::make_mut(&mut self.0);
         let pair = node.keys.remove(0);
         let child = node.children.remove(0);
@@ -355,15 +290,7 @@ impl<A: BTreeValue> Node<A> {
         (pair, child)
     }
 
-    fn pop_max(&self) -> (Node<A>, A, Option<Node<A>>) {
-        let mut new_data = (&*self.0).clone();
-        let pair = new_data.keys.pop().unwrap();
-        let child = new_data.children.pop().unwrap();
-        new_data.count -= 1 + Node::maybe_len(&child);
-        (Node::wrap(new_data), pair, child)
-    }
-
-    fn pop_max_mut(&mut self) -> (A, Option<Node<A>>) {
+    fn pop_max(&mut self) -> (A, Option<Node<A>>) {
         let node = Ref::make_mut(&mut self.0);
         let pair = node.keys.pop().unwrap();
         let child = node.children.pop().unwrap();
@@ -371,260 +298,33 @@ impl<A: BTreeValue> Node<A> {
         (pair, child)
     }
 
-    fn push_min(&self, child: Option<Node<A>>, pair: A) -> Node<A> {
-        let mut new_data = (&*self.0).clone();
-        new_data.count += 1 + Node::maybe_len(&child);
-        new_data.keys.insert(0, pair);
-        new_data.children.insert(0, child);
-        Node::wrap(new_data)
-    }
-
-    fn push_min_mut(&mut self, child: Option<Node<A>>, pair: A) {
+    fn push_min(&mut self, child: Option<Node<A>>, pair: A) {
         let node = Ref::make_mut(&mut self.0);
         node.count += 1 + Node::maybe_len(&child);
         node.keys.insert(0, pair);
         node.children.insert(0, child);
     }
 
-    fn push_max(&self, child: Option<Node<A>>, pair: A) -> Node<A> {
-        let mut new_data = (&*self.0).clone();
-        new_data.count += 1 + Node::maybe_len(&child);
-        new_data.keys.push(pair);
-        new_data.children.push(child);
-        Node::wrap(new_data)
-    }
-
-    fn push_max_mut(&mut self, child: Option<Node<A>>, pair: A) {
+    fn push_max(&mut self, child: Option<Node<A>>, pair: A) {
         let node = Ref::make_mut(&mut self.0);
         node.count += 1 + Node::maybe_len(&child);
         node.keys.push(pair);
         node.children.push(child);
     }
 
-    fn pull_up<BK>(
-        &self,
-        key: &BK,
-        from_index: usize,
-        from_child: &Node<A>,
-        pull_to: usize,
-        child_index: usize,
-    ) -> Remove<A>
-    where
-        BK: Ord + ?Sized,
-        A::Key: Borrow<BK>,
-    {
-        match from_child.remove_index(Ok(from_index), key) {
-            Remove::NoChange => unreachable!(),
-            Remove::Removed(_) => unreachable!(),
-            Remove::Update(pulled_pair, new_child) => {
-                let mut new_data = (&*self.0).clone();
-                new_data.keys.push(pulled_pair);
-                let pair = new_data.keys.swap_remove(pull_to);
-                new_data.children[child_index] = Some(new_child);
-                new_data.count -= 1;
-                Remove::Update(pair, Node::wrap(new_data))
-            }
-        }
-    }
-
-    pub fn remove<BK>(&self, key: &BK) -> Remove<A>
-    where
-        BK: Ord + ?Sized,
-        A::Key: Borrow<BK>,
-    {
-        self.remove_index(A::search_key(&self.0.keys, key), key)
-    }
-
-    pub fn remove_index<BK>(&self, index: Result<usize, usize>, key: &BK) -> Remove<A>
-    where
-        BK: Ord + ?Sized,
-        A::Key: Borrow<BK>,
-    {
-        match index {
-            // Key exists in node, remove it.
-            Ok(index) => {
-                match (&self.0.children[index], &self.0.children[index + 1]) {
-                    // If we're a leaf, just delete the entry.
-                    (&None, &None) => {
-                        let mut new_data = (&*self.0).clone();
-                        let pair = new_data.keys.remove(index);
-                        new_data.children.remove(index);
-                        new_data.count -= 1;
-                        Remove::Update(pair, Node::wrap(new_data))
-                    }
-                    // If the left hand child has capacity, pull the predecessor up.
-                    (&Some(ref left), _) if !left.too_small() => {
-                        self.pull_up(key, left.0.keys.len() - 1, left, index, index)
-                    }
-                    // If the right hand child has capacity, pull the successor up.
-                    (_, &Some(ref right)) if !right.too_small() => {
-                        self.pull_up(key, 0, right, index, index + 1)
-                    }
-                    // If neither child has capacity, we'll have to merge them.
-                    (&Some(ref left), &Some(ref right)) => {
-                        let mut new_data = (&*self.0).clone();
-                        let pair = new_data.keys.remove(index);
-                        let merged_child = Node::merge(pair.clone(), left, right);
-                        let new_child = match merged_child.remove(key) {
-                            Remove::NoChange => merged_child,
-                            Remove::Removed(_) => unreachable!(),
-                            Remove::Update(_, updated_child) => updated_child,
-                        };
-                        if new_data.keys.is_empty() {
-                            // If we've depleted the root node, the merged child becomes the root.
-                            Remove::Update(pair, new_child)
-                        } else {
-                            new_data.count -= 1;
-                            new_data.children.remove(index + 1);
-                            new_data.children[index] = Some(new_child);
-                            Remove::Update(pair, Node::wrap(new_data))
-                        }
-                    }
-                    // If one child exists and the other doesn't, we're in a bad state.
-                    _ => unreachable!(),
-                }
-            }
-            // Key is adjacent to some key in node
-            Err(index) => match self.0.children[index] {
-                // No child at location means key isn't in map.
-                None => Remove::NoChange,
-                // Child at location, but it's at minimum capacity.
-                Some(ref child) if child.too_small() => {
-                    let has_left = index > 0;
-                    let has_right = index < self.0.children.len() - 1;
-                    // If it has a left sibling with capacity, steal a key from it.
-                    if has_left {
-                        match self.0.children[index - 1] {
-                            Some(ref old_left) if !old_left.too_small() => {
-                                // Prepare the rebalanced node.
-                                let right = child.push_min(
-                                    old_left.0.children.last().unwrap().clone(),
-                                    self.0.keys[index - 1].clone(),
-                                );
-                                match right.remove(key) {
-                                    Remove::NoChange => return Remove::NoChange,
-                                    Remove::Removed(_) => unreachable!(),
-                                    Remove::Update(pair, new_child) => {
-                                        // If we did remove something, we complete the rebalancing.
-                                        let mut new_data = (&*self.0).clone();
-                                        let (left, left_pair, _) = old_left.pop_max();
-                                        new_data.keys[index - 1] = left_pair;
-                                        new_data.children[index - 1] = Some(left);
-                                        new_data.children[index] = Some(new_child);
-                                        new_data.count -= 1;
-                                        return Remove::Update(pair, Node::wrap(new_data));
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    // If it has a right sibling with capacity, same as above.
-                    if has_right {
-                        match self.0.children[index + 1] {
-                            Some(ref old_right) if !old_right.too_small() => {
-                                // Prepare the rebalanced node.
-                                let left = child.push_max(
-                                    old_right.0.children[0].clone(),
-                                    self.0.keys[index].clone(),
-                                );
-                                match left.remove(key) {
-                                    Remove::NoChange => return Remove::NoChange,
-                                    Remove::Removed(_) => unreachable!(),
-                                    Remove::Update(pair, new_child) => {
-                                        // If we did remove something, we complete the rebalancing.
-                                        let mut new_data = (&*self.0).clone();
-                                        let (right, right_pair, _) = old_right.pop_min();
-                                        new_data.keys[index] = right_pair;
-                                        new_data.children[index] = Some(new_child);
-                                        new_data.children[index + 1] = Some(right);
-                                        new_data.count -= 1;
-                                        return Remove::Update(pair, Node::wrap(new_data));
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    // If it has neither, we'll have to merge it with a sibling.
-                    // If we have a right sibling, we'll merge with that.
-                    if has_right {
-                        if let Some(ref right) = self.0.children[index + 1] {
-                            let merged = Node::merge(self.0.keys[index].clone(), child, right);
-                            match merged.remove(key) {
-                                Remove::NoChange => return Remove::NoChange,
-                                Remove::Removed(_) => unreachable!(),
-                                Remove::Update(pair, new_child) => {
-                                    if self.0.keys.len() == 1 {
-                                        return Remove::Update(pair, new_child);
-                                    }
-                                    let mut new_data = (&*self.0).clone();
-                                    new_data.count -= 1;
-                                    new_data.keys.remove(index);
-                                    new_data.children.remove(index);
-                                    new_data.children[index] = Some(new_child);
-                                    return Remove::Update(pair, Node::wrap(new_data));
-                                }
-                            }
-                        }
-                    }
-                    // If we have a left sibling, we'll merge with that.
-                    if has_left {
-                        if let Some(ref left) = self.0.children[index - 1] {
-                            let merged = Node::merge(self.0.keys[index - 1].clone(), left, child);
-                            match merged.remove(key) {
-                                Remove::NoChange => return Remove::NoChange,
-                                Remove::Removed(_) => unreachable!(),
-                                Remove::Update(pair, new_child) => {
-                                    if self.0.keys.len() == 1 {
-                                        return Remove::Update(pair, new_child);
-                                    }
-                                    let mut new_data = (&*self.0).clone();
-                                    new_data.count -= 1;
-                                    new_data.keys.remove(index - 1);
-                                    new_data.children.remove(index - 1);
-                                    new_data.children[index - 1] = Some(new_child);
-                                    return Remove::Update(pair, Node::wrap(new_data));
-                                }
-                            }
-                        }
-                    }
-                    // If none of the above, we're in a bad state.
-                    unreachable!()
-                }
-                // Child at location, and it's big enough, we can recurse down.
-                Some(ref child) => match child.remove(key) {
-                    Remove::NoChange => Remove::NoChange,
-                    Remove::Removed(_) => unreachable!(),
-                    Remove::Update(pair, new_child) => {
-                        let mut new_data = (&*self.0).clone();
-                        new_data.children[index] = Some(new_child);
-                        new_data.count -= 1;
-                        Remove::Update(pair, Node::wrap(new_data))
-                    }
-                },
-            },
-        }
-    }
-
-    pub fn insert_mut(&mut self, value: A) -> Insert<A> {
+    pub fn insert(&mut self, value: A) -> Insert<A> {
         if self.0.keys.is_empty() {
             let node = Ref::make_mut(&mut self.0);
             node.keys.push(value);
             node.children.push(None);
             node.count += 1;
-            return Insert::JustInc;
+            return Insert::Added;
         }
         let (median, left, right) = match A::search_value(&self.0.keys, &value) {
             // Key exists in node
             Ok(index) => {
-                if value.ptr_eq(&self.0.keys[index]) {
-                    return Insert::NoChange;
-                } else {
-                    let mut node = Ref::make_mut(&mut self.0);
-                    node.keys[index] = value;
-                    return Insert::JustInc;
-                }
+                let mut node = Ref::make_mut(&mut self.0);
+                return Insert::Replaced(mem::replace(&mut node.keys[index], value));
             }
             // Key is adjacent to some key in node
             Err(index) => {
@@ -634,25 +334,25 @@ impl<A: BTreeValue> Node<A> {
                     // No child at location, this is the target node.
                     None => InsertAt,
                     // Child at location, pass it on.
-                    Some(ref mut child) => match child.insert_mut(value.clone()) {
-                        Insert::NoChange => NoAction,
-                        Insert::JustInc => IncAction,
+                    Some(ref mut child) => match child.insert(value.clone()) {
+                        Insert::Added => AddedAction,
+                        Insert::Replaced(value) => ReplacedAction(value),
                         Insert::Update(_) => unreachable!(),
                         Insert::Split(left, median, right) => InsertSplit(left, median, right),
                     },
                 };
                 match action {
-                    NoAction => return Insert::NoChange,
-                    IncAction => {
+                    ReplacedAction(value) => return Insert::Replaced(value),
+                    AddedAction => {
                         node.count += 1;
-                        return Insert::JustInc;
+                        return Insert::Added;
                     }
                     InsertAt => {
                         if has_room {
                             node.keys.insert(index, value);
                             node.children.insert(index + 1, None);
                             node.count += 1;
-                            return Insert::JustInc;
+                            return Insert::Added;
                         } else {
                             (value, None, None)
                         }
@@ -663,7 +363,7 @@ impl<A: BTreeValue> Node<A> {
                             node.keys.insert(index, median);
                             node.children.insert(index + 1, Some(right));
                             node.count += 1;
-                            return Insert::JustInc;
+                            return Insert::Added;
                         } else {
                             (median, Some(left), Some(right))
                         }
@@ -674,16 +374,16 @@ impl<A: BTreeValue> Node<A> {
         self.split(median, left, right)
     }
 
-    pub fn remove_mut<BK>(&mut self, key: &BK) -> Remove<A>
+    pub fn remove<BK>(&mut self, key: &BK) -> Remove<A>
     where
         BK: Ord + ?Sized,
         A::Key: Borrow<BK>,
     {
         let index = A::search_key(&self.0.keys, key);
-        self.remove_mut_index(index, key)
+        self.remove_index(index, key)
     }
 
-    fn remove_mut_index<BK>(&mut self, index: Result<usize, usize>, key: &BK) -> Remove<A>
+    fn remove_index<BK>(&mut self, index: Result<usize, usize>, key: &BK) -> Remove<A>
     where
         BK: Ord + ?Sized,
         A::Key: Borrow<BK>,
@@ -755,7 +455,7 @@ impl<A: BTreeValue> Node<A> {
                 let mut update = None;
                 let mut pair;
                 if let Some(&mut Some(ref mut child)) = children.get_mut(child_index) {
-                    match child.remove_mut_index(Ok(target_index), key) {
+                    match child.remove_index(Ok(target_index), key) {
                         Remove::NoChange => unreachable!(),
                         Remove::Removed(pulled_pair) => {
                             node.keys.push(pulled_pair);
@@ -787,7 +487,7 @@ impl<A: BTreeValue> Node<A> {
                 };
                 let mut node = Ref::make_mut(&mut self.0);
                 let pair = node.keys.remove(index);
-                let new_child = match merged_child.remove_mut(key) {
+                let new_child = match merged_child.remove(key) {
                     Remove::NoChange | Remove::Removed(_) => merged_child,
                     Remove::Update(_, updated_child) => updated_child,
                 };
@@ -820,26 +520,26 @@ impl<A: BTreeValue> Node<A> {
                     let mut left = children.next().unwrap();
                     let mut child = children.next().unwrap();
                     // Prepare the rebalanced node.
-                    child.push_min_mut(
+                    child.push_min(
                         left.0.children.last().unwrap().clone(),
                         node.keys[index - 1].clone(),
                     );
-                    match child.remove_mut(key) {
+                    match child.remove(key) {
                         Remove::NoChange => {
                             // Key wasn't there, we need to revert the steal.
-                            child.pop_min_mut();
+                            child.pop_min();
                             return Remove::NoChange;
                         }
                         Remove::Removed(pair) => {
                             // If we did remove something, we complete the rebalancing.
-                            let (left_pair, _) = left.pop_max_mut();
+                            let (left_pair, _) = left.pop_max();
                             node.keys[index - 1] = left_pair;
                             node.count -= 1;
                             out_pair = pair;
                         }
                         Remove::Update(pair, new_child) => {
                             // If we did remove something, we complete the rebalancing.
-                            let (left_pair, _) = left.pop_max_mut();
+                            let (left_pair, _) = left.pop_max();
                             node.keys[index - 1] = left_pair;
                             update = Some(new_child);
                             node.count -= 1;
@@ -869,23 +569,23 @@ impl<A: BTreeValue> Node<A> {
                     let mut child = children.next().unwrap();
                     let mut right = children.next().unwrap();
                     // Prepare the rebalanced node.
-                    child.push_max_mut(right.0.children[0].clone(), node.keys[index].clone());
-                    match child.remove_mut(key) {
+                    child.push_max(right.0.children[0].clone(), node.keys[index].clone());
+                    match child.remove(key) {
                         Remove::NoChange => {
                             // Key wasn't there, we need to revert the steal.
-                            child.pop_max_mut();
+                            child.pop_max();
                             return Remove::NoChange;
                         }
                         Remove::Removed(pair) => {
                             // If we did remove something, we complete the rebalancing.
-                            let (right_pair, _) = right.pop_min_mut();
+                            let (right_pair, _) = right.pop_min();
                             node.keys[index] = right_pair;
                             node.count -= 1;
                             out_pair = pair;
                         }
                         Remove::Update(pair, new_child) => {
                             // If we did remove something, we complete the rebalancing.
-                            let (right_pair, _) = right.pop_min_mut();
+                            let (right_pair, _) = right.pop_min();
                             node.keys[index] = right_pair;
                             update = Some(new_child);
                             node.count -= 1;
@@ -910,7 +610,7 @@ impl<A: BTreeValue> Node<A> {
                 let mut update;
                 let mut out_pair;
                 {
-                    match merged.remove_mut(key) {
+                    match merged.remove(key) {
                         Remove::NoChange => return Remove::NoChange,
                         Remove::Removed(pair) => {
                             if node.keys.len() == 1 {
@@ -944,7 +644,7 @@ impl<A: BTreeValue> Node<A> {
                 let mut update = None;
                 let mut out_pair;
                 if let Some(&mut Some(ref mut child)) = node.children.get_mut(index) {
-                    match child.remove_mut(key) {
+                    match child.remove(key) {
                         Remove::NoChange => return Remove::NoChange,
                         Remove::Removed(pair) => {
                             node.count -= 1;

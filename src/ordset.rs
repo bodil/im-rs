@@ -203,33 +203,15 @@ impl<A: Ord + Clone> OrdSet<A> {
         }
     }
 
-    /// Construct a new set from the current set with the given value
-    /// added.
+    /// Test if a value is part of a set.
     ///
     /// Time: O(log n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::ordset::OrdSet;
-    /// # fn main() {
-    /// let set = ordset![456];
-    /// assert_eq!(
-    ///   set.update(123),
-    ///   ordset![123, 456]
-    /// );
-    /// # }
-    /// ```
-    pub fn update(&self, a: A) -> Self {
-        match self.root.insert(Value(a)) {
-            Insert::NoChange => self.clone(),
-            Insert::JustInc => unreachable!(),
-            Insert::Update(root) => OrdSet { root },
-            Insert::Split(left, median, right) => OrdSet {
-                root: Node::from_split(left, median, right),
-            },
-        }
+    pub fn contains<BA>(&self, a: &BA) -> bool
+    where
+        BA: Ord + ?Sized,
+        A: Borrow<BA>,
+    {
+        self.root.lookup(a).is_some()
     }
 
     /// Insert a value into a set.
@@ -254,39 +236,14 @@ impl<A: Ord + Clone> OrdSet<A> {
     ///
     /// [insert]: #method.insert
     #[inline]
-    pub fn insert(&mut self, a: A) {
-        match self.root.insert_mut(Value(a)) {
-            Insert::NoChange | Insert::JustInc => {}
+    pub fn insert(&mut self, a: A) -> Option<A> {
+        match self.root.insert(Value(a)) {
+            Insert::Replaced(Value(old_value)) => return Some(old_value),
+            Insert::Added => (),
             Insert::Update(root) => self.root = root,
             Insert::Split(left, median, right) => self.root = Node::from_split(left, median, right),
         }
-    }
-
-    /// Test if a value is part of a set.
-    ///
-    /// Time: O(log n)
-    pub fn contains<BA>(&self, a: &BA) -> bool
-    where
-        BA: Ord + ?Sized,
-        A: Borrow<BA>,
-    {
-        self.root.lookup(a).is_some()
-    }
-
-    /// Construct a new set with the given value removed if it's in
-    /// the set.
-    ///
-    /// Time: O(log n)
-    pub fn without<BA>(&self, a: &BA) -> Self
-    where
-        BA: Ord + ?Sized,
-        A: Borrow<BA>,
-    {
-        match self.root.remove(a) {
-            Remove::NoChange => self.clone(),
-            Remove::Removed(_) => unreachable!(),
-            Remove::Update(_, root) => OrdSet { root },
-        }
+        None
     }
 
     /// Remove a value from a set.
@@ -298,174 +255,13 @@ impl<A: Ord + Clone> OrdSet<A> {
         BA: Ord + ?Sized,
         A: Borrow<BA>,
     {
-        match self.root.remove_mut(a) {
+        match self.root.remove(a) {
             Remove::Update(value, root) => {
                 self.root = root;
                 Some(value.0)
             }
             Remove::Removed(value) => Some(value.0),
             Remove::NoChange => None,
-        }
-    }
-
-    /// Construct the union of two sets.
-    ///
-    /// Time: O(n)
-    pub fn union<RS>(&self, other: RS) -> Self
-    where
-        RS: Borrow<Self>,
-    {
-        other
-            .borrow()
-            .iter()
-            .fold(self.clone(), |set, item| set.update(item.clone()))
-    }
-
-    /// Construct the union of multiple sets.
-    ///
-    /// Time: O(n)
-    pub fn unions<I>(i: I) -> Self
-    where
-        I: IntoIterator<Item = Self>,
-    {
-        i.into_iter().fold(OrdSet::new(), |a, b| a.union(&b))
-    }
-
-    /// Construct the difference between two sets.
-    ///
-    /// Time: O(n)
-    pub fn difference<RS>(&self, other: RS) -> Self
-    where
-        RS: Borrow<Self>,
-    {
-        other
-            .borrow()
-            .iter()
-            .fold(self.clone(), |set, item| set.without(&item))
-    }
-
-    /// Construct the intersection of two sets.
-    ///
-    /// Time: O(n)
-    pub fn intersection<RS>(&self, other: RS) -> Self
-    where
-        RS: Borrow<Self>,
-    {
-        other.borrow().iter().fold(OrdSet::new(), |set, item| {
-            if self.contains(&item) {
-                set.update(item.clone())
-            } else {
-                set
-            }
-        })
-    }
-
-    /// Split a set into two, with the left hand set containing values
-    /// which are smaller than `split`, and the right hand set
-    /// containing values which are larger than `split`.
-    ///
-    /// The `split` value itself is discarded.
-    ///
-    /// Time: O(n)
-    pub fn split<BA>(&self, split: &BA) -> (Self, Self)
-    where
-        BA: Ord + ?Sized,
-        A: Borrow<BA>,
-    {
-        self.iter().fold(
-            (OrdSet::new(), OrdSet::new()),
-            |(less, greater), item| match (*item).borrow().cmp(split) {
-                Ordering::Less => (less.update(item.clone()), greater),
-                Ordering::Equal => (less, greater),
-                Ordering::Greater => (less, greater.update(item.clone())),
-            },
-        )
-    }
-
-    /// Split a set into two, with the left hand set containing values
-    /// which are smaller than `split`, and the right hand set
-    /// containing values which are larger than `split`.
-    ///
-    /// Returns a tuple of the two sets and a boolean which is true if
-    /// the `split` value existed in the original set, and false
-    /// otherwise.
-    ///
-    /// Time: O(n)
-    pub fn split_member<BA>(&self, split: &BA) -> (Self, bool, Self)
-    where
-        BA: Ord + ?Sized,
-        A: Borrow<BA>,
-    {
-        self.iter().fold(
-            (OrdSet::new(), false, OrdSet::new()),
-            |(less, present, greater), item| match (*item).borrow().cmp(split) {
-                Ordering::Less => (less.update(item.clone()), present, greater),
-                Ordering::Equal => (less, true, greater),
-                Ordering::Greater => (less, present, greater.update(item.clone())),
-            },
-        )
-    }
-
-    /// Test whether a set is a subset of another set, meaning that
-    /// all values in our set must also be in the other set.
-    ///
-    /// Time: O(n)
-    pub fn is_subset<RS>(&self, other: RS) -> bool
-    where
-        RS: Borrow<Self>,
-    {
-        let o = other.borrow();
-        self.iter().all(|v| o.contains(&v))
-    }
-
-    /// Test whether a set is a proper subset of another set, meaning
-    /// that all values in our set must also be in the other set. A
-    /// proper subset must also be smaller than the other set.
-    ///
-    /// Time: O(n)
-    pub fn is_proper_subset<RS>(&self, other: RS) -> bool
-    where
-        RS: Borrow<Self>,
-    {
-        let o = other.borrow();
-        self.len() < o.len() && self.is_subset(o)
-    }
-
-    /// Construct a set with only the `n` smallest values from a given
-    /// set.
-    ///
-    /// Time: O(n)
-    pub fn take(&self, n: usize) -> Self {
-        self.iter().take(n).cloned().collect()
-    }
-
-    /// Construct a set with the `n` smallest values removed from a
-    /// given set.
-    ///
-    /// Time: O(n)
-    pub fn skip(&self, n: usize) -> Self {
-        self.iter().skip(n).cloned().collect()
-    }
-
-    /// Remove the smallest value from a set, and return that value as
-    /// well as the updated set.
-    ///
-    /// Time: O(log n)
-    pub fn without_min(&self) -> (Option<A>, Self) {
-        match self.get_min() {
-            Some(v) => (Some(v.clone()), self.without(&v)),
-            None => (None, self.clone()),
-        }
-    }
-
-    /// Remove the largest value from a set, and return that value as
-    /// well as the updated set.
-    ///
-    /// Time: O(log n)
-    pub fn without_max(&self) -> (Option<A>, Self) {
-        match self.get_max() {
-            Some(v) => (Some(v.clone()), self.without(&v)),
-            None => (None, self.clone()),
         }
     }
 
@@ -491,6 +287,239 @@ impl<A: Ord + Clone> OrdSet<A> {
             Some(v) => v,
         }.clone();
         self.remove(&key)
+    }
+
+    /// Construct a new set from the current set with the given value
+    /// added.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordset::OrdSet;
+    /// # fn main() {
+    /// let set = ordset![456];
+    /// assert_eq!(
+    ///   set.update(123),
+    ///   ordset![123, 456]
+    /// );
+    /// # }
+    /// ```
+    pub fn update(&self, a: A) -> Self {
+        let mut out = self.clone();
+        out.insert(a);
+        out
+    }
+
+    /// Construct a new set with the given value removed if it's in
+    /// the set.
+    ///
+    /// Time: O(log n)
+    pub fn without<BA>(&self, a: &BA) -> Self
+    where
+        BA: Ord + ?Sized,
+        A: Borrow<BA>,
+    {
+        let mut out = self.clone();
+        out.remove(a);
+        out
+    }
+
+    /// Remove the smallest value from a set, and return that value as
+    /// well as the updated set.
+    ///
+    /// Time: O(log n)
+    pub fn without_min(&self) -> (Option<A>, Self) {
+        match self.get_min() {
+            Some(v) => (Some(v.clone()), self.without(&v)),
+            None => (None, self.clone()),
+        }
+    }
+
+    /// Remove the largest value from a set, and return that value as
+    /// well as the updated set.
+    ///
+    /// Time: O(log n)
+    pub fn without_max(&self) -> (Option<A>, Self) {
+        match self.get_max() {
+            Some(v) => (Some(v.clone()), self.without(&v)),
+            None => (None, self.clone()),
+        }
+    }
+
+    /// Construct the union of two sets.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordset::OrdSet;
+    /// # fn main() {
+    /// let set1 = ordset!{1, 2};
+    /// let set2 = ordset!{2, 3};
+    /// let expected = ordset!{1, 2, 3};
+    /// assert_eq!(expected, set1.union(set2));
+    /// # }
+    /// ```
+    pub fn union(mut self, other: Self) -> Self {
+        for value in other {
+            self.insert(value);
+        }
+        self
+    }
+
+    /// Construct the union of multiple sets.
+    ///
+    /// Time: O(n log n)
+    pub fn unions<I>(i: I) -> Self
+    where
+        I: IntoIterator<Item = Self>,
+    {
+        i.into_iter().fold(Self::default(), |a, b| a.union(b))
+    }
+
+    /// Construct the difference between two sets.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordset::OrdSet;
+    /// # fn main() {
+    /// let set1 = ordset!{1, 2};
+    /// let set2 = ordset!{2, 3};
+    /// let expected = ordset!{1, 3};
+    /// assert_eq!(expected, set1.difference(set2));
+    /// # }
+    /// ```
+    pub fn difference(mut self, other: Self) -> Self {
+        for value in other {
+            if self.remove(&value).is_none() {
+                self.insert(value);
+            }
+        }
+        self
+    }
+
+    /// Construct the intersection of two sets.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordset::OrdSet;
+    /// # fn main() {
+    /// let set1 = ordset!{1, 2};
+    /// let set2 = ordset!{2, 3};
+    /// let expected = ordset!{2};
+    /// assert_eq!(expected, set1.intersection(set2));
+    /// # }
+    /// ```
+    pub fn intersection(self, other: Self) -> Self {
+        let mut out = Self::default();
+        for value in other {
+            if self.contains(&value) {
+                out.insert(value);
+            }
+        }
+        out
+    }
+
+    /// Test whether a set is a subset of another set, meaning that
+    /// all values in our set must also be in the other set.
+    ///
+    /// Time: O(n log n)
+    pub fn is_subset<RS>(&self, other: RS) -> bool
+    where
+        RS: Borrow<Self>,
+    {
+        let o = other.borrow();
+        self.iter().all(|a| o.contains(&a))
+    }
+
+    /// Test whether a set is a proper subset of another set, meaning
+    /// that all values in our set must also be in the other set. A
+    /// proper subset must also be smaller than the other set.
+    ///
+    /// Time: O(n log n)
+    pub fn is_proper_subset<RS>(&self, other: RS) -> bool
+    where
+        RS: Borrow<Self>,
+    {
+        self.len() != other.borrow().len() && self.is_subset(other)
+    }
+
+    /// Split a set into two, with the left hand set containing values
+    /// which are smaller than `split`, and the right hand set
+    /// containing values which are larger than `split`.
+    ///
+    /// The `split` value itself is discarded.
+    ///
+    /// Time: O(n)
+    pub fn split<BA>(self, split: &BA) -> (Self, Self)
+    where
+        BA: Ord + ?Sized,
+        A: Borrow<BA>,
+    {
+        let (left, _, right) = self.split_member(split);
+        (left, right)
+    }
+
+    /// Split a set into two, with the left hand set containing values
+    /// which are smaller than `split`, and the right hand set
+    /// containing values which are larger than `split`.
+    ///
+    /// Returns a tuple of the two sets and a boolean which is true if
+    /// the `split` value existed in the original set, and false
+    /// otherwise.
+    ///
+    /// Time: O(n)
+    pub fn split_member<BA>(self, split: &BA) -> (Self, bool, Self)
+    where
+        BA: Ord + ?Sized,
+        A: Borrow<BA>,
+    {
+        let mut left = Self::default();
+        let mut right = Self::default();
+        let mut present = false;
+        for value in self {
+            match value.borrow().cmp(split) {
+                Ordering::Less => {
+                    left.insert(value);
+                }
+                Ordering::Equal => {
+                    present = true;
+                }
+                Ordering::Greater => {
+                    right.insert(value);
+                }
+            }
+        }
+        (left, present, right)
+    }
+
+    /// Construct a set with only the `n` smallest values from a given
+    /// set.
+    ///
+    /// Time: O(n)
+    pub fn take(&self, n: usize) -> Self {
+        self.iter().take(n).cloned().collect()
+    }
+
+    /// Construct a set with the `n` smallest values removed from a
+    /// given set.
+    ///
+    /// Time: O(n)
+    pub fn skip(&self, n: usize) -> Self {
+        self.iter().skip(n).cloned().collect()
     }
 }
 
@@ -546,7 +575,7 @@ impl<A: Ord + Clone> Add for OrdSet<A> {
     type Output = OrdSet<A>;
 
     fn add(self, other: Self) -> Self::Output {
-        self.union(&other)
+        self.union(other)
     }
 }
 
@@ -554,7 +583,7 @@ impl<'a, A: Ord + Clone> Add for &'a OrdSet<A> {
     type Output = OrdSet<A>;
 
     fn add(self, other: Self) -> Self::Output {
-        self.union(other)
+        self.clone().union(other.clone())
     }
 }
 
@@ -562,7 +591,7 @@ impl<A: Ord + Clone> Mul for OrdSet<A> {
     type Output = OrdSet<A>;
 
     fn mul(self, other: Self) -> Self::Output {
-        self.intersection(&other)
+        self.intersection(other)
     }
 }
 
@@ -570,7 +599,7 @@ impl<'a, A: Ord + Clone> Mul for &'a OrdSet<A> {
     type Output = OrdSet<A>;
 
     fn mul(self, other: Self) -> Self::Output {
-        self.intersection(other)
+        self.clone().intersection(other.clone())
     }
 }
 
@@ -706,7 +735,7 @@ where
 
 impl<'s, 'a, A, OA> From<&'s OrdSet<&'a A>> for OrdSet<OA>
 where
-    A: ToOwned<Owned = OA> + Ord + Clone + ?Sized,
+    A: ToOwned<Owned = OA> + Ord + ?Sized,
     OA: Borrow<A> + Ord + Clone,
 {
     fn from(set: &OrdSet<&A>) -> Self {
@@ -714,9 +743,12 @@ where
     }
 }
 
-impl<'a, A: Ord + Clone> From<&'a [A]> for OrdSet<A> {
+impl<'a, A> From<&'a [A]> for OrdSet<A>
+where
+    A: Ord + Clone,
+{
     fn from(slice: &'a [A]) -> Self {
-        slice.into_iter().cloned().collect()
+        slice.iter().cloned().collect()
     }
 }
 
@@ -820,13 +852,16 @@ pub mod proptest {
 #[cfg(test)]
 mod test {
     use super::proptest::*;
-    // use super::*;
+    use super::*;
 
-    // #[test]
-    // fn match_strings_with_string_slices() {
-    //     let set: OrdSet<String> = From::from(&ordset!["foo"]);
-    //     assert!(set.contains("foo"));
-    // }
+    #[test]
+    fn match_strings_with_string_slices() {
+        let mut set: OrdSet<String> = From::from(&ordset!["foo", "bar"]);
+        set = set.without("bar");
+        assert!(!set.contains("bar"));
+        set.remove("foo");
+        assert!(!set.contains("foo"));
+    }
 
     proptest! {
         #[test]

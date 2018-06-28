@@ -70,7 +70,7 @@ fn hashmap_insert_n(size: usize, b: &mut Bencher) {
     b.iter(|| {
         let mut m = HashMap::new();
         for i in keys.clone() {
-            m = m.insert(i, i)
+            m = m.update(i, i)
         }
     })
 }
@@ -95,7 +95,7 @@ fn hashmap_insert_mut_n(size: usize, b: &mut Bencher) {
     b.iter(|| {
         let mut m = HashMap::new();
         for i in keys.clone() {
-            m.insert_mut(i, i)
+            m.insert(i, i);
         }
     })
 }
@@ -127,7 +127,7 @@ fn hashmap_remove_n(size: usize, b: &mut Bencher) {
     b.iter(|| {
         let mut m = map.clone();
         for i in &order {
-            m = m.remove(i)
+            m = m.without(i)
         }
     })
 }
@@ -154,7 +154,7 @@ fn hashmap_remove_mut_n(size: usize, b: &mut Bencher) {
     b.iter(|| {
         let mut m = map.clone();
         for i in &order {
-            m.remove_mut(i)
+            m.remove(i);
         }
     })
 }
@@ -178,7 +178,7 @@ fn hashmap_insert_once_n(size: usize, b: &mut Bencher) {
     let mut keys = random_keys(size + 1);
     let key = keys.pop().unwrap();
     let map: HashMap<i64, i64> = HashMap::from_iter(keys.into_iter().map(|i| (i, i)));
-    b.iter(|| map.insert(key, key))
+    b.iter(|| map.update(key, key))
 }
 
 #[bench]
@@ -205,7 +205,7 @@ fn hashmap_remove_once_n(size: usize, b: &mut Bencher) {
     let keys = random_keys(size + 1);
     let key = keys[0];
     let map: HashMap<i64, i64> = HashMap::from_iter(keys.into_iter().map(|i| (i, i)));
-    b.iter(|| map.remove(&key))
+    b.iter(|| map.without(&key))
 }
 
 #[bench]

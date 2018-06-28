@@ -30,7 +30,7 @@ use std::collections;
 use std::collections::hash_map::RandomState;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{BuildHasher, Hash, Hasher};
-use std::iter::{FromIterator, Sum};
+use std::iter::{FromIterator, FusedIterator, Sum};
 use std::mem;
 use std::ops::{Add, Index, IndexMut};
 
@@ -39,7 +39,7 @@ use util::Ref;
 
 use nodes::hamt::{HashValue, Node};
 
-pub use nodes::hamt::{ConsumingIter, Iter};
+pub use nodes::hamt::{ConsumingIter, Iter as NodeIter};
 
 /// Construct a hash map from a sequence of key/value pairs.
 ///
@@ -252,6 +252,13 @@ where
         }
     }
 
+    /// Get a reference to the map's [`BuildHasher`][BuildHasher].
+    ///
+    /// [BuildHasher]: https://doc.rust-lang.org/std/hash/trait.BuildHasher.html
+    pub fn hasher(&self) -> &Ref<S> {
+        &self.hasher
+    }
+
     /// Construct an empty hash map using the same hasher as the
     /// current hash map.
     #[inline]
@@ -275,8 +282,10 @@ where
     /// They will, however, come out in the same order every time for
     /// the same map.
     #[inline]
-    pub fn iter(&self) -> Iter<'_, (K, V)> {
-        Node::iter(&self.root, self.size)
+    pub fn iter(&self) -> Iter<'_, K, V> {
+        Iter {
+            it: NodeIter::new(&self.root, self.size),
+        }
     }
 
     /// Get an iterator over a hash map's keys.
@@ -288,7 +297,9 @@ where
     /// the same map.
     #[inline]
     pub fn keys(&self) -> Keys<K, V> {
-        Keys { it: self.iter() }
+        Keys {
+            it: NodeIter::new(&self.root, self.size),
+        }
     }
 
     /// Get an iterator over a hash map's values.
@@ -300,7 +311,9 @@ where
     /// the same map.
     #[inline]
     pub fn values(&self) -> Values<K, V> {
-        Values { it: self.iter() }
+        Values {
+            it: NodeIter::new(&self.root, self.size),
+        }
     }
 
     /// Get the value for a key from a hash map.
@@ -322,7 +335,7 @@ where
     /// ```
     pub fn get<BK>(&self, key: &BK) -> Option<&V>
     where
-        BK: Hash + Eq + Clone + ?Sized,
+        BK: Hash + Eq + ?Sized,
         K: Borrow<BK>,
     {
         self.root
@@ -350,7 +363,7 @@ where
     /// ```
     pub fn get_mut<BK>(&mut self, key: &BK) -> Option<&mut V>
     where
-        BK: Hash + Eq + Clone + ?Sized,
+        BK: Hash + Eq + ?Sized,
         K: Borrow<BK>,
     {
         let root = Ref::make_mut(&mut self.root);
@@ -382,44 +395,10 @@ where
     #[inline]
     pub fn contains_key<BK>(&self, k: &BK) -> bool
     where
-        BK: Hash + Eq + Clone + ?Sized,
+        BK: Hash + Eq + ?Sized,
         K: Borrow<BK>,
     {
         self.get(k).is_some()
-    }
-
-    /// Construct a new hash map by inserting a key/value mapping into a map.
-    ///
-    /// If the map already has a mapping for the given key, the previous value
-    /// is overwritten.
-    ///
-    /// Time: O(log n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::hashmap::HashMap;
-    /// # fn main() {
-    /// let map = hashmap!{};
-    /// assert_eq!(
-    ///   map.update(123, "123"),
-    ///   hashmap!{123 => "123"}
-    /// );
-    /// # }
-    /// ```
-    #[inline]
-    pub fn update(&self, k: K, v: V) -> Self {
-        let (added, new_node) = self.root.insert(hash_key(&*self.hasher, &k), 0, (k, v));
-        HashMap {
-            root: Ref::new(new_node),
-            size: if added {
-                self.size + 1
-            } else {
-                self.size
-            },
-            hasher: self.hasher.clone(),
-        }
     }
 
     /// Insert a key/value mapping into a map.
@@ -445,127 +424,14 @@ where
     /// # }
     /// ```
     #[inline]
-    pub fn insert(&mut self, k: K, v: V) {
+    pub fn insert(&mut self, k: K, v: V) -> Option<V> {
         let hash = hash_key(&*self.hasher, &k);
         let root = Ref::make_mut(&mut self.root);
-        if root.insert_mut(hash, 0, (k, v)) {
+        let result = root.insert(hash, 0, (k, v));
+        if result.is_none() {
             self.size += 1;
         }
-    }
-
-    /// Construct a new hash map by inserting a key/value mapping into
-    /// a map.
-    ///
-    /// If the map already has a mapping for the given key, we call
-    /// the provided function with the old value and the new value,
-    /// and insert the result as the new value.
-    ///
-    /// Time: O(log n)
-    pub fn update_with<F>(self, k: K, v: V, f: F) -> Self
-    where
-        F: FnOnce(V, V) -> V,
-    {
-        match self.pop_with_key(&k) {
-            None => self.update(k, v),
-            Some((_, v2, m)) => m.update(k, f(v2, v)),
-        }
-    }
-
-    /// Construct a new map by inserting a key/value mapping into a
-    /// map.
-    ///
-    /// If the map already has a mapping for the given key, we call
-    /// the provided function with the key, the old value and the new
-    /// value, and insert the result as the new value.
-    ///
-    /// Time: O(log n)
-    pub fn update_with_key<F>(self, k: K, v: V, f: F) -> Self
-    where
-        F: FnOnce(&K, V, V) -> V,
-    {
-        match self.pop_with_key(&k) {
-            None => self.update(k, v),
-            Some((_, v2, m)) => {
-                let out_v = f(&k, v2, v);
-                m.update(k, out_v)
-            }
-        }
-    }
-
-    /// Construct a new map by inserting a key/value mapping into a
-    /// map, returning the old value for the key as well as the new
-    /// map.
-    ///
-    /// If the map already has a mapping for the given key, we call
-    /// the provided function with the key, the old value and the new
-    /// value, and insert the result as the new value.
-    ///
-    /// Time: O(log n)
-    pub fn update_lookup_with_key<F>(self, k: K, v: V, f: F) -> (Option<V>, Self)
-    where
-        F: FnOnce(&K, &V, V) -> V,
-    {
-        match self.pop_with_key(&k) {
-            None => (None, self.update(k, v)),
-            Some((_, v2, m)) => {
-                let out_v = f(&k, &v2, v);
-                (Some(v2), m.update(k, out_v))
-            }
-        }
-    }
-
-    /// Update the value for a given key by calling a function with
-    /// the current value and overwriting it with the function's
-    /// return value.
-    ///
-    /// The function gets an [`Option<V>`][std::option::Option] and
-    /// returns the same, so that it can decide to delete a mapping
-    /// instead of updating the value, and decide what to do if the
-    /// key isn't in the map.
-    ///
-    /// Time: O(log n)
-    ///
-    /// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
-    pub fn alter<F>(&self, f: F, k: K) -> Self
-    where
-        F: FnOnce(Option<V>) -> Option<V>,
-    {
-        let pop = self.pop_with_key(&k);
-        match (f(pop.as_ref().map(|&(_, ref v, _)| v.clone())), pop) {
-            (None, None) => self.clone(),
-            (Some(v), None) => self.update(k, v),
-            (None, Some((_, _, m))) => m,
-            (Some(v), Some((_, _, m))) => m.update(k, v),
-        }
-    }
-
-    /// Construct a new map without the given key.
-    ///
-    /// Construct a map that's a copy of the current map, absent the
-    /// mapping for `key` if it's present.
-    ///
-    /// Time: O(log n)
-    pub fn without<BK>(&self, k: &BK) -> Self
-    where
-        BK: Hash + Eq + Clone + ?Sized,
-        K: Borrow<BK>,
-    {
-        match self.pop_with_key(k) {
-            None => self.clone(),
-            Some((_, _, map)) => map,
-        }
-    }
-
-    /// Remove a key/value pair from a map, if it exists, and return
-    /// the removed value as well as the updated list.
-    ///
-    /// Time: O(log n)
-    pub fn pop<BK>(&self, k: &BK) -> Option<(V, Self)>
-    where
-        BK: Hash + Eq + Clone + ?Sized,
-        K: Borrow<BK>,
-    {
-        self.pop_with_key(k).map(|(_, v, m)| (v, m))
+        result.map(|(_, v)| v)
     }
 
     /// Remove a key/value pair from a map, if it exists, and return
@@ -592,34 +458,10 @@ where
     /// ```
     pub fn remove<BK>(&mut self, k: &BK) -> Option<V>
     where
-        BK: Hash + Eq + Clone + ?Sized,
+        BK: Hash + Eq + ?Sized,
         K: Borrow<BK>,
     {
         self.remove_with_key(k).map(|(_, v)| v)
-    }
-
-    /// Remove a key/value pair from a map, if it exists, and return
-    /// the removed key and value as well as the updated list.
-    ///
-    /// Time: O(log n)
-    pub fn pop_with_key<BK>(&self, k: &BK) -> Option<(K, V, Self)>
-    where
-        BK: Hash + Eq + Clone + ?Sized,
-        K: Borrow<BK>,
-    {
-        self.root
-            .remove(hash_key(&*self.hasher, k), 0, k)
-            .map(|((k, v), node)| {
-                (
-                    k,
-                    v,
-                    HashMap {
-                        hasher: self.hasher.clone(),
-                        size: self.size - 1,
-                        root: Ref::new(node),
-                    },
-                )
-            })
     }
 
     /// Remove a key/value pair from a map, if it exists, and return
@@ -642,273 +484,22 @@ where
     /// ```
     pub fn remove_with_key<BK>(&mut self, k: &BK) -> Option<(K, V)>
     where
-        BK: Hash + Eq + Clone + ?Sized,
+        BK: Hash + Eq + ?Sized,
         K: Borrow<BK>,
     {
         let root = Ref::make_mut(&mut self.root);
-        let result = root.remove_mut(hash_key(&*self.hasher, k), 0, k);
+        let result = root.remove(hash_key(&*self.hasher, k), 0, k);
         if result.is_some() {
             self.size -= 1;
         }
         result
     }
 
-    /// Construct the union of two maps, keeping the values in the
-    /// current map when keys exist in both maps.
-    #[inline]
-    pub fn union<RM>(&self, other: RM) -> Self
-    where
-        RM: Borrow<Self>,
-    {
-        self.union_with_key(other, |_, v, _| v.clone())
-    }
-
-    /// Construct the union of two maps, using a function to decide
-    /// what to do with the value when a key is in both maps.
-    #[inline]
-    pub fn union_with<F, RM>(&self, other: RM, f: F) -> Self
-    where
-        F: Fn(&V, &V) -> V,
-        RM: Borrow<Self>,
-    {
-        self.union_with_key(other, |_, v1, v2| f(v1, v2))
-    }
-
-    /// Construct the union of two maps, using a function to decide
-    /// what to do with the value when a key is in both maps. The
-    /// function receives the key as well as both values.
-    pub fn union_with_key<F, RM>(&self, other: RM, f: F) -> Self
-    where
-        F: Fn(&K, &V, &V) -> V,
-        RM: Borrow<Self>,
-    {
-        other.borrow().iter().fold(self.clone(), |m, (k, v)| {
-            m.update(
-                k.clone(),
-                self.get(&k)
-                    .map(|v1| f(&k, v1, v))
-                    .unwrap_or_else(|| v.clone()),
-            )
-        })
-    }
-
-    /// Construct the union of a sequence of maps, selecting the value
-    /// of the leftmost when a key appears in more than one map.
-    pub fn unions<I>(i: I) -> Self
-    where
-        S: Default,
-        I: IntoIterator<Item = Self>,
-    {
-        i.into_iter().fold(Self::default(), |a, b| a.union(&b))
-    }
-
-    /// Construct the union of a sequence of maps, using a function to
-    /// decide what to do with the value when a key is in more than
-    /// one map.
-    pub fn unions_with<I, F>(i: I, f: F) -> Self
-    where
-        S: Default,
-        I: IntoIterator<Item = Self>,
-        F: Fn(&V, &V) -> V,
-    {
-        i.into_iter()
-            .fold(Self::default(), |a, b| a.union_with(&b, &f))
-    }
-
-    /// Construct the union of a sequence of maps, using a function to
-    /// decide what to do with the value when a key is in more than
-    /// one map. The function receives the key as well as both values.
-    pub fn unions_with_key<I, F>(i: I, f: F) -> Self
-    where
-        S: Default,
-        I: IntoIterator<Item = Self>,
-        F: Fn(&K, &V, &V) -> V,
-    {
-        i.into_iter()
-            .fold(Self::default(), |a, b| a.union_with_key(&b, &f))
-    }
-
-    /// Construct the difference between two maps by discarding keys
-    /// which occur in both maps.
-    #[inline]
-    pub fn difference<B, RM>(&self, other: RM) -> Self
-    where
-        RM: Borrow<HashMap<K, B, S>>,
-        B: Clone,
-    {
-        self.difference_with_key(other, |_, _, _| None)
-    }
-
-    /// Construct the difference between two maps by using a function
-    /// to decide what to do if a key occurs in both.
-    #[inline]
-    pub fn difference_with<B, RM, F>(&self, other: RM, f: F) -> Self
-    where
-        B: Clone,
-        F: Fn(&V, &B) -> Option<V>,
-        RM: Borrow<HashMap<K, B, S>>,
-    {
-        self.difference_with_key(other, |_, a, b| f(a, b))
-    }
-
-    /// Construct the difference between two maps by using a function
-    /// to decide what to do if a key occurs in both. The function
-    /// receives the key as well as both values.
-    pub fn difference_with_key<B, RM, F>(&self, other: RM, f: F) -> Self
-    where
-        B: Clone,
-        F: Fn(&K, &V, &B) -> Option<V>,
-        RM: Borrow<HashMap<K, B, S>>,
-    {
-        other
-            .borrow()
-            .iter()
-            .fold(self.clone(), |m, (k, v2)| match m.pop_with_key(&k) {
-                None => m,
-                Some((k, v1, m)) => match f(&k, &v1, &v2) {
-                    None => m,
-                    Some(v) => m.update(k, v),
-                },
-            })
-    }
-
-    /// Construct the intersection of two maps, keeping the values
-    /// from the current map.
-    #[inline]
-    pub fn intersection<B, RM>(&self, other: RM) -> Self
-    where
-        B: Clone,
-        RM: Borrow<HashMap<K, B, S>>,
-    {
-        self.intersection_with_key(other, |_, v, _| v.clone())
-    }
-
-    /// Construct the intersection of two maps, calling a function
-    /// with both values for each key and using the result as the
-    /// value for the key.
-    #[inline]
-    pub fn intersection_with<B, C, RM, F>(&self, other: RM, f: F) -> HashMap<K, C, S>
-    where
-        B: Clone,
-        C: Clone,
-        F: Fn(&V, &B) -> C,
-        RM: Borrow<HashMap<K, B, S>>,
-    {
-        self.intersection_with_key(other, |_, v1, v2| f(v1, v2))
-    }
-
-    /// Construct the intersection of two maps, calling a function
-    /// with the key and both values for each key and using the result
-    /// as the value for the key.
-    pub fn intersection_with_key<B, C, RM, F>(&self, other: RM, f: F) -> HashMap<K, C, S>
-    where
-        B: Clone,
-        C: Clone,
-        F: Fn(&K, &V, &B) -> C,
-        RM: Borrow<HashMap<K, B, S>>,
-    {
-        other.borrow().iter().fold(self.new_from(), |m, (k, v2)| {
-            self.get(&k)
-                .map(|v1| {
-                    let out_v = f(k, v1, v2);
-                    m.update(k.clone(), out_v)
-                })
-                .unwrap_or(m)
-        })
-    }
-
-    /// Merge two maps.
+    /// Get the [`Entry`][Entry] for a key in the map for in-place manipulation.
     ///
-    /// First, we call the `combine` function for each key/value pair
-    /// which exists in both maps, updating the value or discarding it
-    /// according to the function's return value.
+    /// Time: O(log n)
     ///
-    /// The `only1` and `only2` functions are called with the
-    /// key/value pairs which are only in the first and the second
-    /// list respectively. The results of these are then merged with
-    /// the result of the first operation.
-    pub fn merge_with_key<B, C, RM, FC, F1, F2>(
-        &self,
-        other: RM,
-        combine: FC,
-        only1: F1,
-        only2: F2,
-    ) -> HashMap<K, C, S>
-    where
-        B: Clone,
-        C: Clone,
-        RM: Borrow<HashMap<K, B, S>>,
-        FC: Fn(&K, V, &B) -> Option<C>,
-        F1: FnOnce(Self) -> HashMap<K, C, S>,
-        F2: FnOnce(HashMap<K, B, S>) -> HashMap<K, C, S>,
-    {
-        let (left, right, both) = other.borrow().iter().fold(
-            (self.clone(), other.borrow().clone(), self.new_from()),
-            |(l, r, m), (k, vr)| match l.pop_with_key(&k) {
-                None => (l, r, m),
-                Some((k, vl, ml)) => (
-                    ml,
-                    r.without(&k),
-                    combine(&k, vl, vr).map(|v| m.update(k, v)).unwrap_or(m),
-                ),
-            },
-        );
-        both.union(&only1(left)).union(&only2(right))
-    }
-
-    /// Test whether a map is a submap of another map, meaning that
-    /// all keys in our map must also be in the other map, with the
-    /// same values.
-    ///
-    /// Use the provided function to decide whether values are equal.
-    pub fn is_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
-    where
-        B: Clone,
-        F: Fn(&V, &B) -> bool,
-        RM: Borrow<HashMap<K, B, S>>,
-    {
-        self.iter()
-            .all(|(k, v)| other.borrow().get(k).map(|ov| cmp(v, ov)).unwrap_or(false))
-    }
-
-    /// Test whether a map is a proper submap of another map, meaning
-    /// that all keys in our map must also be in the other map, with
-    /// the same values. To be a proper submap, ours must also contain
-    /// fewer keys than the other map.
-    ///
-    /// Use the provided function to decide whether values are equal.
-    pub fn is_proper_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
-    where
-        B: Clone,
-        F: Fn(&V, &B) -> bool,
-        RM: Borrow<HashMap<K, B, S>>,
-    {
-        self.len() != other.borrow().len() && self.is_submap_by(other, cmp)
-    }
-
-    /// Test whether a map is a submap of another map, meaning that
-    /// all keys in our map must also be in the other map, with the
-    /// same values.
-    pub fn is_submap<RM>(&self, other: RM) -> bool
-    where
-        V: PartialEq,
-        RM: Borrow<Self>,
-    {
-        self.is_submap_by(other.borrow(), PartialEq::eq)
-    }
-
-    /// Test whether a map is a proper submap of another map, meaning
-    /// that all keys in our map must also be in the other map, with
-    /// the same values. To be a proper submap, ours must also contain
-    /// fewer keys than the other map.
-    pub fn is_proper_submap<RM>(&self, other: RM) -> bool
-    where
-        V: PartialEq,
-        RM: Borrow<Self>,
-    {
-        self.is_proper_submap_by(other.borrow(), PartialEq::eq)
-    }
-
+    /// [Entry]: enum.Entry.html
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V, S> {
         let hash = hash_key(&*self.hasher, &key);
         if self.root.get(hash, 0, &key).is_some() {
@@ -925,10 +516,571 @@ where
             })
         }
     }
+
+    /// Construct a new hash map by inserting a key/value mapping into a map.
+    ///
+    /// If the map already has a mapping for the given key, the previous value
+    /// is overwritten.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map = hashmap!{};
+    /// assert_eq!(
+    ///   map.update(123, "123"),
+    ///   hashmap!{123 => "123"}
+    /// );
+    /// # }
+    /// ```
+    #[inline]
+    pub fn update(&self, k: K, v: V) -> Self {
+        let mut out = self.clone();
+        out.insert(k, v);
+        out
+    }
+
+    /// Construct a new hash map by inserting a key/value mapping into
+    /// a map.
+    ///
+    /// If the map already has a mapping for the given key, we call
+    /// the provided function with the old value and the new value,
+    /// and insert the result as the new value.
+    ///
+    /// Time: O(log n)
+    pub fn update_with<F>(&self, k: K, v: V, f: F) -> Self
+    where
+        F: FnOnce(V, V) -> V,
+    {
+        match self.extract_with_key(&k) {
+            None => self.update(k, v),
+            Some((_, v2, m)) => m.update(k, f(v2, v)),
+        }
+    }
+
+    /// Construct a new map by inserting a key/value mapping into a
+    /// map.
+    ///
+    /// If the map already has a mapping for the given key, we call
+    /// the provided function with the key, the old value and the new
+    /// value, and insert the result as the new value.
+    ///
+    /// Time: O(log n)
+    pub fn update_with_key<F>(&self, k: K, v: V, f: F) -> Self
+    where
+        F: FnOnce(&K, V, V) -> V,
+    {
+        match self.extract_with_key(&k) {
+            None => self.update(k, v),
+            Some((_, v2, m)) => {
+                let out_v = f(&k, v2, v);
+                m.update(k, out_v)
+            }
+        }
+    }
+
+    /// Construct a new map by inserting a key/value mapping into a
+    /// map, returning the old value for the key as well as the new
+    /// map.
+    ///
+    /// If the map already has a mapping for the given key, we call
+    /// the provided function with the key, the old value and the new
+    /// value, and insert the result as the new value.
+    ///
+    /// Time: O(log n)
+    pub fn update_lookup_with_key<F>(&self, k: K, v: V, f: F) -> (Option<V>, Self)
+    where
+        F: FnOnce(&K, &V, V) -> V,
+    {
+        match self.extract_with_key(&k) {
+            None => (None, self.update(k, v)),
+            Some((_, v2, m)) => {
+                let out_v = f(&k, &v2, v);
+                (Some(v2), m.update(k, out_v))
+            }
+        }
+    }
+
+    /// Update the value for a given key by calling a function with
+    /// the current value and overwriting it with the function's
+    /// return value.
+    ///
+    /// The function gets an [`Option<V>`][std::option::Option] and
+    /// returns the same, so that it can decide to delete a mapping
+    /// instead of updating the value, and decide what to do if the
+    /// key isn't in the map.
+    ///
+    /// Time: O(log n)
+    ///
+    /// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
+    pub fn alter<F>(&self, f: F, k: K) -> Self
+    where
+        F: FnOnce(Option<V>) -> Option<V>,
+    {
+        let pop = self.extract_with_key(&k);
+        match (f(pop.as_ref().map(|&(_, ref v, _)| v.clone())), pop) {
+            (None, None) => self.clone(),
+            (Some(v), None) => self.update(k, v),
+            (None, Some((_, _, m))) => m,
+            (Some(v), Some((_, _, m))) => m.update(k, v),
+        }
+    }
+
+    /// Construct a new map without the given key.
+    ///
+    /// Construct a map that's a copy of the current map, absent the
+    /// mapping for `key` if it's present.
+    ///
+    /// Time: O(log n)
+    pub fn without<BK>(&self, k: &BK) -> Self
+    where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
+    {
+        match self.extract_with_key(k) {
+            None => self.clone(),
+            Some((_, _, map)) => map,
+        }
+    }
+
+    /// Remove a key/value pair from a map, if it exists, and return
+    /// the removed value as well as the updated map.
+    ///
+    /// Time: O(log n)
+    pub fn extract<BK>(&self, k: &BK) -> Option<(V, Self)>
+    where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
+    {
+        self.extract_with_key(k).map(|(_, v, m)| (v, m))
+    }
+
+    /// Remove a key/value pair from a map, if it exists, and return
+    /// the removed key and value as well as the updated list.
+    ///
+    /// Time: O(log n)
+    pub fn extract_with_key<BK>(&self, k: &BK) -> Option<(K, V, Self)>
+    where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
+    {
+        let mut out = self.clone();
+        out.remove_with_key(k).map(|(k, v)| (k, v, out))
+    }
+
+    /// Construct the union of two maps, keeping the values in the
+    /// current map when keys exist in both maps.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map1 = hashmap!{1 => 1, 3 => 3};
+    /// let map2 = hashmap!{2 => 2, 3 => 4};
+    /// let expected = hashmap!{1 => 1, 2 => 2, 3 => 3};
+    /// assert_eq!(expected, map1.union(map2));
+    /// # }
+    /// ```
+    #[inline]
+    pub fn union(mut self, other: Self) -> Self {
+        for (k, v) in other {
+            self.entry(k).or_insert(v);
+        }
+        self
+    }
+
+    /// Construct the union of two maps, using a function to decide
+    /// what to do with the value when a key is in both maps.
+    ///
+    /// The function is called when a value exists in both maps, and
+    /// receives the value from the current map as its first argument,
+    /// and the value from the other map as the second. It should
+    /// return the value to be inserted in the resulting map.
+    ///
+    /// Time: O(n log n)
+    #[inline]
+    pub fn union_with<F>(self, other: Self, f: F) -> Self
+    where
+        F: Fn(V, V) -> V,
+    {
+        self.union_with_key(other, |_, v1, v2| f(v1, v2))
+    }
+
+    /// Construct the union of two maps, using a function to decide
+    /// what to do with the value when a key is in both maps.
+    ///
+    /// The function is called when a value exists in both maps, and
+    /// receives a reference to the key as its first argument, the
+    /// value from the current map as the second argument, and the
+    /// value from the other map as the third argument. It should
+    /// return the value to be inserted in the resulting map.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map1 = hashmap!{1 => 1, 3 => 4};
+    /// let map2 = hashmap!{2 => 2, 3 => 5};
+    /// let expected = hashmap!{1 => 1, 2 => 2, 3 => 9};
+    /// assert_eq!(expected, map1.union_with_key(
+    ///     map2,
+    ///     |key, left, right| left + right
+    /// ));
+    /// # }
+    /// ```
+    pub fn union_with_key<F>(mut self, other: Self, f: F) -> Self
+    where
+        F: Fn(&K, V, V) -> V,
+    {
+        for (key, right_value) in other {
+            match self.remove(&key) {
+                None => {
+                    self.insert(key, right_value);
+                }
+                Some(left_value) => {
+                    let final_value = f(&key, left_value, right_value);
+                    self.insert(key, final_value);
+                }
+            }
+        }
+        self
+    }
+
+    /// Construct the union of a sequence of maps, selecting the value
+    /// of the leftmost when a key appears in more than one map.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map1 = hashmap!{1 => 1, 3 => 3};
+    /// let map2 = hashmap!{2 => 2};
+    /// let expected = hashmap!{1 => 1, 2 => 2, 3 => 3};
+    /// assert_eq!(expected, HashMap::unions(vec![map1, map2]));
+    /// # }
+    /// ```
+    pub fn unions<I>(i: I) -> Self
+    where
+        S: Default,
+        I: IntoIterator<Item = Self>,
+    {
+        i.into_iter().fold(Self::default(), |a, b| a.union(b))
+    }
+
+    /// Construct the union of a sequence of maps, using a function to
+    /// decide what to do with the value when a key is in more than
+    /// one map.
+    ///
+    /// The function is called when a value exists in multiple maps,
+    /// and receives the value from the current map as its first
+    /// argument, and the value from the next map as the second. It
+    /// should return the value to be inserted in the resulting map.
+    ///
+    /// Time: O(n log n)
+    pub fn unions_with<I, F>(i: I, f: F) -> Self
+    where
+        S: Default,
+        I: IntoIterator<Item = Self>,
+        F: Fn(V, V) -> V,
+    {
+        i.into_iter()
+            .fold(Self::default(), |a, b| a.union_with(b, &f))
+    }
+
+    /// Construct the union of a sequence of maps, using a function to
+    /// decide what to do with the value when a key is in more than
+    /// one map.
+    ///
+    /// The function is called when a value exists in multiple maps,
+    /// and receives a reference to the key as its first argument, the
+    /// value from the current map as the second argument, and the
+    /// value from the next map as the third argument. It should
+    /// return the value to be inserted in the resulting map.
+    ///
+    /// Time: O(n log n)
+    pub fn unions_with_key<I, F>(i: I, f: F) -> Self
+    where
+        S: Default,
+        I: IntoIterator<Item = Self>,
+        F: Fn(&K, V, V) -> V,
+    {
+        i.into_iter()
+            .fold(Self::default(), |a, b| a.union_with_key(b, &f))
+    }
+
+    /// Construct the difference between two maps by discarding keys
+    /// which occur in both maps.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map1 = hashmap!{1 => 1, 3 => 4};
+    /// let map2 = hashmap!{2 => 2, 3 => 5};
+    /// let expected = hashmap!{1 => 1, 2 => 2};
+    /// assert_eq!(expected, map1.difference(map2));
+    /// # }
+    /// ```
+    #[inline]
+    pub fn difference(self, other: Self) -> Self {
+        self.difference_with_key(other, |_, _, _| None)
+    }
+
+    /// Construct the difference between two maps by using a function
+    /// to decide what to do if a key occurs in both.
+    ///
+    /// Time: O(n log n)
+    #[inline]
+    pub fn difference_with<F>(self, other: Self, f: F) -> Self
+    where
+        F: Fn(V, V) -> Option<V>,
+    {
+        self.difference_with_key(other, |_, a, b| f(a, b))
+    }
+
+    /// Construct the difference between two maps by using a function
+    /// to decide what to do if a key occurs in both. The function
+    /// receives the key as well as both values.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map1 = hashmap!{1 => 1, 3 => 4};
+    /// let map2 = hashmap!{2 => 2, 3 => 5};
+    /// let expected = hashmap!{1 => 1, 2 => 2, 3 => 9};
+    /// assert_eq!(expected, map1.difference_with_key(
+    ///     map2,
+    ///     |key, left, right| Some(left + right)
+    /// ));
+    /// # }
+    /// ```
+    pub fn difference_with_key<F>(mut self, other: Self, f: F) -> Self
+    where
+        F: Fn(&K, V, V) -> Option<V>,
+    {
+        let mut out = self.new_from();
+        for (key, right_value) in other {
+            match self.remove(&key) {
+                None => {
+                    out.insert(key, right_value);
+                }
+                Some(left_value) => if let Some(final_value) = f(&key, left_value, right_value) {
+                    out.insert(key, final_value);
+                },
+            }
+        }
+        out.union(self)
+    }
+
+    /// Construct the intersection of two maps, keeping the values
+    /// from the current map.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map1 = hashmap!{1 => 1, 2 => 2};
+    /// let map2 = hashmap!{2 => 3, 3 => 4};
+    /// let expected = hashmap!{2 => 2};
+    /// assert_eq!(expected, map1.intersection(map2));
+    /// # }
+    /// ```
+    #[inline]
+    pub fn intersection(self, other: Self) -> Self {
+        self.intersection_with_key(other, |_, v, _| v)
+    }
+
+    /// Construct the intersection of two maps, calling a function
+    /// with both values for each key and using the result as the
+    /// value for the key.
+    ///
+    /// Time: O(n log n)
+    #[inline]
+    pub fn intersection_with<B, C, F>(self, other: HashMap<K, B, S>, f: F) -> HashMap<K, C, S>
+    where
+        B: Clone,
+        C: Clone,
+        F: Fn(V, B) -> C,
+    {
+        self.intersection_with_key(other, |_, v1, v2| f(v1, v2))
+    }
+
+    /// Construct the intersection of two maps, calling a function
+    /// with the key and both values for each key and using the result
+    /// as the value for the key.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map1 = hashmap!{1 => 1, 2 => 2};
+    /// let map2 = hashmap!{2 => 3, 3 => 4};
+    /// let expected = hashmap!{2 => 5};
+    /// assert_eq!(expected, map1.intersection_with_key(
+    ///     map2,
+    ///     |key, left, right| left + right
+    /// ));
+    /// # }
+    /// ```
+    pub fn intersection_with_key<B, C, F>(
+        mut self,
+        other: HashMap<K, B, S>,
+        f: F,
+    ) -> HashMap<K, C, S>
+    where
+        B: Clone,
+        C: Clone,
+        F: Fn(&K, V, B) -> C,
+    {
+        let mut out = self.new_from();
+        for (key, right_value) in other {
+            match self.remove(&key) {
+                None => (),
+                Some(left_value) => {
+                    let result = f(&key, left_value, right_value);
+                    out.insert(key, result);
+                }
+            }
+        }
+        out
+    }
+
+    /// Test whether a map is a submap of another map, meaning that
+    /// all keys in our map must also be in the other map, with the
+    /// same values.
+    ///
+    /// Use the provided function to decide whether values are equal.
+    ///
+    /// Time: O(n log n)
+    pub fn is_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
+    where
+        B: Clone,
+        F: Fn(&V, &B) -> bool,
+        RM: Borrow<HashMap<K, B, S>>,
+    {
+        self.iter()
+            .all(|(k, v)| other.borrow().get(k).map(|ov| cmp(v, ov)).unwrap_or(false))
+    }
+
+    /// Test whether a map is a proper submap of another map, meaning
+    /// that all keys in our map must also be in the other map, with
+    /// the same values. To be a proper submap, ours must also contain
+    /// fewer keys than the other map.
+    ///
+    /// Use the provided function to decide whether values are equal.
+    ///
+    /// Time: O(n log n)
+    pub fn is_proper_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
+    where
+        B: Clone,
+        F: Fn(&V, &B) -> bool,
+        RM: Borrow<HashMap<K, B, S>>,
+    {
+        self.len() != other.borrow().len() && self.is_submap_by(other, cmp)
+    }
+
+    /// Test whether a map is a submap of another map, meaning that
+    /// all keys in our map must also be in the other map, with the
+    /// same values.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map1 = hashmap!{1 => 1, 2 => 2};
+    /// let map2 = hashmap!{1 => 1, 2 => 2, 3 => 3};
+    /// assert!(map1.is_submap(map2));
+    /// # }
+    /// ```
+    pub fn is_submap<RM>(&self, other: RM) -> bool
+    where
+        V: PartialEq,
+        RM: Borrow<Self>,
+    {
+        self.is_submap_by(other.borrow(), PartialEq::eq)
+    }
+
+    /// Test whether a map is a proper submap of another map, meaning
+    /// that all keys in our map must also be in the other map, with
+    /// the same values. To be a proper submap, ours must also contain
+    /// fewer keys than the other map.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map1 = hashmap!{1 => 1, 2 => 2};
+    /// let map2 = hashmap!{1 => 1, 2 => 2, 3 => 3};
+    /// assert!(map1.is_proper_submap(map2));
+    ///
+    /// let map3 = hashmap!{1 => 1, 2 => 2};
+    /// let map4 = hashmap!{1 => 1, 2 => 2};
+    /// assert!(!map3.is_proper_submap(map4));
+    /// # }
+    /// ```
+    pub fn is_proper_submap<RM>(&self, other: RM) -> bool
+    where
+        V: PartialEq,
+        RM: Borrow<Self>,
+    {
+        self.is_proper_submap_by(other.borrow(), PartialEq::eq)
+    }
 }
 
 // Entries
 
+/// A handle for a key and its associated value.
+///
+/// ## Performance Note
+///
+/// When using an `Entry`, the key is only ever hashed once, when you
+/// create the `Entry`. Operations on an `Entry` will never trigger a
+/// rehash, where eg. a `contains_key(key)` followed by an
+/// `insert(key, default_value)` (the equivalent of
+/// `Entry::or_insert()`) would need to hash the key once for the
+/// `contains_key` and again for the `insert`. The operations
+/// generally perform similarly otherwise.
 pub enum Entry<'a, K, V, S>
 where
     K: 'a + Hash + Eq + Clone,
@@ -945,10 +1097,15 @@ where
     V: 'a + Clone,
     S: 'a + BuildHasher,
 {
+    /// Insert the default value provided if there was no value
+    /// already, and return a mutable reference to the value.
     pub fn or_insert(self, default: V) -> &'a mut V {
         self.or_insert_with(|| default)
     }
 
+    /// Insert the default value from the provided function if there
+    /// was no value already, and return a mutable reference to the
+    /// value.
     pub fn or_insert_with<F>(self, default: F) -> &'a mut V
     where
         F: FnOnce() -> V,
@@ -959,6 +1116,8 @@ where
         }
     }
 
+    /// Insert a default value if there was no value already, and
+    /// return a mutable reference to the value.
     pub fn or_default(self) -> &'a mut V
     where
         V: Default,
@@ -966,6 +1125,7 @@ where
         self.or_insert_with(Default::default)
     }
 
+    /// Get the key for this entry.
     pub fn key(&self) -> &K {
         match self {
             Entry::Occupied(entry) => entry.key(),
@@ -973,6 +1133,8 @@ where
         }
     }
 
+    /// Call the provided function to modify the value if the value
+    /// exists.
     pub fn and_modify<F>(mut self, f: F) -> Self
     where
         F: FnOnce(&mut V),
@@ -985,6 +1147,7 @@ where
     }
 }
 
+/// An entry for a mapping that already exists in the map.
 pub struct OccupiedEntry<'a, K, V, S>
 where
     K: 'a + Hash + Eq + Clone,
@@ -1002,35 +1165,42 @@ where
     V: 'a + Clone,
     S: 'a + BuildHasher,
 {
+    /// Get the key for this entry.
     pub fn key(&self) -> &K {
         &self.key
     }
 
+    /// Remove this entry from the map and return the removed mapping.
     pub fn remove_entry(self) -> (K, V) {
         let root = Ref::make_mut(&mut self.map.root);
-        let result = root.remove_mut(self.hash, 0, &self.key);
+        let result = root.remove(self.hash, 0, &self.key);
         self.map.size -= 1;
         result.unwrap()
     }
 
+    /// Get the current value.
     pub fn get(&self) -> &V {
         &self.map.root.get(self.hash, 0, &self.key).unwrap().1
     }
 
+    /// Get a mutable reference to the current value.
     pub fn get_mut(&mut self) -> &mut V {
         let root = Ref::make_mut(&mut self.map.root);
         &mut root.get_mut(self.hash, 0, &self.key).unwrap().1
     }
 
+    /// Convert this entry into a mutable reference.
     pub fn into_mut(self) -> &'a mut V {
         let root = Ref::make_mut(&mut self.map.root);
         &mut root.get_mut(self.hash, 0, &self.key).unwrap().1
     }
 
+    /// Overwrite the current value.
     pub fn insert(&mut self, value: V) -> V {
         mem::replace(self.get_mut(), value)
     }
 
+    /// Remove this entry from the map and return the removed value.
     pub fn remove(self) -> V {
         self.remove_entry().1
     }
@@ -1047,26 +1217,34 @@ where
     key: K,
 }
 
+/// An entry for a mapping that does not already exist in the map.
 impl<'a, K, V, S> VacantEntry<'a, K, V, S>
 where
     K: 'a + Hash + Eq + Clone,
     V: 'a + Clone,
     S: 'a + BuildHasher,
 {
+    /// Get the key for this entry.
     pub fn key(&self) -> &K {
         &self.key
     }
 
+    /// Convert this entry into its key.
     pub fn into_key(self) -> K {
         self.key
     }
 
+    /// Insert a value into this entry.
     pub fn insert(self, value: V) -> &'a mut V {
         let root = Ref::make_mut(&mut self.map.root);
-        if root.insert_mut(self.hash, 0, (self.key.clone(), value)) {
+        if root
+            .insert(self.hash, 0, (self.key.clone(), value))
+            .is_none()
+        {
             self.map.size += 1;
         }
-        // TODO root.insert_mut ought to return this reference
+        // TODO it's unfortunate that we need to look up the key again
+        // here to get the mut ref.
         &mut root.get_mut(self.hash, 0, &self.key).unwrap().1
     }
 }
@@ -1207,7 +1385,7 @@ where
     type Output = HashMap<K, V, S>;
 
     fn add(self, other: Self) -> Self::Output {
-        self.union(&other)
+        self.union(other)
     }
 }
 
@@ -1220,7 +1398,7 @@ where
     type Output = HashMap<K, V, S>;
 
     fn add(self, other: Self) -> Self::Output {
-        self.union(other)
+        self.clone().union(other.clone())
     }
 }
 
@@ -1256,7 +1434,7 @@ where
 
 impl<'a, BK, K, V, S> Index<&'a BK> for HashMap<K, V, S>
 where
-    BK: Hash + Eq + Clone + ?Sized,
+    BK: Hash + Eq + ?Sized,
     K: Hash + Eq + Clone + Borrow<BK>,
     V: Clone,
     S: BuildHasher,
@@ -1273,7 +1451,7 @@ where
 
 impl<'a, BK, K, V, S> IndexMut<&'a BK> for HashMap<K, V, S>
 where
-    BK: Hash + Eq + Clone + ?Sized,
+    BK: Hash + Eq + ?Sized,
     K: Hash + Eq + Clone + Borrow<BK>,
     V: Clone,
     S: BuildHasher,
@@ -1339,29 +1517,65 @@ where
 
 // // Iterators
 
+pub struct Iter<'a, K: 'a, V: 'a> {
+    it: NodeIter<'a, (K, V)>,
+}
+
+impl<'a, K, V> Iterator for Iter<'a, K, V> {
+    type Item = &'a (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.it.next().map(|(p, _)| p)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
+    }
+}
+
+impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {}
+
+impl<'a, K, V> FusedIterator for Iter<'a, K, V> {}
+
 pub struct Keys<'a, K: 'a, V: 'a> {
-    it: Iter<'a, (K, V)>,
+    it: NodeIter<'a, (K, V)>,
 }
 
 impl<'a, K, V> Iterator for Keys<'a, K, V> {
     type Item = &'a K;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.it.next().map(|(k, _)| k)
+        self.it.next().map(|((k, _), _)| k)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
     }
 }
 
+impl<'a, K, V> ExactSizeIterator for Keys<'a, K, V> {}
+
+impl<'a, K, V> FusedIterator for Keys<'a, K, V> {}
+
 pub struct Values<'a, K: 'a, V: 'a> {
-    it: Iter<'a, (K, V)>,
+    it: NodeIter<'a, (K, V)>,
 }
 
 impl<'a, K, V> Iterator for Values<'a, K, V> {
     type Item = &'a V;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.it.next().map(|(_, v)| v)
+        self.it.next().map(|((_, v), _)| v)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
     }
 }
+
+impl<'a, K, V> ExactSizeIterator for Values<'a, K, V> {}
+
+impl<'a, K, V> FusedIterator for Values<'a, K, V> {}
 
 impl<'a, K, V, S> IntoIterator for &'a HashMap<K, V, S>
 where
@@ -1370,7 +1584,7 @@ where
     S: BuildHasher,
 {
     type Item = &'a (K, V);
-    type IntoIter = Iter<'a, (K, V)>;
+    type IntoIter = Iter<'a, K, V>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -1426,8 +1640,8 @@ where
 
 impl<'m, 'k, 'v, K, V, OK, OV, SA, SB> From<&'m HashMap<&'k K, &'v V, SA>> for HashMap<OK, OV, SB>
 where
-    K: Hash + Eq + Clone + ToOwned<Owned = OK> + ?Sized,
-    V: ToOwned<Owned = OV> + Clone + ?Sized,
+    K: Hash + Eq + ToOwned<Owned = OK> + ?Sized,
+    V: ToOwned<Owned = OV> + ?Sized,
     OK: Hash + Eq + Clone + Borrow<K>,
     OV: Borrow<V> + Clone,
     SA: BuildHasher,
@@ -1643,17 +1857,16 @@ mod test {
         }
     }
 
-    // #[test]
-    // fn match_string_keys_with_string_slices() {
-    //     let mut map: HashMap<String, i32> =
-    //         From::from(&hashmap!{ "foo" => &1, "bar" => &2, "baz" => &3 });
-    //     assert_eq!(Some(&1), map.get("foo"));
-    //     map = map.remove("foo");
-    //     assert_eq!(&5, map.get_or("foo", &5));
-    //     assert_eq!(Some(&3), map.pop_mut("baz"));
-    //     map["bar"] = 8;
-    //     assert_eq!(8, map["bar"]);
-    // }
+    #[test]
+    fn match_string_keys_with_string_slices() {
+        let mut map: HashMap<String, i32> =
+            From::from(&hashmap!{ "foo" => &1, "bar" => &2, "baz" => &3 });
+        assert_eq!(Some(&1), map.get("foo"));
+        map = map.without("foo");
+        assert_eq!(Some(3), map.remove("baz"));
+        map["bar"] = 8;
+        assert_eq!(8, map["bar"]);
+    }
 
     #[test]
     fn macro_allows_trailing_comma() {
@@ -1779,11 +1992,13 @@ mod test {
         }
 
         #[test]
-        fn delete_and_reinsert(ref input in collection::hash_map(i16::ANY, i16::ANY, 1..100),
-                               index_rand in usize::ANY) {
+        fn delete_and_reinsert(
+            ref input in collection::hash_map(i16::ANY, i16::ANY, 1..100),
+            index_rand in usize::ANY
+        ) {
             let index = *input.keys().nth(index_rand % input.len()).unwrap();
             let map1: HashMap<_, _> = HashMap::from_iter(input.clone());
-            let (val, map2) = map1.pop(&index).unwrap();
+            let (val, map2) = map1.extract(&index).unwrap();
             let map3 = map2.update(index, val);
             for key in map2.keys() {
                 assert!(*key != index);

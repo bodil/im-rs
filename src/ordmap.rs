@@ -226,6 +226,16 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
         Iter::new(&self.root)
     }
 
+    /// Get an iterator over a map's keys.
+    pub fn keys(&self) -> Keys<'_, K, V> {
+        Keys { it: self.iter() }
+    }
+
+    /// Get an iterator over a map's values.
+    pub fn values(&self) -> Values<'_, K, V> {
+        Values { it: self.iter() }
+    }
+
     /// Get an iterator over the differences between this map and
     /// another, i.e. the set of entries to add, update, or remove to
     /// this map in order to make it equal to the other map.
@@ -239,16 +249,6 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// shared between them)
     pub fn diff<'a>(&'a self, other: &'a Self) -> DiffIter<'a, (K, V)> {
         DiffIter::new(&self.root, &other.root)
-    }
-
-    /// Get an iterator over a map's keys.
-    pub fn keys(&self) -> Keys<'_, K, V> {
-        Keys { it: self.iter() }
-    }
-
-    /// Get an iterator over a map's values.
-    pub fn values(&self) -> Values<'_, K, V> {
-        Values { it: self.iter() }
     }
 
     /// Get the value for a key from a map.
@@ -270,7 +270,7 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// ```
     pub fn get<BK>(&self, key: &BK) -> Option<&V>
     where
-        BK: Ord + Clone + ?Sized,
+        BK: Ord + ?Sized,
         K: Borrow<BK>,
     {
         self.root.lookup(key).map(|(_, v)| v)
@@ -278,7 +278,7 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
 
     fn get_mut<BK>(&mut self, key: &BK) -> Option<&mut V>
     where
-        BK: Ord + Clone + ?Sized,
+        BK: Ord + ?Sized,
         K: Borrow<BK>,
     {
         self.root.lookup_mut(key).map(|(_, v)| v)
@@ -305,42 +305,10 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// ```
     pub fn contains_key<BK>(&self, k: &BK) -> bool
     where
-        BK: Ord + Clone + ?Sized,
+        BK: Ord + ?Sized,
         K: Borrow<BK>,
     {
         self.get(k).is_some()
-    }
-
-    /// Construct a new map by inserting a key/value mapping into a
-    /// map.
-    ///
-    /// If the map already has a mapping for the given key, the
-    /// previous value is overwritten.
-    ///
-    /// Time: O(log n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::ordmap::OrdMap;
-    /// # fn main() {
-    /// let map = ordmap!{};
-    /// assert_eq!(
-    ///   map.update(123, "123"),
-    ///   ordmap!{123 => "123"}
-    /// );
-    /// # }
-    /// ```
-    pub fn update(&self, key: K, value: V) -> Self {
-        match self.root.insert((key, value)) {
-            Insert::NoChange => self.clone(),
-            Insert::JustInc => unreachable!(),
-            Insert::Update(root) => OrdMap { root },
-            Insert::Split(left, median, right) => OrdMap {
-                root: Node::from_split(left, median, right),
-            },
-        }
     }
 
     /// Insert a key/value mapping into a map.
@@ -372,12 +340,87 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     ///
     /// [insert]: #method.insert
     #[inline]
-    pub fn insert(&mut self, key: K, value: V) {
-        match self.root.insert_mut((key, value)) {
-            Insert::NoChange | Insert::JustInc => {}
+    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+        match self.root.insert((key, value)) {
+            Insert::Replaced((_, old_value)) => return Some(old_value),
+            Insert::Added => (),
             Insert::Update(root) => self.root = root,
             Insert::Split(left, median, right) => self.root = Node::from_split(left, median, right),
         }
+        None
+    }
+
+    /// Remove a key/value mapping from a map if it exists.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # fn main() {
+    /// let mut map = ordmap!{123 => "123", 456 => "456"};
+    /// map.remove(&123);
+    /// map.remove(&456);
+    /// assert!(map.is_empty());
+    /// # }
+    /// ```
+    ///
+    /// [remove]: #method.remove
+    #[inline]
+    pub fn remove<BK>(&mut self, k: &BK) -> Option<V>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
+        self.remove_with_key(k).map(|(_, v)| v)
+    }
+
+    /// Remove a key/value pair from a map, if it exists, and return
+    /// the removed key and value.
+    ///
+    /// Time: O(log n)
+    pub fn remove_with_key<BK>(&mut self, k: &BK) -> Option<(K, V)>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
+        match self.root.remove(k) {
+            Remove::NoChange => None,
+            Remove::Removed(pair) => Some(pair),
+            Remove::Update(pair, root) => {
+                self.root = root;
+                Some(pair)
+            }
+        }
+    }
+
+    /// Construct a new map by inserting a key/value mapping into a
+    /// map.
+    ///
+    /// If the map already has a mapping for the given key, the
+    /// previous value is overwritten.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # fn main() {
+    /// let map = ordmap!{};
+    /// assert_eq!(
+    ///   map.update(123, "123"),
+    ///   ordmap!{123 => "123"}
+    /// );
+    /// # }
+    /// ```
+    pub fn update(&self, key: K, value: V) -> Self {
+        let mut out = self.clone();
+        out.insert(key, value);
+        out
     }
 
     /// Construct a new map by inserting a key/value mapping into a
@@ -407,7 +450,7 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     where
         F: FnOnce(&K, V, V) -> V,
     {
-        match self.pop_with_key(&k) {
+        match self.extract_with_key(&k) {
             None => self.update(k, v),
             Some((_, v2, m)) => {
                 let out_v = f(&k, v2, v);
@@ -429,7 +472,7 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     where
         F: FnOnce(&K, &V, V) -> V,
     {
-        match self.pop_with_key(&k) {
+        match self.extract_with_key(&k) {
             None => (None, self.update(k, v)),
             Some((_, v2, m)) => {
                 let out_v = f(&k, &v2, v);
@@ -454,7 +497,7 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     where
         F: FnOnce(Option<V>) -> Option<V>,
     {
-        let pop = self.pop_with_key(&k);
+        let pop = self.extract_with_key(&k);
         match (f(pop.as_ref().map(|&(_, ref v, _)| v.clone())), pop) {
             (None, None) => self.clone(),
             (Some(v), None) => self.update(k, v),
@@ -468,20 +511,44 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// Time: O(log n)
     pub fn without<BK>(&self, k: &BK) -> Self
     where
-        BK: Ord + Clone + ?Sized,
+        BK: Ord + ?Sized,
         K: Borrow<BK>,
     {
-        self.pop(k).map(|(_, m)| m).unwrap_or_else(|| self.clone())
+        self.extract(k)
+            .map(|(_, m)| m)
+            .unwrap_or_else(|| self.clone())
     }
 
-    /// Remove a key/value mapping from a map if it exists, mutating
-    /// it in place when it is safe to do so.
-    ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// map's structure which are shared with other maps will be
-    /// safely copied before mutating.
+    /// Remove a key/value pair from a map, if it exists, and return
+    /// the removed value as well as the updated list.
     ///
     /// Time: O(log n)
+    pub fn extract<BK>(&self, k: &BK) -> Option<(V, Self)>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
+        self.extract_with_key(k).map(|(_, v, m)| (v, m))
+    }
+
+    /// Remove a key/value pair from a map, if it exists, and return
+    /// the removed key and value as well as the updated list.
+    ///
+    /// Time: O(log n)
+    pub fn extract_with_key<BK>(&self, k: &BK) -> Option<(K, V, Self)>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
+        let mut out = self.clone();
+        let result = out.remove_with_key(k);
+        result.map(|(k, v)| (k, v, out))
+    }
+
+    /// Construct the union of two maps, keeping the values in the
+    /// current map when keys exist in both maps.
+    ///
+    /// Time: O(n log n)
     ///
     /// # Examples
     ///
@@ -489,176 +556,174 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
     /// # fn main() {
-    /// let mut map = ordmap!{123 => "123", 456 => "456"};
-    /// map.remove(&123);
-    /// map.remove(&456);
-    /// assert!(map.is_empty());
+    /// let map1 = ordmap!{1 => 1, 3 => 3};
+    /// let map2 = ordmap!{2 => 2, 3 => 4};
+    /// let expected = ordmap!{1 => 1, 2 => 2, 3 => 3};
+    /// assert_eq!(expected, map1.union(map2));
     /// # }
     /// ```
-    ///
-    /// [remove]: #method.remove
     #[inline]
-    pub fn remove<BK>(&mut self, k: &BK)
-    where
-        BK: Ord + Clone + ?Sized,
-        K: Borrow<BK>,
-    {
-        self.pop_with_key_mut(k);
-    }
-
-    /// Remove a key/value pair from a map, if it exists, and return
-    /// the removed value as well as the updated list.
-    ///
-    /// Time: O(log n)
-    pub fn pop<BK>(&self, k: &BK) -> Option<(V, Self)>
-    where
-        BK: Ord + Clone + ?Sized,
-        K: Borrow<BK>,
-    {
-        self.pop_with_key(k).map(|(_, v, m)| (v, m))
-    }
-
-    /// Remove a key/value pair from a map, if it exists, and return
-    /// the removed value.
-    ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// map's structure which are shared with other maps will be
-    /// safely copied before mutating.
-    ///
-    /// Time: O(log n)
-    pub fn pop_mut<BK>(&mut self, k: &BK) -> Option<V>
-    where
-        BK: Ord + Clone + ?Sized,
-        K: Borrow<BK>,
-    {
-        self.pop_with_key_mut(k).map(|(_, v)| v)
-    }
-
-    /// Remove a key/value pair from a map, if it exists, and return
-    /// the removed key and value as well as the updated list.
-    ///
-    /// Time: O(log n)
-    pub fn pop_with_key<BK>(&self, k: &BK) -> Option<(K, V, Self)>
-    where
-        BK: Ord + Clone + ?Sized,
-        K: Borrow<BK>,
-    {
-        match self.root.remove(k) {
-            Remove::NoChange => None,
-            Remove::Removed(_) => unreachable!(),
-            Remove::Update(pair, root) => Some((pair.0, pair.1, OrdMap { root })),
+    pub fn union(mut self, other: Self) -> Self {
+        for (k, v) in other {
+            self.entry(k).or_insert(v);
         }
-    }
-
-    /// Remove a key/value pair from a map, if it exists, and return
-    /// the removed key and value.
-    ///
-    /// This is a copy-on-write operation, so that the parts of the
-    /// map's structure which are shared with other maps will be
-    /// safely copied before mutating.
-    ///
-    /// Time: O(log n)
-    pub fn pop_with_key_mut<BK>(&mut self, k: &BK) -> Option<(K, V)>
-    where
-        BK: Ord + Clone + ?Sized,
-        K: Borrow<BK>,
-    {
-        match self.root.remove_mut(k) {
-            Remove::NoChange => None,
-            Remove::Removed(pair) => Some(pair),
-            Remove::Update(pair, root) => {
-                self.root = root;
-                Some(pair)
-            }
-        }
-    }
-
-    /// Construct the union of two maps, keeping the values in the
-    /// current map when keys exist in both maps.
-    pub fn union<RM>(&self, other: RM) -> Self
-    where
-        RM: Borrow<Self>,
-    {
-        self.union_with_key(other, |_, v, _| v.clone())
+        self
     }
 
     /// Construct the union of two maps, using a function to decide
     /// what to do with the value when a key is in both maps.
-    pub fn union_with<F, RM>(&self, other: RM, f: F) -> Self
+    ///
+    /// The function is called when a value exists in both maps, and
+    /// receives the value from the current map as its first argument,
+    /// and the value from the other map as the second. It should
+    /// return the value to be inserted in the resulting map.
+    ///
+    /// Time: O(n log n)
+    #[inline]
+    pub fn union_with<F>(self, other: Self, f: F) -> Self
     where
-        F: Fn(&V, &V) -> V,
-        RM: Borrow<Self>,
+        F: Fn(V, V) -> V,
     {
         self.union_with_key(other, |_, v1, v2| f(v1, v2))
     }
 
     /// Construct the union of two maps, using a function to decide
-    /// what to do with the value when a key is in both maps. The
-    /// function receives the key as well as both values.
-    pub fn union_with_key<F, RM>(&self, other: RM, f: F) -> Self
+    /// what to do with the value when a key is in both maps.
+    ///
+    /// The function is called when a value exists in both maps, and
+    /// receives a reference to the key as its first argument, the
+    /// value from the current map as the second argument, and the
+    /// value from the other map as the third argument. It should
+    /// return the value to be inserted in the resulting map.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # fn main() {
+    /// let map1 = ordmap!{1 => 1, 3 => 4};
+    /// let map2 = ordmap!{2 => 2, 3 => 5};
+    /// let expected = ordmap!{1 => 1, 2 => 2, 3 => 9};
+    /// assert_eq!(expected, map1.union_with_key(
+    ///     map2,
+    ///     |key, left, right| left + right
+    /// ));
+    /// # }
+    /// ```
+    pub fn union_with_key<F>(mut self, other: Self, f: F) -> Self
     where
-        F: Fn(&K, &V, &V) -> V,
-        RM: Borrow<Self>,
+        F: Fn(&K, V, V) -> V,
     {
-        other.borrow().iter().fold(self.clone(), |m, (k, v)| {
-            m.update(
-                k.clone(),
-                self.get(&*k)
-                    .map(|v1| f(k, v1, v))
-                    .unwrap_or_else(|| v.clone()),
-            )
-        })
+        for (key, right_value) in other {
+            match self.remove(&key) {
+                None => {
+                    self.insert(key, right_value);
+                }
+                Some(left_value) => {
+                    let final_value = f(&key, left_value, right_value);
+                    self.insert(key, final_value);
+                }
+            }
+        }
+        self
     }
 
     /// Construct the union of a sequence of maps, selecting the value
     /// of the leftmost when a key appears in more than one map.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # fn main() {
+    /// let map1 = ordmap!{1 => 1, 3 => 3};
+    /// let map2 = ordmap!{2 => 2};
+    /// let expected = ordmap!{1 => 1, 2 => 2, 3 => 3};
+    /// assert_eq!(expected, OrdMap::unions(vec![map1, map2]));
+    /// # }
+    /// ```
     pub fn unions<I>(i: I) -> Self
     where
         I: IntoIterator<Item = Self>,
     {
-        i.into_iter().fold(ordmap![], |a, b| a.union(&b))
+        i.into_iter().fold(Self::default(), |a, b| a.union(b))
     }
 
     /// Construct the union of a sequence of maps, using a function to
     /// decide what to do with the value when a key is in more than
     /// one map.
+    ///
+    /// The function is called when a value exists in multiple maps,
+    /// and receives the value from the current map as its first
+    /// argument, and the value from the next map as the second. It
+    /// should return the value to be inserted in the resulting map.
+    ///
+    /// Time: O(n log n)
     pub fn unions_with<I, F>(i: I, f: F) -> Self
     where
         I: IntoIterator<Item = Self>,
-        F: Fn(&V, &V) -> V,
+        F: Fn(V, V) -> V,
     {
-        i.into_iter().fold(ordmap![], |a, b| a.union_with(&b, &f))
+        i.into_iter()
+            .fold(Self::default(), |a, b| a.union_with(b, &f))
     }
 
     /// Construct the union of a sequence of maps, using a function to
     /// decide what to do with the value when a key is in more than
-    /// one map. The function receives the key as well as both values.
+    /// one map.
+    ///
+    /// The function is called when a value exists in multiple maps,
+    /// and receives a reference to the key as its first argument, the
+    /// value from the current map as the second argument, and the
+    /// value from the next map as the third argument. It should
+    /// return the value to be inserted in the resulting map.
+    ///
+    /// Time: O(n log n)
     pub fn unions_with_key<I, F>(i: I, f: F) -> Self
     where
         I: IntoIterator<Item = Self>,
-        F: Fn(&K, &V, &V) -> V,
+        F: Fn(&K, V, V) -> V,
     {
         i.into_iter()
-            .fold(ordmap![], |a, b| a.union_with_key(&b, &f))
+            .fold(Self::default(), |a, b| a.union_with_key(b, &f))
     }
 
     /// Construct the difference between two maps by discarding keys
     /// which occur in both maps.
-    pub fn difference<B, RM>(&self, other: RM) -> Self
-    where
-        B: Clone,
-        RM: Borrow<OrdMap<K, B>>,
-    {
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # fn main() {
+    /// let map1 = ordmap!{1 => 1, 3 => 4};
+    /// let map2 = ordmap!{2 => 2, 3 => 5};
+    /// let expected = ordmap!{1 => 1, 2 => 2};
+    /// assert_eq!(expected, map1.difference(map2));
+    /// # }
+    /// ```
+    #[inline]
+    pub fn difference(self, other: Self) -> Self {
         self.difference_with_key(other, |_, _, _| None)
     }
 
     /// Construct the difference between two maps by using a function
     /// to decide what to do if a key occurs in both.
-    pub fn difference_with<B, RM, F>(&self, other: RM, f: F) -> Self
+    ///
+    /// Time: O(n log n)
+    #[inline]
+    pub fn difference_with<F>(self, other: Self, f: F) -> Self
     where
-        B: Clone,
-        F: Fn(&V, &B) -> Option<V>,
-        RM: Borrow<OrdMap<K, B>>,
+        F: Fn(V, V) -> Option<V>,
     {
         self.difference_with_key(other, |_, a, b| f(a, b))
     }
@@ -666,43 +731,75 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// Construct the difference between two maps by using a function
     /// to decide what to do if a key occurs in both. The function
     /// receives the key as well as both values.
-    pub fn difference_with_key<B, RM, F>(&self, other: RM, f: F) -> Self
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # fn main() {
+    /// let map1 = ordmap!{1 => 1, 3 => 4};
+    /// let map2 = ordmap!{2 => 2, 3 => 5};
+    /// let expected = ordmap!{1 => 1, 2 => 2, 3 => 9};
+    /// assert_eq!(expected, map1.difference_with_key(
+    ///     map2,
+    ///     |key, left, right| Some(left + right)
+    /// ));
+    /// # }
+    /// ```
+    pub fn difference_with_key<F>(mut self, other: Self, f: F) -> Self
     where
-        B: Clone,
-        F: Fn(&K, &V, &B) -> Option<V>,
-        RM: Borrow<OrdMap<K, B>>,
+        F: Fn(&K, V, V) -> Option<V>,
     {
-        other
-            .borrow()
-            .iter()
-            .fold(self.clone(), |m, (k, v2)| match m.pop_with_key(&*k) {
-                None => m,
-                Some((k1, v1, m)) => match f(&k1, &v1, v2) {
-                    None => m,
-                    Some(v) => m.update(k1, v),
+        let mut out = Self::default();
+        for (key, right_value) in other {
+            match self.remove(&key) {
+                None => {
+                    out.insert(key, right_value);
+                }
+                Some(left_value) => if let Some(final_value) = f(&key, left_value, right_value) {
+                    out.insert(key, final_value);
                 },
-            })
+            }
+        }
+        out.union(self)
     }
 
     /// Construct the intersection of two maps, keeping the values
     /// from the current map.
-    pub fn intersection<B, RM>(&self, other: RM) -> Self
-    where
-        B: Clone,
-        RM: Borrow<OrdMap<K, B>>,
-    {
-        self.intersection_with_key(other, |_, v, _| v.clone())
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # fn main() {
+    /// let map1 = ordmap!{1 => 1, 2 => 2};
+    /// let map2 = ordmap!{2 => 3, 3 => 4};
+    /// let expected = ordmap!{2 => 2};
+    /// assert_eq!(expected, map1.intersection(map2));
+    /// # }
+    /// ```
+    #[inline]
+    pub fn intersection(self, other: Self) -> Self {
+        self.intersection_with_key(other, |_, v, _| v)
     }
 
     /// Construct the intersection of two maps, calling a function
     /// with both values for each key and using the result as the
     /// value for the key.
-    pub fn intersection_with<B, C, RM, F>(&self, other: RM, f: F) -> OrdMap<K, C>
+    ///
+    /// Time: O(n log n)
+    #[inline]
+    pub fn intersection_with<B, C, F>(self, other: OrdMap<K, B>, f: F) -> OrdMap<K, C>
     where
         B: Clone,
         C: Clone,
-        F: Fn(&V, &B) -> C,
-        RM: Borrow<OrdMap<K, B>>,
+        F: Fn(V, B) -> C,
     {
         self.intersection_with_key(other, |_, v1, v2| f(v1, v2))
     }
@@ -710,57 +807,130 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// Construct the intersection of two maps, calling a function
     /// with the key and both values for each key and using the result
     /// as the value for the key.
-    pub fn intersection_with_key<B, C, RM, F>(&self, other: RM, f: F) -> OrdMap<K, C>
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # fn main() {
+    /// let map1 = ordmap!{1 => 1, 2 => 2};
+    /// let map2 = ordmap!{2 => 3, 3 => 4};
+    /// let expected = ordmap!{2 => 5};
+    /// assert_eq!(expected, map1.intersection_with_key(
+    ///     map2,
+    ///     |key, left, right| left + right
+    /// ));
+    /// # }
+    /// ```
+    pub fn intersection_with_key<B, C, F>(mut self, other: OrdMap<K, B>, f: F) -> OrdMap<K, C>
     where
         B: Clone,
         C: Clone,
-        F: Fn(&K, &V, &B) -> C,
-        RM: Borrow<OrdMap<K, B>>,
+        F: Fn(&K, V, B) -> C,
     {
-        other.borrow().iter().fold(ordmap![], |m, (k, v2)| {
-            self.get(&*k)
-                .map(|v1| m.update(k.clone(), f(k, v1, v2)))
-                .unwrap_or(m)
-        })
+        let mut out = OrdMap::<K, C>::default();
+        for (key, right_value) in other {
+            match self.remove(&key) {
+                None => (),
+                Some(left_value) => {
+                    let result = f(&key, left_value, right_value);
+                    out.insert(key, result);
+                }
+            }
+        }
+        out
     }
 
-    /// Merge two maps.
+    /// Test whether a map is a submap of another map, meaning that
+    /// all keys in our map must also be in the other map, with the
+    /// same values.
     ///
-    /// First, we call the `combine` function for each key/value pair
-    /// which exists in both maps, updating the value or discarding it
-    /// according to the function's return value.
+    /// Use the provided function to decide whether values are equal.
     ///
-    /// The `only1` and `only2` functions are called with the
-    /// key/value pairs which are only in the first and the second
-    /// list respectively. The results of these are then merged with
-    /// the result of the first operation.
-    pub fn merge_with_key<B, C, RM, FC, F1, F2>(
-        &self,
-        other: RM,
-        combine: FC,
-        only1: F1,
-        only2: F2,
-    ) -> OrdMap<K, C>
+    /// Time: O(n log n)
+    pub fn is_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
     where
         B: Clone,
-        C: Clone,
+        F: Fn(&V, &B) -> bool,
         RM: Borrow<OrdMap<K, B>>,
-        FC: Fn(&K, V, &B) -> Option<C>,
-        F1: FnOnce(Self) -> OrdMap<K, C>,
-        F2: FnOnce(OrdMap<K, B>) -> OrdMap<K, C>,
     {
-        let (left, right, both) = other.borrow().iter().fold(
-            (self.clone(), other.borrow().clone(), ordmap![]),
-            |(l, r, m), (k, vr)| match l.pop_with_key(&*k) {
-                None => (l, r, m),
-                Some((k, vl, ml)) => (
-                    ml,
-                    r.without(&k),
-                    combine(&k, vl, vr).map(|v| m.update(k, v)).unwrap_or(m),
-                ),
-            },
-        );
-        both.union(&only1(left)).union(&only2(right))
+        self.iter()
+            .all(|(k, v)| other.borrow().get(k).map(|ov| cmp(v, ov)).unwrap_or(false))
+    }
+
+    /// Test whether a map is a proper submap of another map, meaning
+    /// that all keys in our map must also be in the other map, with
+    /// the same values. To be a proper submap, ours must also contain
+    /// fewer keys than the other map.
+    ///
+    /// Use the provided function to decide whether values are equal.
+    ///
+    /// Time: O(n log n)
+    pub fn is_proper_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
+    where
+        B: Clone,
+        F: Fn(&V, &B) -> bool,
+        RM: Borrow<OrdMap<K, B>>,
+    {
+        self.len() != other.borrow().len() && self.is_submap_by(other, cmp)
+    }
+
+    /// Test whether a map is a submap of another map, meaning that
+    /// all keys in our map must also be in the other map, with the
+    /// same values.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # fn main() {
+    /// let map1 = ordmap!{1 => 1, 2 => 2};
+    /// let map2 = ordmap!{1 => 1, 2 => 2, 3 => 3};
+    /// assert!(map1.is_submap(map2));
+    /// # }
+    /// ```
+    pub fn is_submap<RM>(&self, other: RM) -> bool
+    where
+        V: PartialEq,
+        RM: Borrow<Self>,
+    {
+        self.is_submap_by(other.borrow(), PartialEq::eq)
+    }
+
+    /// Test whether a map is a proper submap of another map, meaning
+    /// that all keys in our map must also be in the other map, with
+    /// the same values. To be a proper submap, ours must also contain
+    /// fewer keys than the other map.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # fn main() {
+    /// let map1 = ordmap!{1 => 1, 2 => 2};
+    /// let map2 = ordmap!{1 => 1, 2 => 2, 3 => 3};
+    /// assert!(map1.is_proper_submap(map2));
+    ///
+    /// let map3 = ordmap!{1 => 1, 2 => 2};
+    /// let map4 = ordmap!{1 => 1, 2 => 2};
+    /// assert!(!map3.is_proper_submap(map4));
+    /// # }
+    /// ```
+    pub fn is_proper_submap<RM>(&self, other: RM) -> bool
+    where
+        V: PartialEq,
+        RM: Borrow<Self>,
+    {
+        self.is_proper_submap_by(other.borrow(), PartialEq::eq)
     }
 
     /// Split a map into two, with the left hand map containing keys
@@ -770,7 +940,7 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// The `split` mapping is discarded.
     pub fn split<BK>(&self, split: &BK) -> (Self, Self)
     where
-        BK: Ord + Clone + ?Sized,
+        BK: Ord + ?Sized,
         K: Borrow<BK>,
     {
         let (l, _, r) = self.split_lookup(split);
@@ -784,7 +954,7 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// Returns both the two maps and the value of `split`.
     pub fn split_lookup<BK>(&self, split: &BK) -> (Self, Option<V>, Self)
     where
-        BK: Ord + Clone + ?Sized,
+        BK: Ord + ?Sized,
         K: Borrow<BK>,
     {
         // TODO this is atrociously slow, got to be a better way
@@ -796,41 +966,6 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
                     Ordering::Greater => (l, m, r.update(k.clone(), v.clone())),
                 }
             })
-    }
-
-    /// Test whether a map is a submap of another map, meaning that
-    /// all keys in our map must also be in the other map, with the
-    /// same values.
-    ///
-    /// Use the provided function to decide whether values are equal.
-    pub fn is_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
-    where
-        B: Clone,
-        F: Fn(&V, &B) -> bool,
-        RM: Borrow<OrdMap<K, B>>,
-    {
-        self.iter().all(|(k, v)| {
-            other
-                .borrow()
-                .get(&*k)
-                .map(|ov| cmp(v, ov))
-                .unwrap_or(false)
-        })
-    }
-
-    /// Test whether a map is a proper submap of another map, meaning
-    /// that all keys in our map must also be in the other map, with
-    /// the same values. To be a proper submap, ours must also contain
-    /// fewer keys than the other map.
-    ///
-    /// Use the provided function to decide whether values are equal.
-    pub fn is_proper_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
-    where
-        B: Clone,
-        F: Fn(&V, &B) -> bool,
-        RM: Borrow<OrdMap<K, B>>,
-    {
-        self.len() != other.borrow().len() && self.is_submap_by(other, cmp)
     }
 
     /// Construct a map with only the `n` smallest keys from a given
@@ -847,18 +982,18 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
 
     /// Remove the smallest key from a map, and return its value as
     /// well as the updated map.
-    pub fn pop_min(&self) -> (Option<V>, Self) {
-        let (pop, next) = self.pop_min_with_key();
+    pub fn without_min(&self) -> (Option<V>, Self) {
+        let (pop, next) = self.without_min_with_key();
         (pop.map(|(_, v)| v), next)
     }
 
     /// Remove the smallest key from a map, and return that key, its
     /// value as well as the updated map.
-    pub fn pop_min_with_key(&self) -> (Option<(K, V)>, Self) {
+    pub fn without_min_with_key(&self) -> (Option<(K, V)>, Self) {
         match self.get_min() {
             None => (None, self.clone()),
             Some((k, _)) => {
-                let (key, value, next) = self.pop_with_key(k).unwrap();
+                let (key, value, next) = self.extract_with_key(k).unwrap();
                 (Some((key, value)), next)
             }
         }
@@ -866,55 +1001,21 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
 
     /// Remove the largest key from a map, and return its value as
     /// well as the updated map.
-    pub fn pop_max(&self) -> (Option<V>, Self) {
-        let (pop, next) = self.pop_max_with_key();
+    pub fn without_max(&self) -> (Option<V>, Self) {
+        let (pop, next) = self.without_max_with_key();
         (pop.map(|(_, v)| v), next)
     }
 
     /// Remove the largest key from a map, and return that key, its
     /// value as well as the updated map.
-    pub fn pop_max_with_key(&self) -> (Option<(K, V)>, Self) {
+    pub fn without_max_with_key(&self) -> (Option<(K, V)>, Self) {
         match self.get_max() {
             None => (None, self.clone()),
             Some((k, _)) => {
-                let (key, value, next) = self.pop_with_key(k).unwrap();
+                let (key, value, next) = self.extract_with_key(k).unwrap();
                 (Some((key, value)), next)
             }
         }
-    }
-
-    /// Discard the smallest key from a map, returning the updated
-    /// map.
-    pub fn delete_min(&self) -> Self {
-        self.pop_min().1
-    }
-
-    /// Discard the largest key from a map, returning the updated map.
-    pub fn delete_max(&self) -> Self {
-        self.pop_max().1
-    }
-
-    /// Test whether a map is a submap of another map, meaning that
-    /// all keys in our map must also be in the other map, with the
-    /// same values.
-    pub fn is_submap<RM>(&self, other: RM) -> bool
-    where
-        V: PartialEq,
-        RM: Borrow<Self>,
-    {
-        self.is_submap_by(other.borrow(), PartialEq::eq)
-    }
-
-    /// Test whether a map is a proper submap of another map, meaning
-    /// that all keys in our map must also be in the other map, with
-    /// the same values. To be a proper submap, ours must also contain
-    /// fewer keys than the other map.
-    pub fn is_proper_submap<RM>(&self, other: RM) -> bool
-    where
-        V: PartialEq,
-        RM: Borrow<Self>,
-    {
-        self.is_proper_submap_by(other.borrow(), PartialEq::eq)
     }
 
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
@@ -1002,7 +1103,7 @@ where
 
     pub fn remove_entry(self) -> (K, V) {
         self.map
-            .pop_with_key_mut(&self.key)
+            .remove_with_key(&self.key)
             .expect("ordmap::OccupiedEntry::remove_entry: key has vanished!")
     }
 
@@ -1151,7 +1252,7 @@ where
     type Output = OrdMap<K, V>;
 
     fn add(self, other: Self) -> Self::Output {
-        self.union(other)
+        self.clone().union(other.clone())
     }
 }
 
@@ -1163,7 +1264,7 @@ where
     type Output = OrdMap<K, V>;
 
     fn add(self, other: Self) -> Self::Output {
-        self.union(&other)
+        self.union(other)
     }
 }
 
@@ -1197,7 +1298,7 @@ where
 
 impl<'a, BK, K, V> Index<&'a BK> for OrdMap<K, V>
 where
-    BK: Ord + Clone + ?Sized,
+    BK: Ord + ?Sized,
     K: Ord + Clone + Borrow<BK>,
     V: Clone,
 {
@@ -1213,7 +1314,7 @@ where
 
 impl<'a, BK, K, V> IndexMut<&'a BK> for OrdMap<K, V>
 where
-    BK: Ord + Clone + ?Sized,
+    BK: Ord + ?Sized,
     K: Ord + Clone + Borrow<BK>,
     V: Clone,
 {
@@ -1378,8 +1479,8 @@ impl<K, V> AsRef<OrdMap<K, V>> for OrdMap<K, V> {
 
 impl<'m, 'k, 'v, K, V, OK, OV> From<&'m OrdMap<&'k K, &'v V>> for OrdMap<OK, OV>
 where
-    K: Ord + Clone + ToOwned<Owned = OK> + ?Sized,
-    V: Clone + ToOwned<Owned = OV> + ?Sized,
+    K: Ord + ToOwned<Owned = OK> + ?Sized,
+    V: ToOwned<Owned = OV> + ?Sized,
     OK: Ord + Clone + Borrow<K>,
     OV: Clone + Borrow<V>,
 {
@@ -1620,8 +1721,8 @@ mod test {
             7 => 77,
             6 => 66
         };
-        assert_eq!(map.pop(&11), None);
-        let (popped, less) = map.pop(&5).unwrap();
+        assert_eq!(map.extract(&11), None);
+        let (popped, less) = map.extract(&5).unwrap();
         assert_eq!(popped, 55);
         let mut it = less.iter();
         assert_eq!(it.next(), Some(&(1, 11)));
@@ -1723,17 +1824,16 @@ mod test {
         assert!(!map.contains_key(&"bar"));
     }
 
-    // FIXME these have to work!
-    // #[test]
-    // fn match_string_keys_with_string_slices() {
-    //     let mut map: OrdMap<String, i32> =
-    //         From::from(&ordmap!{ "foo" => &1, "bar" => &2, "baz" => &3 });
-    //     assert_eq!(Some(&1), map.get("foo"));
-    //     map = map.remove("foo");
-    //     assert_eq!(Some(&3), map.pop_mut("baz"));
-    //     map["bar"] = 8;
-    //     assert_eq!(8, map["bar"]);
-    // }
+    #[test]
+    fn match_string_keys_with_string_slices() {
+        let mut map: OrdMap<String, i32> =
+            From::from(&ordmap!{ "foo" => &1, "bar" => &2, "baz" => &3 });
+        assert_eq!(Some(&1), map.get("foo"));
+        map = map.without("foo");
+        assert_eq!(Some(3), map.remove("baz"));
+        map["bar"] = 8;
+        assert_eq!(8, map["bar"]);
+    }
 
     quickcheck! {
         fn length(input: Vec<i32>) -> bool {
@@ -1799,7 +1899,7 @@ mod test {
         fn diff_added_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
             let a: OrdMap<usize, usize> = OrdMap::from(a);
             let b: OrdMap<usize, usize> = OrdMap::from(b);
-            let ab = a.union(&b);
+            let ab = a.clone().union(b.clone());
             a.diff(&ab).eq(b.iter().filter(|&(ref k, _)| !a.contains_key(k)).map(DiffItem::Add))
         }
 
@@ -1818,7 +1918,7 @@ mod test {
         fn diff_removed_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
             let a: OrdMap<usize, usize> = OrdMap::from(a);
             let b: OrdMap<usize, usize> = OrdMap::from(b);
-            let ab = a.union(&b);
+            let ab = a.clone().union(b.clone());
             ab.diff(&a).eq(b.iter().filter(|&(ref k, _)| !a.contains_key(k)).map(DiffItem::Remove))
         }
 
@@ -1939,7 +2039,7 @@ mod test {
         ) {
             let index = *input.keys().nth(index_rand % input.len()).unwrap();
             let map1 = OrdMap::from_iter(input.clone());
-            let (val, map2): (i16, _) = map1.pop(&index).unwrap();
+            let (val, map2): (i16, _) = map1.extract(&index).unwrap();
             let map3 = map2.update(index, val);
             for key in map2.keys() {
                 assert!(*key != index);

@@ -4,6 +4,7 @@
 
 use std::borrow::Borrow;
 use std::iter::FusedIterator;
+use std::mem;
 
 use bits::{bitpos, index, Bitmap, HASH_BITS, HASH_SIZE};
 use util::Ref;
@@ -33,6 +34,15 @@ pub struct CollisionNode<A> {
 pub enum Entry<A> {
     Value(A, Bitmap),
     Collision(Ref<CollisionNode<A>>),
+}
+
+impl<A> Entry<A> {
+    fn unwrap_value(self) -> A {
+        match self {
+            Entry::Value(a, _) => a,
+            _ => panic!("nodes::hamt::Entry::unwrap_value: unwrapped a non-value"),
+        }
+    }
 }
 
 enum SizePredicate {
@@ -128,106 +138,24 @@ impl<A: HashValue> Node<A> {
         index(self.nodemap, bitpos)
     }
 
-    fn update_node<RN>(&self, bitpos: Bitmap, node: RN) -> Self
-    where
-        Ref<Node<A>>: From<RN>,
-    {
-        let index = self.node_index(bitpos);
-        let mut new_nodes = Vec::with_capacity(self.nodes.len());
-        new_nodes.extend(self.nodes.iter().cloned().take(index));
-        new_nodes.push(From::from(node));
-        new_nodes.extend(self.nodes.iter().cloned().skip(index + 1));
-        Node {
-            nodemap: self.nodemap,
-            nodes: new_nodes,
-            datamap: self.datamap,
-            data: self.data.clone(),
-        }
-    }
-
-    fn update_value(&self, bitpos: Bitmap, value: Entry<A>) -> Self {
+    fn update_value(&mut self, bitpos: Bitmap, value: Entry<A>) -> Entry<A> {
         let index = self.data_index(bitpos);
-        let mut new_data = Vec::with_capacity(self.data.len());
-        new_data.extend(self.data.iter().cloned().take(index));
-        new_data.push(value);
-        new_data.extend(self.data.iter().cloned().skip(index + 1));
-        Node {
-            nodemap: self.nodemap,
-            nodes: self.nodes.clone(),
-            datamap: self.datamap,
-            data: new_data,
-        }
+        mem::replace(&mut self.data[index], value)
     }
 
-    fn update_value_mut(&mut self, bitpos: Bitmap, value: Entry<A>) {
-        let index = self.data_index(bitpos);
-        self.data[index] = value;
-    }
-
-    fn insert_value(&self, bitpos: Bitmap, value: Entry<A>) -> Self {
-        let index = self.data_index(bitpos);
-        let mut new_data = Vec::with_capacity(self.data.len() + 1);
-        new_data.extend(self.data.iter().cloned().take(index));
-        new_data.push(value);
-        new_data.extend(self.data.iter().cloned().skip(index));
-        Node {
-            nodemap: self.nodemap,
-            nodes: self.nodes.clone(),
-            datamap: self.datamap | bitpos,
-            data: new_data,
-        }
-    }
-
-    fn insert_value_mut(&mut self, bitpos: Bitmap, value: Entry<A>) {
+    fn insert_value(&mut self, bitpos: Bitmap, value: Entry<A>) {
         let index = self.data_index(bitpos);
         self.data.insert(index, value);
         self.datamap |= bitpos;
     }
 
-    fn remove_value(&self, bitpos: Bitmap) -> Self {
-        let index = self.data_index(bitpos);
-        let mut new_data = Vec::with_capacity(self.data.len() - 1);
-        new_data.extend(self.data.iter().cloned().take(index));
-        new_data.extend(self.data.iter().cloned().skip(index + 1));
-        Node {
-            nodemap: self.nodemap,
-            nodes: self.nodes.clone(),
-            datamap: self.datamap ^ bitpos,
-            data: new_data,
-        }
-    }
-
-    fn remove_value_mut(&mut self, bitpos: Bitmap) {
+    fn remove_value(&mut self, bitpos: Bitmap) {
         let index = self.data_index(bitpos);
         self.data.remove(index);
         self.datamap ^= bitpos;
     }
 
-    fn value_to_node<RN>(&self, bitpos: Bitmap, node: RN) -> Self
-    where
-        Ref<Node<A>>: From<RN>,
-    {
-        let old_index = self.data_index(bitpos);
-        let new_index = self.node_index(bitpos);
-
-        let mut new_data = Vec::with_capacity(self.data.len() - 1);
-        new_data.extend(self.data.iter().cloned().take(old_index));
-        new_data.extend(self.data.iter().cloned().skip(old_index + 1));
-
-        let mut new_nodes = Vec::with_capacity(self.nodes.len() + 1);
-        new_nodes.extend(self.nodes.iter().cloned().take(new_index));
-        new_nodes.push(From::from(node));
-        new_nodes.extend(self.nodes.iter().cloned().skip(new_index));
-
-        Node {
-            nodemap: self.nodemap | bitpos,
-            nodes: new_nodes,
-            datamap: self.datamap ^ bitpos,
-            data: new_data,
-        }
-    }
-
-    fn value_to_node_mut<RN>(&mut self, bitpos: Bitmap, node: RN)
+    fn value_to_node<RN>(&mut self, bitpos: Bitmap, node: RN)
     where
         Ref<Node<A>>: From<RN>,
     {
@@ -239,28 +167,7 @@ impl<A: HashValue> Node<A> {
         self.nodemap |= bitpos;
     }
 
-    fn node_to_value(&self, bitpos: Bitmap, node: &Node<A>) -> Self {
-        let old_index = self.node_index(bitpos);
-        let new_index = self.data_index(bitpos);
-
-        let mut new_data = Vec::with_capacity(self.data.len() + 1);
-        new_data.extend(self.data.iter().cloned().take(new_index));
-        new_data.push(node.data[0].clone());
-        new_data.extend(self.data.iter().cloned().skip(new_index));
-
-        let mut new_nodes = Vec::with_capacity(self.nodes.len() - 1);
-        new_nodes.extend(self.nodes.iter().cloned().take(old_index));
-        new_nodes.extend(self.nodes.iter().cloned().skip(old_index + 1));
-
-        Node {
-            nodemap: self.nodemap ^ bitpos,
-            nodes: new_nodes,
-            datamap: self.datamap | bitpos,
-            data: new_data,
-        }
-    }
-
-    fn node_to_value_mut(&mut self, bitpos: Bitmap, value: Entry<A>) {
+    fn node_to_value(&mut self, bitpos: Bitmap, value: Entry<A>) {
         let old_index = self.node_index(bitpos);
         let new_index = self.data_index(bitpos);
         self.nodes.remove(old_index);
@@ -350,63 +257,7 @@ impl<A: HashValue> Node<A> {
         }
     }
 
-    pub fn insert(&self, hash: Bitmap, shift: usize, value: A) -> (bool, Self) {
-        let bitpos = bitpos(hash, shift);
-        if self.datamap & bitpos != 0 {
-            // Value is here
-            let index = self.data_index(bitpos);
-            match self.data[index] {
-                // Update value or create a subtree
-                Entry::Value(ref current, hash2) => {
-                    if value.extract_key() == current.extract_key() {
-                        (false, self.update_value(bitpos, Entry::Value(value, hash)))
-                    } else {
-                        let value2 = current.clone();
-                        if shift + HASH_BITS >= HASH_SIZE {
-                            // Need to set up a collision
-                            let coll = CollisionNode::new(
-                                hash,
-                                Entry::Value(value, hash),
-                                Entry::Value(value2, hash),
-                            );
-                            (
-                                true,
-                                self.update_value(bitpos, Entry::Collision(Ref::new(coll))),
-                            )
-                        } else {
-                            let node = Node::merge_values(
-                                Entry::Value(value, hash),
-                                Entry::Value(value2, hash2),
-                                hash,
-                                hash2,
-                                shift + HASH_BITS,
-                            );
-                            (true, self.value_to_node(bitpos, Ref::new(node)))
-                        }
-                    }
-                }
-                // There's already a collision here.
-                Entry::Collision(ref coll) => {
-                    let (added, new_coll) = coll.insert(value);
-                    (
-                        added,
-                        self.update_value(bitpos, Entry::Collision(Ref::new(new_coll))),
-                    )
-                }
-            }
-        } else if self.nodemap & bitpos != 0 {
-            // Child node
-            let index = self.node_index(bitpos);
-            let child = &self.nodes[index];
-            let (added, new_child) = child.insert(hash, shift + HASH_BITS, value);
-            (added, self.update_node(bitpos, Ref::new(new_child)))
-        } else {
-            // New value
-            (true, self.insert_value(bitpos, Entry::Value(value, hash)))
-        }
-    }
-
-    pub fn insert_mut(&mut self, hash: Bitmap, shift: usize, value: A) -> bool {
+    pub fn insert(&mut self, hash: Bitmap, shift: usize, value: A) -> Option<A> {
         let bitpos = bitpos(hash, shift);
         if self.datamap & bitpos != 0 {
             // Value is here
@@ -425,12 +276,14 @@ impl<A: HashValue> Node<A> {
                 // There's already a collision here.
                 Entry::Collision(ref mut collision) => {
                     let coll = Ref::make_mut(collision);
-                    return coll.insert_mut(value);
+                    return coll.insert(value);
                 }
             }
             if insert {
-                self.update_value_mut(bitpos, Entry::Value(value, hash));
-                return false;
+                return Some(
+                    self.update_value(bitpos, Entry::Value(value, hash))
+                        .unwrap_value(),
+                );
             }
             if let Some((value2, hash2)) = merge {
                 if shift + HASH_BITS >= HASH_SIZE {
@@ -440,8 +293,8 @@ impl<A: HashValue> Node<A> {
                         Entry::Value(value, hash),
                         Entry::Value(value2, hash2),
                     );
-                    self.update_value_mut(bitpos, Entry::Collision(Ref::new(coll)));
-                    return true;
+                    self.update_value(bitpos, Entry::Collision(Ref::new(coll)));
+                    return None;
                 } else {
                     let node = Node::merge_values(
                         Entry::Value(value, hash),
@@ -450,8 +303,8 @@ impl<A: HashValue> Node<A> {
                         hash2,
                         shift + HASH_BITS,
                     );
-                    self.value_to_node_mut(bitpos, Ref::new(node));
-                    return true;
+                    self.value_to_node(bitpos, Ref::new(node));
+                    return None;
                 }
             }
             unreachable!()
@@ -459,64 +312,15 @@ impl<A: HashValue> Node<A> {
             // Child node
             let index = self.node_index(bitpos);
             let child = Ref::make_mut(&mut self.nodes[index]);
-            child.insert_mut(hash, shift + HASH_BITS, value)
+            child.insert(hash, shift + HASH_BITS, value)
         } else {
             // New value
-            self.insert_value_mut(bitpos, Entry::Value(value, hash));
-            true
-        }
-    }
-
-    pub fn remove<BK>(&self, hash: Bitmap, shift: usize, key: &BK) -> Option<(A, Self)>
-    where
-        BK: Eq + ?Sized,
-        A::Key: Borrow<BK>,
-    {
-        let pos = bitpos(hash, shift);
-        if self.datamap & pos != 0 {
-            // Key is (or would be) in this node.
-            let index = self.data_index(pos);
-            match self.data[index] {
-                Entry::Value(ref value, _) => if key == value.extract_key().borrow() {
-                    Some((value.clone(), self.remove_value(pos)))
-                // }
-                } else {
-                    None
-                },
-                Entry::Collision(ref coll) => match coll.remove(key) {
-                    None => None,
-                    Some((value, next_coll)) => Some((
-                        value,
-                        self.update_value(pos, Entry::Collision(Ref::new(next_coll))),
-                    )),
-                },
-            }
-        } else if self.nodemap & pos != 0 {
-            // Key is in a subnode.
-            let remove_result =
-                self.nodes[self.node_index(pos)].remove(hash, shift + HASH_BITS, key);
-            match remove_result {
-                None => None,
-                Some((value, next_node)) => {
-                    match next_node.size_predicate() {
-                        SizePredicate::Empty => panic!(
-                            "HashMap::remove: encountered unexpectedly empty subnode after removal"
-                        ),
-                        SizePredicate::One => {
-                            // Subnode has single value, merge it into self.
-                            Some((value, self.node_to_value(pos, &next_node)))
-                        }
-                        SizePredicate::Many => Some((value, self.update_node(pos, next_node))),
-                    }
-                }
-            }
-        } else {
-            // Key isn't here.
+            self.insert_value(bitpos, Entry::Value(value, hash));
             None
         }
     }
 
-    pub fn remove_mut<BK>(&mut self, hash: Bitmap, shift: usize, key: &BK) -> Option<A>
+    pub fn remove<BK>(&mut self, hash: Bitmap, shift: usize, key: &BK) -> Option<A>
     where
         BK: Eq + ?Sized,
         A::Key: Borrow<BK>,
@@ -534,10 +338,10 @@ impl<A: HashValue> Node<A> {
                 },
                 Entry::Collision(ref mut collisions) => {
                     let mut coll = Ref::make_mut(collisions);
-                    return coll.remove_mut(key);
+                    return coll.remove(key);
                 }
             }
-            self.remove_value_mut(pos);
+            self.remove_value(pos);
             Some(removed)
         } else if self.nodemap & pos != 0 {
             // Key is in a subnode.
@@ -546,7 +350,7 @@ impl<A: HashValue> Node<A> {
             let remaining;
             {
                 let child = Ref::make_mut(&mut self.nodes[index]);
-                match child.remove_mut(hash, shift + HASH_BITS, key) {
+                match child.remove(hash, shift + HASH_BITS, key) {
                     None => return None,
                     Some(value) => match child.size_predicate() {
                         SizePredicate::Empty => panic!(
@@ -561,7 +365,7 @@ impl<A: HashValue> Node<A> {
                 }
             }
             // Subnode has single value if we get here, merge it into self.
-            self.node_to_value_mut(pos, remaining);
+            self.node_to_value(pos, remaining);
             Some(removed)
         } else {
             // Key isn't here.
@@ -610,62 +414,17 @@ impl<A: HashValue> CollisionNode<A> {
         None
     }
 
-    fn insert(&self, value: A) -> (bool, Self) {
-        let mut data = Vec::with_capacity(self.data.len() + 1);
-        let mut add = true;
-        for item in &self.data {
-            if value.extract_key() == item.extract_key() {
-                data.push(value.clone());
-                add = false;
-            } else {
-                data.push(item.clone());
-            }
-        }
-        if add {
-            data.push(value);
-        }
-        (
-            add,
-            CollisionNode {
-                hash: self.hash,
-                data,
-            },
-        )
-    }
-
-    fn insert_mut(&mut self, value: A) -> bool {
+    fn insert(&mut self, value: A) -> Option<A> {
         for item in &mut self.data {
             if value.extract_key() == item.extract_key() {
-                *item = value;
-                return false;
+                return Some(mem::replace(item, value));
             }
         }
         self.data.push(value);
-        true
-    }
-
-    fn remove<BK>(&self, key: &BK) -> Option<(A, Self)>
-    where
-        BK: Eq + ?Sized,
-        A::Key: Borrow<BK>,
-    {
-        for (index, item) in self.data.iter().enumerate() {
-            if key == item.extract_key().borrow() {
-                let mut data = self.data.clone();
-                let value = data.remove(index);
-                return Some((
-                    value,
-                    CollisionNode {
-                        hash: self.hash,
-                        data,
-                    },
-                ));
-            }
-        }
         None
     }
 
-    fn remove_mut<BK>(&mut self, key: &BK) -> Option<A>
+    fn remove<BK>(&mut self, key: &BK) -> Option<A>
     where
         BK: Eq + ?Sized,
         A::Key: Borrow<BK>,
@@ -720,7 +479,7 @@ impl<'a, A> Iterator for Iter<'a, A>
 where
     A: 'a,
 {
-    type Item = &'a A;
+    type Item = (&'a A, Bitmap);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(ref coll) = self.collision {
@@ -728,17 +487,17 @@ where
                 let value = &coll.data[self.coll_index];
                 self.coll_index += 1;
                 self.count -= 1;
-                return Some(value);
+                return Some((value, coll.hash));
             }
         }
         self.collision = None;
         if !self.nodes {
             if self.node.data.len() > self.index {
                 match self.node.data[self.index] {
-                    Entry::Value(ref value, _) => {
+                    Entry::Value(ref value, hash) => {
                         self.index += 1;
                         self.count -= 1;
-                        return Some(value);
+                        return Some((value, hash));
                     }
                     Entry::Collision(ref coll) => {
                         self.index += 1;
