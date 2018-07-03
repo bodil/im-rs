@@ -4,7 +4,7 @@
 
 //! An ordered map.
 //!
-//! An immutable ordered map implemented as a B-tree.
+//! An immutable ordered map implemented as a [B-tree] [1].
 //!
 //! Most operations on this type of map are O(log n). A
 //! [`HashMap`][hashmap::HashMap] is usually a better choice for
@@ -13,6 +13,7 @@
 //! ordered, so that keys always come out from lowest to highest,
 //! where a [`HashMap`][hashmap::HashMap] has no guaranteed ordering.
 //!
+//! [1]: https://en.wikipedia.org/wiki/B-tree
 //! [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 //! [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 
@@ -26,7 +27,6 @@ use std::mem;
 use std::ops::{Add, Index, IndexMut};
 
 use hashmap::HashMap;
-
 use nodes::btree::{BTreeValue, Insert, Node, Remove};
 
 pub use nodes::btree::{ConsumingIter, DiffItem, DiffIter, Iter};
@@ -86,7 +86,7 @@ impl<K: Ord + Clone, V: Clone> BTreeValue for (K, V) {
     }
 }
 
-/// # Ordered Map
+/// An ordered map.
 ///
 /// An immutable ordered map implemented as a B-tree.
 ///

@@ -2,15 +2,26 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! A hash set.
+//! An unordered set.
 //!
-//! An immutable hash set.
+//! An immutable hash set using [hash array mapped tries] [1].
 //!
-//! This is implemented as a [`HashMap`][hashmap::HashMap] with no
-//! values, so it shares the exact performance characteristics of
-//! [`HashMap`][hashmap::HashMap].
+//! Most operations on this set are O(log<sub>x</sub> n) for a
+//! suitably high *x* that it should be nearly O(1) for most sets.
+//! Because of this, it's a great choice for a generic set as long as
+//! you don't mind that values will need to implement
+//! [`Hash`][std::hash::Hash] and [`Eq`][std::cmp::Eq].
 //!
-//! [hashmap::HashMap]: ../hashmap/struct.HashMap.html
+//! Values will have a predictable order based on the hasher being
+//! used. Unless otherwise specified, all sets will use the default
+//! [`RandomState`][std::collections::hash_map::RandomState] hasher,
+//! which will produce consistent hashes for the duration of its
+//! lifetime, but not between restarts of your program.
+//!
+//! [1]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
+//! [std::cmp::Eq]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
+//! [std::hash::Hash]: https://doc.rust-lang.org/std/hash/trait.Hash.html
+//! [std::collections::hash_map::RandomState]: https://doc.rust-lang.org/std/collections/hash_map/struct.RandomState.h
 
 use std::borrow::Borrow;
 use std::cmp::Ordering;
@@ -61,15 +72,26 @@ macro_rules! hashset {
     }};
 }
 
-/// A hash set.
+/// An unordered set.
 ///
-/// An immutable hash set.
+/// An immutable hash set using [hash array mapped tries] [1].
 ///
-/// This is implemented as a [`HashMap`][hashmap::HashMap] with no
-/// values, so it shares the exact performance characteristics of
-/// [`HashMap`][hashmap::HashMap].
+/// Most operations on this set are O(log<sub>x</sub> n) for a
+/// suitably high *x* that it should be nearly O(1) for most sets.
+/// Because of this, it's a great choice for a generic set as long as
+/// you don't mind that values will need to implement
+/// [`Hash`][std::hash::Hash] and [`Eq`][std::cmp::Eq].
 ///
-/// [hashmap::HashMap]: ../hashmap/struct.HashMap.html
+/// Values will have a predictable order based on the hasher being
+/// used. Unless otherwise specified, all sets will use the default
+/// [`RandomState`][std::collections::hash_map::RandomState] hasher,
+/// which will produce consistent hashes for the duration of its
+/// lifetime, but not between restarts of your program.
+///
+/// [1]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
+/// [std::cmp::Eq]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
+/// [std::hash::Hash]: https://doc.rust-lang.org/std/hash/trait.Hash.html
+/// [std::collections::hash_map::RandomState]: https://doc.rust-lang.org/std/collections/hash_map/struct.RandomState.h
 pub struct HashSet<A, S = RandomState> {
     hasher: Ref<S>,
     root: Ref<Node<Value<A>>>,
@@ -656,6 +678,7 @@ where
 
 // Iterators
 
+// An iterator over the elements of a set.
 pub struct Iter<'a, A>
 where
     A: 'a,
@@ -674,6 +697,7 @@ where
     }
 }
 
+// A consuming iterator over the elements of a set.
 pub struct ConsumingIter<A> {
     it: ConsumingNodeIter<Value<A>>,
 }

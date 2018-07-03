@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! A hash map.
+//! An unordered map.
 //!
 //! An immutable hash map using [hash array mapped tries] [1].
 //!
@@ -13,11 +13,10 @@
 //! [`Hash`][std::hash::Hash] and [`Eq`][std::cmp::Eq].
 //!
 //! Map entries will have a predictable order based on the hasher
-//! being used. Unless otherwise specified, all maps will share an
-//! instance of the default
-//! [`RandomState`][std::collections::hash_map::RandomState] hasher,
-//! which will produce consistent hashes for the duration of its
-//! lifetime, but not between restarts of your program.
+//! being used. Unless otherwise specified, all maps will use the
+//! default [`RandomState`][std::collections::hash_map::RandomState]
+//! hasher, which will produce consistent hashes for the duration of
+//! its lifetime, but not between restarts of your program.
 //!
 //! [1]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
 //! [std::cmp::Eq]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
@@ -35,11 +34,10 @@ use std::mem;
 use std::ops::{Add, Index, IndexMut};
 
 use bits::{hash_key, Bitmap};
+use nodes::hamt::{HashValue, Iter as NodeIter, Node};
 use util::Ref;
 
-use nodes::hamt::{HashValue, Node};
-
-pub use nodes::hamt::{ConsumingIter, Iter as NodeIter};
+pub use nodes::hamt::ConsumingIter;
 
 /// Construct a hash map from a sequence of key/value pairs.
 ///
@@ -80,7 +78,7 @@ macro_rules! hashmap {
     }};
 }
 
-/// A hash map.
+/// An unordered map.
 ///
 /// An immutable hash map using [hash array mapped tries] [1].
 ///
@@ -1206,6 +1204,7 @@ where
     }
 }
 
+/// An entry for a mapping that does not already exist in the map.
 pub struct VacantEntry<'a, K, V, S>
 where
     K: 'a + Hash + Eq + Clone,
@@ -1217,7 +1216,6 @@ where
     key: K,
 }
 
-/// An entry for a mapping that does not already exist in the map.
 impl<'a, K, V, S> VacantEntry<'a, K, V, S>
 where
     K: 'a + Hash + Eq + Clone,
@@ -1517,6 +1515,7 @@ where
 
 // // Iterators
 
+// An iterator over the elements of a map.
 pub struct Iter<'a, K: 'a, V: 'a> {
     it: NodeIter<'a, (K, V)>,
 }
@@ -1537,6 +1536,7 @@ impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {}
 
 impl<'a, K, V> FusedIterator for Iter<'a, K, V> {}
 
+// An iterator over the keys of a map.
 pub struct Keys<'a, K: 'a, V: 'a> {
     it: NodeIter<'a, (K, V)>,
 }
@@ -1557,6 +1557,7 @@ impl<'a, K, V> ExactSizeIterator for Keys<'a, K, V> {}
 
 impl<'a, K, V> FusedIterator for Keys<'a, K, V> {}
 
+// An iterator over the values of a map.
 pub struct Values<'a, K: 'a, V: 'a> {
     it: NodeIter<'a, (K, V)>,
 }

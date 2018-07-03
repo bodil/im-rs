@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//! A persistent vector of elements of type `A`.
+//! A persistent vector.
 //!
 //! This is a sequence of elements in insertion order - if you need a
 //! list of things, any kind of list of things, this is what you're
@@ -97,7 +97,42 @@ macro_rules! vector {
     }};
 }
 
-/// A persistent vector of elements of type `A`.
+/// A persistent vector.
+///
+/// This is a sequence of elements in insertion order - if you need a
+/// list of things, any kind of list of things, this is what you're
+/// looking for.
+///
+/// It's implemented as an [RRB vector][rrbpaper] with [smart
+/// head/tail chunking][chunkedseq]. In performance terms, this means
+/// that practically every operation is O(log n), except push/pop on
+/// both sides, which will be O(1) amortised, and O(log n) in the
+/// worst case. In practice, the push/pop operations will be
+/// blindingly fast, nearly on par with the native
+/// [`VecDeque`][VecDeque], and other operations will have decent, if
+/// not high, performance, but they all have more or less the same
+/// O(log n) complexity, so you don't need to keep their performance
+/// characteristics in mind - everything, even splitting and merging,
+/// is safe to use and never too slow.
+///
+/// ## Performance Notes
+///
+/// Because of the head/tail chunking technique, until you push a
+/// number of items above double the tree's branching factor (that's
+/// `self.len()` = 2 × *k* (where *k* = 64) = 128) on either side, the
+/// data structure is still just a handful of arrays, not yet an RRB
+/// tree, so you'll see performance and memory characteristics similar
+/// to [`Vec`][Vec] or [`VecDeque`][VecDeque].
+///
+/// This means that the structure always preallocates four chunks of
+/// size *k* (*k* being the tree's branching factor), equivalent to a
+/// [`Vec`][Vec] with an initial capacity of 256. Beyond that, it will
+/// allocate tree nodes of capacity *k* as needed.
+///
+/// [rrbpaper]: https://infoscience.epfl.ch/record/213452/files/rrbvector.pdf
+/// [chunkedseq]: http://deepsea.inria.fr/pasl/chunkedseq.pdf
+/// [Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
+/// [VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
 pub struct Vector<A> {
     length: usize,
     middle_level: usize,

@@ -4,11 +4,18 @@
 
 //! An ordered set.
 //!
-//! This is implemented as an [`OrdMap`][ordmap::OrdMap] with no
-//! values, so it shares the exact performance characteristics of
-//! [`OrdMap`][ordmap::OrdMap].
+//! An immutable ordered set implemented as a [B-tree] [1].
 //!
-//! [ordmap::OrdMap]: ../ordmap/struct.OrdMap.html
+//! Most operations on this type of set are O(log n). A
+//! [`HashSet`][hashset::HashSet] is usually a better choice for
+//! performance, but the `OrdSet` has the advantage of only requiring
+//! an [`Ord`][std::cmp::Ord] constraint on its values, and of being
+//! ordered, so values always come out from lowest to highest, where a
+//! [`HashSet`][hashset::HashSet] has no guaranteed ordering.
+//!
+//! [1]: https://en.wikipedia.org/wiki/B-tree
+//! [hashset::HashSet]: ../hashset/struct.HashSet.html
+//! [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 
 use std::borrow::Borrow;
 use std::cmp::Ordering;
@@ -89,13 +96,20 @@ impl<A: Ord + Clone> BTreeValue for Value<A> {
     }
 }
 
-/// # Ordered Set
+/// An ordered set.
 ///
-/// This is implemented as an [`OrdMap`][ordmap::OrdMap] with no
-/// values, so it shares the exact performance characteristics of
-/// [`OrdMap`][ordmap::OrdMap].
+/// An immutable ordered set implemented as a [B-tree] [1].
 ///
-/// [ordmap::OrdMap]: ../ordmap/struct.OrdMap.html
+/// Most operations on this type of set are O(log n). A
+/// [`HashSet`][hashset::HashSet] is usually a better choice for
+/// performance, but the `OrdSet` has the advantage of only requiring
+/// an [`Ord`][std::cmp::Ord] constraint on its values, and of being
+/// ordered, so values always come out from lowest to highest, where a
+/// [`HashSet`][hashset::HashSet] has no guaranteed ordering.
+///
+/// [1]: https://en.wikipedia.org/wiki/B-tree
+/// [hashset::HashSet]: ../hashset/struct.HashSet.html
+/// [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 pub struct OrdSet<A> {
     root: Node<Value<A>>,
 }
@@ -634,6 +648,7 @@ impl<A: Ord + Clone + Debug> Debug for OrdSet<A> {
 
 // Iterators
 
+// An iterator over the elements of a set.
 pub struct Iter<'a, A>
 where
     A: 'a,
@@ -652,6 +667,7 @@ where
     }
 }
 
+// A consuming iterator over the elements of a set.
 pub struct ConsumingIter<A> {
     it: ConsumingNodeIter<Value<A>>,
 }
@@ -667,6 +683,7 @@ where
     }
 }
 
+// An iterator over the difference between two sets.
 pub struct DiffIter<'a, A: 'a> {
     it: NodeDiffIter<'a, Value<A>>,
 }
