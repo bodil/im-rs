@@ -74,7 +74,7 @@
 //! equivalents in the standard library, but tend to run a bit slower
 //! on the basic operations ([`HashMap`][hashmap::HashMap] is almost
 //! neck and neck with its counterpart, while
-//! [`OrdMap][ordmap::OrdMap] currently tends to run 2-3x slower). On
+//! [`OrdMap`][ordmap::OrdMap] currently tends to run 2-3x slower). On
 //! the other hand, they offer the cheap copy and structural sharing
 //! between copies that you'd expect from immutable data structures.
 //!
