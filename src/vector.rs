@@ -382,6 +382,20 @@ impl<A: Clone> Vector<A> {
         }
     }
 
+    /// Get the last element of a vector.
+    ///
+    /// If the vector is empty, `None` is returned.
+    ///
+    /// This is an alias for the [`back`][back] method.
+    ///
+    /// Time: O(log n)
+    ///
+    /// [back]: #method.back
+    #[inline]
+    pub fn last(&self) -> Option<&A> {
+        self.back()
+    }
+
     /// Get the index of a given element in the vector.
     ///
     /// Searches the vector for the first occurrence of a given value,
