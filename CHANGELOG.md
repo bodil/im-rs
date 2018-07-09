@@ -7,6 +7,7 @@ and this project adheres to [Semantic
 Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
 ### Changed
 
 This is a major release with many breaking changes, and is intended to stabilise
@@ -50,10 +51,10 @@ operations.
 Here is a list of the most notable changed method names for maps and sets:
 
 | Previous immutable | Current immutable | Previous mutable | Current mutable |
-| --- | --- | --- | --- |
-| `insert` | `update` | `insert_mut` | `insert` |
-| `remove` | `without` | `remove_mut` | `remove` |
-| `pop` | `extract` | `pop_mut` | `remove` |
+| ------------------ | ----------------- | ---------------- | --------------- |
+| `insert`           | `update`          | `insert_mut`     | `insert`        |
+| `remove`           | `without`         | `remove_mut`     | `remove`        |
+| `pop`              | `extract`         | `pop_mut`        | `remove`        |
 
 You should expect to be able to rewrite code using `std::collections::HashMap`
 and `std::collections::BTreeMap` with minimal or no changes using `im::HashMap`
@@ -64,6 +65,9 @@ and `im::OrdMap` respectively.
 that you should use `Vector::clone()` to take a snapshot when you need it rather
 than cause an implicit clone for each operation. (It's still O(1) and
 practically instant.)
+
+I'm considering adding back some of the immutable operations if I can come up
+with good names for them, but for now, just `clone` it if you need it.
 
 #### RRB Vector
 
@@ -77,15 +81,15 @@ implementation.
 RRB trees have generally similar performance characteristics to the Hickey trie,
 with the added benefit of having O(log n) splitting and concatenation.
 
-| Operation | RRB tree | Hickey trie | Vec | VecDeque |
-| --- | --- | --- | --- | --- |
-| Push front | O(1)* | O(log n) | O(n) | O(1)* |
-| Push back | O(1)* | O(log n) | O(1)* | O(1)* |
-| Pop front | O(1)* | O(log n) | O(n) | O(1)* |
-| Pop back | O(1)* | O(log n) | O(1) | O(1)* |
-| Lookup by index | O(log n) | O(log n) | O(1) | O(1) |
-| Split | O(log n) | O(log n) | O(n) | O(n) |
-| Join | O(log n) | O(n) | O(n) | O(n) |
+| Operation       | RRB tree | Hickey trie | Vec    | VecDeque |
+| --------------- | -------- | ----------- | ------ | -------- |
+| Push front      | O(1)\*   | O(log n)    | O(n)   | O(1)\*   |
+| Push back       | O(1)\*   | O(log n)    | O(1)\* | O(1)\*   |
+| Pop front       | O(1)\*   | O(log n)    | O(n)   | O(1)\*   |
+| Pop back        | O(1)\*   | O(log n)    | O(1)   | O(1)\*   |
+| Lookup by index | O(log n) | O(log n)    | O(1)   | O(1)     |
+| Split           | O(log n) | O(log n)    | O(n)   | O(n)     |
+| Join            | O(log n) | O(n)        | O(n)   | O(n)     |
 
 (Please note that the timings above are for the `im` version of the Hickey trie,
 based on the [Immutable.js](https://facebook.github.io/immutable-js/)
@@ -116,44 +120,47 @@ are no longer used in the `im` API, to facilitiate closer alignment with
 `last` remain as aliases for `front` and `back`.
 
 ## [10.2.0] - 2018-04-15
+
 ### Added
 
-* Map/set methods which accept references to keys will now also take any value
-  that's borrowable to the key's type, ie. it will take a reference to a type
-  `Borrowable` where the key implements `Borrow<Borrowable>`. This is
-  particularly handy for types such as `String` because you can now pass `&str`
-  to key lookups instead of `&String`. So, instead of the incredibly cumbersome
-  `map.get(&"foo".to_string())` you can just do `map.get("foo")` when looking up
-  a mapping for a string literal.
+-   Map/set methods which accept references to keys will now also take any value
+    that's borrowable to the key's type, ie. it will take a reference to a type
+    `Borrowable` where the key implements `Borrow<Borrowable>`. This is
+    particularly handy for types such as `String` because you can now pass `&str`
+    to key lookups instead of `&String`. So, instead of the incredibly cumbersome
+    `map.get(&"foo".to_string())` you can just do `map.get("foo")` when looking up
+    a mapping for a string literal.
 
 ## [10.1.0] - 2018-04-12
+
 ### Added
 
-* `Vector`, `OrdMap` and `HashMap` now implement `Index` and `IndexMut`,
-  allowing for syntax like `map[key] = value`.
-* Added `cons`, `snoc`, `uncons` and `unsnoc` aliases where they were missing.
-* Everything now implements `Sum` and `Extend` where possible.
+-   `Vector`, `OrdMap` and `HashMap` now implement `Index` and `IndexMut`,
+    allowing for syntax like `map[key] = value`.
+-   Added `cons`, `snoc`, `uncons` and `unsnoc` aliases where they were missing.
+-   Everything now implements `Sum` and `Extend` where possible.
 
 ### Changed
 
-* Generalised `OrdMap`/`OrdSet`'s internal nodes so `OrdSet` now only needs to
-  store pointers to its values, not pairs of pointers to value and `Unit`. This
-  has caused `OrdMap/Set`'s type constraints to tighten somewhat - in
-  particular, iteration over maps/sets whose keys don't implement `Ord` is no
-  longer possible, but as you would only have been able to create empty
-  instances of these, no sensible code should break because of this.
-* `HashMap`/`HashSet` now also cannot be iterated over unless they implement
-  `Hash + Eq`, with the same note as above.
-* Constraints on single operations that take closures on `HashMap` and `OrdMap`
-  have been relaxed from `Fn` to `FnOnce`. (Fixes #7.)
+-   Generalised `OrdMap`/`OrdSet`'s internal nodes so `OrdSet` now only needs to
+    store pointers to its values, not pairs of pointers to value and `Unit`. This
+    has caused `OrdMap/Set`'s type constraints to tighten somewhat - in
+    particular, iteration over maps/sets whose keys don't implement `Ord` is no
+    longer possible, but as you would only have been able to create empty
+    instances of these, no sensible code should break because of this.
+-   `HashMap`/`HashSet` now also cannot be iterated over unless they implement
+    `Hash + Eq`, with the same note as above.
+-   Constraints on single operations that take closures on `HashMap` and `OrdMap`
+    have been relaxed from `Fn` to `FnOnce`. (Fixes #7.)
 
 ### Fixed
 
-* Hashes are now stored in `HashMap`s along with their associated values,
-  removing the need to recompute the hash when a value is reordered inside the
-  tree.
+-   Hashes are now stored in `HashMap`s along with their associated values,
+    removing the need to recompute the hash when a value is reordered inside the
+    tree.
 
 ## [10.0.0] - 2018-03-25
+
 ### Added
 
 This is the first release to be considered reasonably stable. No changelog has

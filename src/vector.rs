@@ -912,6 +912,13 @@ impl<A: Clone> Vector<A> {
         left
     }
 
+    /// Truncate a vector to the given size.
+    ///
+    /// Discards all elements in the vector beyond the given length.
+    ///
+    /// Panics if the new length is greater than the current length.
+    ///
+    /// Time: O(log n)
     pub fn truncate(&mut self, len: usize) {
         // FIXME can be made more efficient by dropping the unwanted side without constructing it
         self.split_off(len);
@@ -1038,6 +1045,20 @@ impl<A: Clone> Vector<A> {
         }
     }
 
+    /// Binary search a sorted vector for a given element using a comparator
+    /// function.
+    ///
+    /// Assumes the vector has already been sorted using the same comparator
+    /// function, eg. by using [`sort_by`][sort_by].
+    ///
+    /// If the value is found, it returns `Ok(index)` where `index` is the index
+    /// of the element. If the value isn't found, it returns `Err(index)` where
+    /// `index` is the index at which the element would need to be inserted to
+    /// maintain sorted order.
+    ///
+    /// Time: O(log n)
+    ///
+    /// [sort_by]: #method.sort_by
     pub fn binary_search_by<F>(&self, mut f: F) -> Result<usize, usize>
     where
         F: FnMut(&A) -> Ordering,
@@ -1063,6 +1084,14 @@ impl<A: Clone> Vector<A> {
         }
     }
 
+    /// Binary search a sorted vector for a given element.
+    ///
+    /// If the value is found, it returns `Ok(index)` where `index` is the index
+    /// of the element. If the value isn't found, it returns `Err(index)` where
+    /// `index` is the index at which the element would need to be inserted to
+    /// maintain sorted order.
+    ///
+    /// Time: O(log n)
     pub fn binary_search(&self, value: &A) -> Result<usize, usize>
     where
         A: Ord,
@@ -1070,14 +1099,46 @@ impl<A: Clone> Vector<A> {
         self.binary_search_by(|e| e.cmp(value))
     }
 
+    /// Binary search a sorted vector for a given element with a key extract
+    /// function.
+    ///
+    /// Assumes the vector has already been sorted using the same key extract
+    /// function, eg. by using [`sort_by_key`][sort_by_key].
+    ///
+    /// If the value is found, it returns `Ok(index)` where `index` is the index
+    /// of the element. If the value isn't found, it returns `Err(index)` where
+    /// `index` is the index at which the element would need to be inserted to
+    /// maintain sorted order.
+    ///
+    /// Time: O(log n)
+    ///
+    /// [sort_by_key]: #method.sort_by_key
     pub fn binary_search_by_key<B, F>(&self, b: &B, mut f: F) -> Result<usize, usize>
     where
-        B: Ord,
         F: FnMut(&A) -> B,
+        B: Ord,
     {
         self.binary_search_by(|k| f(k).cmp(b))
     }
 
+    /// Insert an element into a sorted vector.
+    ///
+    /// Insert an element into a vector in sorted order, assuming the vector is
+    /// already in sorted order.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::vector::Vector;
+    /// # fn main() {
+    /// let mut vec = vector![1, 2, 3, 7, 8, 9];
+    /// vec.insert_ord(5);
+    /// assert_eq!(vector![1, 2, 3, 5, 7, 8, 9], vec);
+    /// # }
+    /// ```
     pub fn insert_ord(&mut self, item: A)
     where
         A: Ord,
@@ -1088,6 +1149,21 @@ impl<A: Clone> Vector<A> {
         }
     }
 
+    /// Sort a vector.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::vector::Vector;
+    /// # fn main() {
+    /// let mut vec = vector![3, 2, 5, 4, 1];
+    /// vec.sort();
+    /// assert_eq!(vector![1, 2, 3, 4, 5], vec);
+    /// # }
+    /// ```
     pub fn sort(&mut self)
     where
         A: Ord,
@@ -1095,6 +1171,21 @@ impl<A: Clone> Vector<A> {
         self.sort_by(Ord::cmp)
     }
 
+    /// Sort a vector using a comparator function.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::vector::Vector;
+    /// # fn main() {
+    /// let mut vec = vector![3, 2, 5, 4, 1];
+    /// vec.sort_by(|left, right| left.cmp(right));
+    /// assert_eq!(vector![1, 2, 3, 4, 5], vec);
+    /// # }
+    /// ```
     pub fn sort_by<F>(&mut self, cmp: F)
     where
         F: Fn(&A, &A) -> Ordering,
