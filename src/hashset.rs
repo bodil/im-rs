@@ -854,10 +854,10 @@ where
 
 // QuickCheck
 
-#[cfg(all(not(feature = "no_arc"), any(test, feature = "quickcheck")))]
+#[cfg(all(feature = "arc", any(test, feature = "quickcheck")))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(not(feature = "no_arc"), any(test, feature = "quickcheck")))]
+#[cfg(all(feature = "arc", any(test, feature = "quickcheck")))]
 impl<A: Hash + Eq + Arbitrary + Sync> Arbitrary for HashSet<A> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         HashSet::from_iter(Vec::<A>::arbitrary(g))

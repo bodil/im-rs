@@ -19,7 +19,7 @@ travis-ci = { repository = "bodil/im-rs" }
 rustc_version = "0.2"
 
 [features]
-no_arc = []
+arc = []
 
 [dependencies]
 quickcheck = { version = "0.6", optional = true }

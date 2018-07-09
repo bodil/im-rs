@@ -8,13 +8,13 @@ use std::ops::IndexMut;
 use std::ptr;
 
 // The `Ref` type is an alias for either `Rc` or `Arc`, user's choice.
-#[cfg(not(feature = "no_arc"))]
+#[cfg(feature = "arc")]
 use std::sync::Arc;
-#[cfg(not(feature = "no_arc"))]
+#[cfg(feature = "arc")]
 pub type Ref<A> = Arc<A>;
-#[cfg(feature = "no_arc")]
+#[cfg(not(feature = "arc"))]
 use std::rc::Rc;
-#[cfg(feature = "no_arc")]
+#[cfg(not(feature = "arc"))]
 pub type Ref<A> = Rc<A>;
 
 pub fn clone_ref<A>(r: Ref<A>) -> A
