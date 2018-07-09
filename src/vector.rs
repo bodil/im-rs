@@ -1181,25 +1181,7 @@ impl<A> Clone for Vector<A> {
 
 impl<A: Clone + Debug> Debug for Vector<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        // f.debug_list().entries(self.iter()).finish()
-
-        fn print_indent(f: &mut Formatter, indent: usize) -> Result<(), Error> {
-            for _i in 0..indent {
-                write!(f, " ")?;
-            }
-            Ok(())
-        }
-
-        f.write_str("Vector:\n")?;
-        print_indent(f, 4)?;
-        writeln!(f, "Outer_f: {:?}", self.outer_f)?;
-        print_indent(f, 4)?;
-        writeln!(f, "Inner_f: {:?}", self.inner_f)?;
-        self.middle.print(f, 4, self.middle_level)?;
-        print_indent(f, 4)?;
-        writeln!(f, "Inner_b: {:?}", self.inner_b)?;
-        print_indent(f, 4)?;
-        writeln!(f, "Outer_b: {:?}", self.outer_b)
+        f.debug_list().entries(self.iter()).finish()
     }
 }
 

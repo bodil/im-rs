@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::fmt::{Debug, Error, Formatter};
 use std::iter::FusedIterator;
 use std::mem::replace;
 
@@ -844,35 +843,35 @@ impl<A: Clone> Node<A> {
             Self::merge_rebalance(level, left, merged, right)
         }
     }
-
-    pub fn print(&self, f: &mut Formatter, indent: usize, level: usize) -> Result<(), Error>
-    where
-        A: Debug,
-    {
-        print_indent(f, indent)?;
-        if level == 0 {
-            if self.children.is_empty_node() {
-                writeln!(f, "Leaf: EMPTY")
-            } else {
-                writeln!(f, "Leaf: {:?}", self.children.unwrap_values())
-            }
-        } else {
-            writeln!(f, "Node level {} size_table {:?}", level, self.size)?;
-            for child in self.children.unwrap_nodes().iter() {
-                child.print(f, indent + 4, level - 1)?;
-            }
-            Ok(())
-        }
-    }
+    //
+    // pub fn print(&self, f: &mut Formatter, indent: usize, level: usize) -> Result<(), Error>
+    // where
+    //     A: Debug,
+    // {
+    //     print_indent(f, indent)?;
+    //     if level == 0 {
+    //         if self.children.is_empty_node() {
+    //             writeln!(f, "Leaf: EMPTY")
+    //         } else {
+    //             writeln!(f, "Leaf: {:?}", self.children.unwrap_values())
+    //         }
+    //     } else {
+    //         writeln!(f, "Node level {} size_table {:?}", level, self.size)?;
+    //         for child in self.children.unwrap_nodes().iter() {
+    //             child.print(f, indent + 4, level - 1)?;
+    //         }
+    //         Ok(())
+    //     }
+    // }
 }
 
-fn print_indent(f: &mut Formatter, indent: usize) -> Result<(), Error> {
-    for _i in 0..indent {
-        write!(f, " ")?;
-    }
-    Ok(())
-}
-
+// fn print_indent(f: &mut Formatter, indent: usize) -> Result<(), Error> {
+//     for _i in 0..indent {
+//         write!(f, " ")?;
+//     }
+//     Ok(())
+// }
+//
 // Iterator
 
 pub struct Iter<'a, A>
