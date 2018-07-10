@@ -1,6 +1,6 @@
 [package]
 name = "im"
-version = "10.2.1-alpha.0"
+version = "11.0.0"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 license = "MPL-2.0+"
 description = "Assorted immutable collection datatypes"
