@@ -1898,6 +1898,19 @@ mod test {
         assert!(!map.contains_key(&"bar"));
     }
 
+    #[test]
+    fn large_map() {
+        let mut map = HashMap::new();
+        let size = 32769;
+        for i in 0..size {
+            map.insert(i, i);
+        }
+        assert_eq!(size, map.len());
+        for i in 0..size {
+            assert_eq!(Some(&i), map.get(&i));
+        }
+    }
+
     proptest! {
         #[test]
         fn update_and_length(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..100)) {
