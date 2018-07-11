@@ -51,6 +51,29 @@ impl<A> Chunk<A> {
         chunk
     }
 
+    pub fn unit(value: A) -> Self {
+        let mut chunk: Self;
+        unsafe {
+            chunk = mem::uninitialized();
+            ptr::write(&mut chunk.left, 0);
+            ptr::write(&mut chunk.right, 1);
+            Chunk::force_write(0, value, &mut chunk);
+        }
+        chunk
+    }
+
+    pub fn pair(left: A, right: A) -> Self {
+        let mut chunk: Self;
+        unsafe {
+            chunk = mem::uninitialized();
+            ptr::write(&mut chunk.left, 0);
+            ptr::write(&mut chunk.right, 2);
+            Chunk::force_write(0, left, &mut chunk);
+            Chunk::force_write(1, right, &mut chunk);
+        }
+        chunk
+    }
+
     #[inline]
     pub fn len(&self) -> usize {
         (self.right - self.left) as usize
@@ -87,11 +110,13 @@ impl<A> Chunk<A> {
     /// Copy a range within a chunk
     #[inline]
     unsafe fn force_copy(from: ChunkIndex, to: ChunkIndex, count: usize, chunk: &mut Self) {
-        ptr::copy(
-            &chunk.values[from as usize],
-            &mut chunk.values[to as usize],
-            count,
-        )
+        if count > 0 {
+            ptr::copy(
+                &chunk.values[from as usize],
+                &mut chunk.values[to as usize],
+                count,
+            )
+        }
     }
 
     /// Copy a range between chunks
@@ -103,11 +128,13 @@ impl<A> Chunk<A> {
         chunk: &Self,
         other: &mut Self,
     ) {
-        ptr::copy_nonoverlapping(
-            &chunk.values[from as usize],
-            &mut other.values[to as usize],
-            count,
-        )
+        if count > 0 {
+            ptr::copy_nonoverlapping(
+                &chunk.values[from as usize],
+                &mut other.values[to as usize],
+                count,
+            )
+        }
     }
 
     pub fn push_front(&mut self, value: A) {
@@ -224,6 +251,48 @@ impl<A> Chunk<A> {
         self.right += other_len;
         other.left = 0;
         other.right = 0;
+    }
+
+    pub fn insert(&mut self, index: usize, value: A) {
+        if self.is_full() {
+            panic!("Chunk::insert: chunk is full");
+        }
+        let real_index = index as ChunkIndex + self.left;
+        if real_index < self.left || real_index > self.right {
+            panic!("Chunk::insert: index out of bounds");
+        }
+        let left_size = index;
+        let right_size = (self.right - real_index) as usize;
+        if self.right == CHUNK_ISIZE || (self.left > 0 && left_size < right_size) {
+            unsafe {
+                Chunk::force_copy(self.left, self.left - 1, left_size, self);
+                Chunk::force_write(real_index - 1, value, self);
+            }
+            self.left -= 1;
+        } else {
+            unsafe {
+                Chunk::force_copy(real_index, real_index + 1, right_size, self);
+                Chunk::force_write(real_index, value, self);
+            }
+            self.right += 1;
+        }
+    }
+
+    pub fn remove(&mut self, index: usize) {
+        let real_index = index as ChunkIndex + self.left;
+        if real_index < self.left || real_index >= self.right {
+            panic!("Chunk::remove: index out of bounds");
+        }
+        unsafe { Chunk::force_drop(real_index as usize, self) };
+        let left_size = index;
+        let right_size = (self.right - real_index - 1) as usize;
+        if left_size < right_size {
+            unsafe { Chunk::force_copy(self.left, self.left + 1, left_size, self) };
+            self.left += 1;
+        } else {
+            unsafe { Chunk::force_copy(real_index + 1, real_index, right_size, self) };
+            self.right -= 1;
+        }
     }
 
     #[inline]
@@ -567,6 +636,57 @@ mod test {
         }
         let out_vec: Vec<i32> = chunk.into_iter().collect();
         let should_vec: Vec<i32> = (0..64).into_iter().collect();
+        assert_eq!(should_vec, out_vec);
+    }
+
+    #[test]
+    fn insert_middle() {
+        let mut chunk = Chunk::new();
+        for i in 0..32 {
+            chunk.push_back(i);
+        }
+        for i in 33..64 {
+            chunk.push_back(i);
+        }
+        chunk.insert(32, 32);
+        let out_vec: Vec<i32> = chunk.into_iter().collect();
+        let should_vec: Vec<i32> = (0..64).into_iter().collect();
+        assert_eq!(should_vec, out_vec);
+    }
+
+    #[test]
+    fn insert_back() {
+        let mut chunk = Chunk::new();
+        for i in 0..63 {
+            chunk.push_back(i);
+        }
+        chunk.insert(63, 63);
+        let out_vec: Vec<i32> = chunk.into_iter().collect();
+        let should_vec: Vec<i32> = (0..64).into_iter().collect();
+        assert_eq!(should_vec, out_vec);
+    }
+
+    #[test]
+    fn insert_front() {
+        let mut chunk = Chunk::new();
+        for i in 1..64 {
+            chunk.push_front(64 - i);
+        }
+        chunk.insert(0, 0);
+        let out_vec: Vec<i32> = chunk.into_iter().collect();
+        let should_vec: Vec<i32> = (0..64).into_iter().collect();
+        assert_eq!(should_vec, out_vec);
+    }
+
+    #[test]
+    fn remove_value() {
+        let mut chunk = Chunk::new();
+        for i in 0..64 {
+            chunk.push_back(i);
+        }
+        chunk.remove(32);
+        let out_vec: Vec<i32> = chunk.into_iter().collect();
+        let should_vec: Vec<i32> = ((0..32).into_iter()).chain((33..64).into_iter()).collect();
         assert_eq!(should_vec, out_vec);
     }
 
