@@ -252,7 +252,6 @@ extern crate serde;
 #[cfg(test)]
 extern crate serde_json;
 
-mod bits;
 mod nodes;
 mod sort;
 mod util;

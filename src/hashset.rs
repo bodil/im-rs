@@ -29,11 +29,12 @@ use std::collections::hash_map::RandomState;
 use std::collections::{self, BTreeSet};
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{BuildHasher, Hash, Hasher};
+use std::iter::FusedIterator;
 use std::iter::{FromIterator, IntoIterator, Sum};
 use std::ops::{Add, Deref, Mul};
 
-use bits::hash_key;
-use nodes::hamt::{ConsumingIter as ConsumingNodeIter, HashValue, Iter as NodeIter, Node};
+use nodes::bitmap::hash_key;
+use nodes::hamt::{Drain as NodeDrain, HashValue, Iter as NodeIter, IterMut as NodeIterMut, Node};
 use ordset::OrdSet;
 use util::Ref;
 
@@ -260,6 +261,19 @@ where
     pub fn iter(&self) -> Iter<'_, A> {
         Iter {
             it: NodeIter::new(&self.root, self.size),
+        }
+    }
+
+    /// Get a mutable iterator over the values in a hash set.
+    ///
+    /// Please note that the order is consistent between sets using the same
+    /// hasher, but no other ordering guarantee is offered.  Items will not come
+    /// out in insertion order or sort order.  They will, however, come out in
+    /// the same order every time for the same set.
+    pub fn iter_mut(&mut self) -> IterMut<'_, A> {
+        let root = Ref::make_mut(&mut self.root);
+        IterMut {
+            it: NodeIterMut::new(root, self.size),
         }
     }
 
@@ -693,25 +707,73 @@ where
     type Item = &'a A;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.it.next().map(|(v, _)| v.deref())
+        self.it.next().map(|(v, _)| &v.0)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
     }
 }
 
+impl<'a, A> ExactSizeIterator for Iter<'a, A> where A: Clone {}
+
+impl<'a, A> FusedIterator for Iter<'a, A> where A: Clone {}
+
+// A mutable iterator over the elements of a set.
+pub struct IterMut<'a, A>
+where
+    A: 'a,
+{
+    it: NodeIterMut<'a, Value<A>>,
+}
+
+impl<'a, A> Iterator for IterMut<'a, A>
+where
+    A: 'a + Clone,
+{
+    type Item = &'a mut A;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.it.next().map(|(v, _)| &mut v.0)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
+    }
+}
+
+impl<'a, A> ExactSizeIterator for IterMut<'a, A> where A: Clone {}
+
+impl<'a, A> FusedIterator for IterMut<'a, A> where A: Clone {}
+
 // A consuming iterator over the elements of a set.
-pub struct ConsumingIter<A> {
-    it: ConsumingNodeIter<Value<A>>,
+pub struct ConsumingIter<A>
+where
+    A: Hash + Eq + Clone,
+{
+    it: NodeDrain<Value<A>>,
 }
 
 impl<A> Iterator for ConsumingIter<A>
 where
-    A: Clone,
+    A: Hash + Eq + Clone,
 {
     type Item = A;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.it.next().map(|v| v.0)
+        self.it.next().map(|(v, _)| v.0)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
     }
 }
+
+impl<A> ExactSizeIterator for ConsumingIter<A> where A: Hash + Eq + Clone {}
+
+impl<A> FusedIterator for ConsumingIter<A> where A: Hash + Eq + Clone {}
+
+// Iterator conversions
 
 impl<A, RA, S> FromIterator<RA> for HashSet<A, S>
 where
@@ -753,7 +815,7 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         ConsumingIter {
-            it: ConsumingNodeIter::new(self.root, self.size),
+            it: NodeDrain::new(self.root, self.size),
         }
     }
 }
@@ -905,6 +967,18 @@ pub mod proptest {
 mod test {
     use super::proptest::*;
     use super::*;
+    use proptest::num::i16;
+    use std::hash::BuildHasherDefault;
+    use test::LolHasher;
+
+    #[test]
+    fn insert_failing() {
+        let mut set: HashSet<i16, BuildHasherDefault<LolHasher>> = Default::default();
+        set.insert(14658);
+        assert_eq!(1, set.len());
+        set.insert(-19198);
+        assert_eq!(2, set.len());
+    }
 
     #[test]
     fn match_strings_with_string_slices() {

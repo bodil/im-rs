@@ -512,7 +512,6 @@ impl<A: Clone> Vector<A> {
         if self.outer_f.is_full() {
             swap(&mut self.outer_f, &mut self.inner_f);
             if !self.outer_f.is_empty() {
-                assert!(self.outer_f.is_full());
                 let mut chunk = Ref::new(Chunk::new());
                 swap(&mut chunk, &mut self.outer_f);
                 self.push_middle(Side::Left, chunk);
@@ -542,7 +541,6 @@ impl<A: Clone> Vector<A> {
         if self.outer_b.is_full() {
             swap(&mut self.outer_b, &mut self.inner_b);
             if !self.outer_b.is_empty() {
-                assert!(self.outer_b.is_full());
                 let mut chunk = Ref::new(Chunk::new());
                 swap(&mut chunk, &mut self.outer_b);
                 self.push_middle(Side::Right, chunk);

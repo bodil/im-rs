@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+xs 4213962225 2884706512 1606470227 2259275645 # shrinks to ref s = {"\\\u{4}\u{b}\u{c7afb}Q$x/\u{1a4f0}\u{1}\u{399ac}$.\u{0}=J>\"\u{2}=\t\t*q乣\'?6\u{ca350}\u{a20b5}", "\u{b50f2}$", "\u{de54f}/¥\u{1b}{*\"¥*:\\\u{e77d2}*s`?\u{3}/\u{9daa7}\t\u{1b}\":\'\u{7cf05}G🕴j", "\u{a2848}\u{bf244}.$=d\u{51d0f}¥\u{98d35}\u{3457c}<`𖡒{\"k�\t.$u\u{0}.", "!`", "\u{4}\u{9c2d9}r\u{d33a9}¥쇛\u{cd875}\u{7f}\\\u{37b37}`\u{b}\ruR\r\t\u{8aaa0}\\&`\u{b}\u{feff}\u{b868c}\u{a976e}\u{0}\\X\u{514dd}&k", "\u{feff}🕴M", "\u{b162a}S\u{6}\"\r\u{4b435}🕴 \\\u{b16df}\'\u{3468e}\\", "÷/\\\u{4dfaf}\u{7f}*\u{47f16}\"�aZ\r(Tj\u{1b}记\t;¥*<\u{1b}E\u{8d037}"}

@@ -33,11 +33,9 @@ use std::iter::{FromIterator, FusedIterator, Sum};
 use std::mem;
 use std::ops::{Add, Index, IndexMut};
 
-use bits::{hash_key, Bitmap};
-use nodes::hamt::{HashValue, Iter as NodeIter, Node};
+use nodes::bitmap::{hash_key, HashBits};
+use nodes::hamt::{Drain as NodeDrain, HashValue, Iter as NodeIter, IterMut as NodeIterMut, Node};
 use util::Ref;
-
-pub use nodes::hamt::ConsumingIter;
 
 /// Construct a hash map from a sequence of key/value pairs.
 ///
@@ -283,6 +281,21 @@ where
     pub fn iter(&self) -> Iter<'_, K, V> {
         Iter {
             it: NodeIter::new(&self.root, self.size),
+        }
+    }
+
+    /// Get a mutable iterator over the values of a hash map.
+    ///
+    /// Please note that the order is consistent between maps using
+    /// the same hasher, but no other ordering guarantee is offered.
+    /// Items will not come out in insertion order or sort order.
+    /// They will, however, come out in the same order every time for
+    /// the same map.
+    #[inline]
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
+        let root = Ref::make_mut(&mut self.root);
+        IterMut {
+            it: NodeIterMut::new(root, self.size),
         }
     }
 
@@ -1153,7 +1166,7 @@ where
     S: 'a + BuildHasher,
 {
     map: &'a mut HashMap<K, V, S>,
-    hash: Bitmap,
+    hash: HashBits,
     key: K,
 }
 
@@ -1212,7 +1225,7 @@ where
     S: 'a + BuildHasher,
 {
     map: &'a mut HashMap<K, V, S>,
-    hash: Bitmap,
+    hash: HashBits,
     key: K,
 }
 
@@ -1536,6 +1549,69 @@ impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {}
 
 impl<'a, K, V> FusedIterator for Iter<'a, K, V> {}
 
+// A mutable iterator over the values of a map.
+pub struct IterMut<'a, K: 'a, V: 'a>
+where
+    K: Clone,
+    V: Clone,
+{
+    it: NodeIterMut<'a, (K, V)>,
+}
+
+impl<'a, K, V> Iterator for IterMut<'a, K, V>
+where
+    K: Clone,
+    V: Clone,
+{
+    type Item = &'a mut V;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.it.next().map(|(entry, _)| &mut entry.1)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
+    }
+}
+
+impl<'a, K, V> ExactSizeIterator for IterMut<'a, K, V>
+where
+    K: Clone,
+    V: Clone,
+{
+}
+
+impl<'a, K, V> FusedIterator for IterMut<'a, K, V>
+where
+    K: Clone,
+    V: Clone,
+{
+}
+
+// A consuming iterator over the elements of a map.
+pub struct ConsumingIter<A: HashValue> {
+    it: NodeDrain<A>,
+}
+
+impl<A> Iterator for ConsumingIter<A>
+where
+    A: HashValue,
+{
+    type Item = A;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.it.next().map(|(p, _)| p)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
+    }
+}
+
+impl<A> ExactSizeIterator for ConsumingIter<A> where A: HashValue {}
+
+impl<A> FusedIterator for ConsumingIter<A> where A: HashValue {}
+
 // An iterator over the keys of a map.
 pub struct Keys<'a, K: 'a, V: 'a> {
     it: NodeIter<'a, (K, V)>,
@@ -1604,7 +1680,9 @@ where
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        ConsumingIter::new(self.root, self.size)
+        ConsumingIter {
+            it: NodeDrain::new(self.root, self.size),
+        }
     }
 }
 
@@ -1877,6 +1955,24 @@ mod test {
             "y" => 2,
         };
         assert_eq!(map1, map2);
+    }
+
+    #[test]
+    fn remove_top_level_collisions() {
+        let pairs = vec![9, 2569, 27145];
+        let mut map: HashMap<i16, i16, BuildHasherDefault<LolHasher>> = Default::default();
+        for k in pairs.clone() {
+            map.insert(k, k);
+        }
+        assert_eq!(pairs.len(), map.len());
+        let keys: Vec<_> = map.keys().cloned().collect();
+        for k in keys {
+            let l = map.len();
+            assert_eq!(Some(&k), map.get(&k));
+            map.remove(&k);
+            assert_eq!(None, map.get(&k));
+            assert_eq!(l - 1, map.len());
+        }
     }
 
     #[test]
