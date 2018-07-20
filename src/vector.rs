@@ -1838,7 +1838,7 @@ mod test {
             assert_eq!(left.len(), split_index);
             assert_eq!(right.len(), vec.len() - split_index);
             for (index, item) in left.iter().enumerate() {
-                assert_eq!(&vec[index], item);
+                assert_eq!(& vec[index], item);
             }
             for (index, item) in right.iter().enumerate() {
                 assert_eq!(&vec[split_index + index], item);

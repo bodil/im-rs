@@ -27,6 +27,7 @@ where
 /// Swap two values of anything implementing `IndexMut`.
 ///
 /// Like `slice::swap`, but more generic.
+#[allow(unsafe_code)]
 pub fn swap_indices<V>(vector: &mut V, a: usize, b: usize)
 where
     V: IndexMut<usize>,

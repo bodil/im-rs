@@ -1008,6 +1008,7 @@ impl<'a, A: Clone> Iterator for IterMut<'a, A> {
         // I blame the Iterator trait in its entirety for this unsafe
         // block, it wouldn't be necessary if `fn next(&'a mut self)`
         // were permissible.
+        #[allow(unsafe_code)]
         Some(unsafe { &mut *(r as *mut _) })
     }
 
@@ -1024,6 +1025,7 @@ impl<'a, A: Clone> DoubleEndedIterator for IterMut<'a, A> {
         }
         self.back_index -= 1;
         let r = self.root.index_mut(self.level, self.back_index);
+        #[allow(unsafe_code)]
         Some(unsafe { &mut *(r as *mut _) })
     }
 }

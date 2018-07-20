@@ -222,15 +222,22 @@ impl<A: HashValue> Node<A> {
                 // If we get here, we're looking at a value entry that needs a merge.
                 // We're going to be unsafe and pry it out of the reference, trusting
                 // that we overwrite it with the merged node.
+                #[allow(unsafe_code)]
                 let old_entry = unsafe { ptr::read(entry) };
                 if shift + HASH_SHIFT >= HASH_SIZE {
                     // We're at the lowest level, need to set up a collision node.
                     let coll = CollisionNode::new(hash, old_entry.unwrap_value(), value);
-                    unsafe { ptr::write(entry, Entry::from(coll)) };
+                    #[allow(unsafe_code)]
+                    unsafe {
+                        ptr::write(entry, Entry::from(coll))
+                    };
                 } else if let Entry::Value(old_value, old_hash) = old_entry {
                     let node =
                         Node::merge_values(old_value, old_hash, value, hash, shift + HASH_SHIFT);
-                    unsafe { ptr::write(entry, Entry::from(node)) };
+                    #[allow(unsafe_code)]
+                    unsafe {
+                        ptr::write(entry, Entry::from(node))
+                    };
                 } else {
                     unreachable!()
                 }

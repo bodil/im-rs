@@ -4,7 +4,8 @@
 
 pub mod bitmap;
 pub mod btree;
-pub mod chunk;
 pub mod hamt;
 pub mod rrb;
-pub mod sparse_chunk;
+
+mod unsafe_chunks;
+pub use self::unsafe_chunks::{chunk, sparse_chunk};
