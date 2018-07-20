@@ -160,7 +160,7 @@ fn vector_push_front_mut_1000(b: &mut Bencher) {
 
 #[bench]
 fn vector_push_front_mut_100000(b: &mut Bencher) {
-    vector_push_front_mut(b, 100000)
+    vector_push_front_mut(b, 100_000)
 }
 
 fn vector_push_back_mut(b: &mut Bencher, count: usize) {
@@ -303,7 +303,7 @@ fn vector_append_1000(b: &mut Bencher) {
 
 #[bench]
 fn vector_append_100000(b: &mut Bencher) {
-    vector_append(b, 100000)
+    vector_append(b, 100_000)
 }
 
 // fn vector_extend(b: &mut Bencher, count: usize) {

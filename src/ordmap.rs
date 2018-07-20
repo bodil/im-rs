@@ -1991,7 +1991,7 @@ mod test {
             let map: OrdMap<i16, i16> =
                 FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             for (k, v) in m {
-                assert_eq!(Some(*v), map.get(k).map(|v| *v));
+                assert_eq!(Some(*v), map.get(k).cloned());
             }
         }
 
@@ -2001,7 +2001,7 @@ mod test {
                 FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             for k in m.keys() {
                 let l = map.len();
-                assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
+                assert_eq!(m.get(k).cloned(), map.get(k).cloned());
                 map = map.without(k);
                 assert_eq!(None, map.get(k));
                 assert_eq!(l - 1, map.len());
@@ -2025,7 +2025,7 @@ mod test {
                 FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             for k in m.keys() {
                 let l = map.len();
-                assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
+                assert_eq!(m.get(k).cloned(), map.get(k).cloned());
                 map.remove(k);
                 assert_eq!(None, map.get(k));
                 assert_eq!(l - 1, map.len());

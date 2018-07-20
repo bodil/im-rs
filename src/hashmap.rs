@@ -1929,7 +1929,7 @@ mod test {
         }
         for k in m.keys() {
             let l = map.len();
-            assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
+            assert_eq!(m.get(k).cloned(), map.get(k).cloned());
             map = map.without(k);
             assert_eq!(None, map.get(k));
             assert_eq!(l - 1, map.len());
@@ -2042,7 +2042,7 @@ mod test {
         fn lookup(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..100)) {
             let map: HashMap<i16, i16> = FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             for (k, v) in m {
-                assert_eq!(Some(*v), map.get(k).map(|v| *v));
+                assert_eq!(Some(*v), map.get(k).cloned());
             }
         }
 
@@ -2060,7 +2060,7 @@ mod test {
             }
             for k in m.keys() {
                 let l = map.len();
-                assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
+                assert_eq!(m.get(k).cloned(), map.get(k).cloned());
                 map = map.without(k);
                 assert_eq!(None, map.get(k));
                 assert_eq!(l - 1, map.len());
@@ -2094,7 +2094,7 @@ mod test {
             }
             for k in m.keys() {
                 let l = map.len();
-                assert_eq!(m.get(k).cloned(), map.get(k).map(|v| *v));
+                assert_eq!(m.get(k).cloned(), map.get(k).cloned());
                 map.remove(k);
                 assert_eq!(None, map.get(k));
                 assert_eq!(l - 1, map.len());
