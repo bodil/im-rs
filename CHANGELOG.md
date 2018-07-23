@@ -9,7 +9,9 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
-- Fixed an edge case bug in `Vector`'s Quicksort implementation.
+- Various performance improvements, amounting to a 5-10% speedup for both kinds
+  of map/set.
+- Fixed an edge case bug in `sort::quicksort`.
 
 ## [11.0.0] - 2018-07-10
 
