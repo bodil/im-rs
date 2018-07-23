@@ -189,7 +189,7 @@ fn vector_push_back_mut_1000(b: &mut Bencher) {
 
 #[bench]
 fn vector_push_back_mut_100000(b: &mut Bencher) {
-    vector_push_back_mut(b, 100000)
+    vector_push_back_mut(b, 100_000)
 }
 
 fn vector_pop_front_mut(b: &mut Bencher, count: usize) {
@@ -219,7 +219,7 @@ fn vector_pop_front_mut_1000(b: &mut Bencher) {
 
 #[bench]
 fn vector_pop_front_mut_100000(b: &mut Bencher) {
-    vector_pop_front_mut(b, 100000)
+    vector_pop_front_mut(b, 100_000)
 }
 
 fn vector_pop_back_mut(b: &mut Bencher, count: usize) {
@@ -249,7 +249,7 @@ fn vector_pop_back_mut_1000(b: &mut Bencher) {
 
 #[bench]
 fn vector_pop_back_mut_100000(b: &mut Bencher) {
-    vector_pop_back_mut(b, 100000)
+    vector_pop_back_mut(b, 100_000)
 }
 
 fn vector_split(b: &mut Bencher, count: usize) {
@@ -274,7 +274,7 @@ fn vector_split_1000(b: &mut Bencher) {
 
 #[bench]
 fn vector_split_100000(b: &mut Bencher) {
-    vector_split(b, 100000)
+    vector_split(b, 100_000)
 }
 
 fn vector_append(b: &mut Bencher, count: usize) {

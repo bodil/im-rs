@@ -30,6 +30,7 @@ use nodes::btree::{
     BTreeValue, ConsumingIter as ConsumingNodeIter, DiffItem as NodeDiffItem,
     DiffIter as NodeDiffIter, Insert, Iter as NodeIter, Node, Remove,
 };
+use util::Ref;
 
 pub type DiffItem<'a, A> = NodeDiffItem<'a, A>;
 
@@ -84,6 +85,7 @@ impl<A: Ord + Clone> BTreeValue for Value<A> {
         BK: Ord + ?Sized,
         Self::Key: Borrow<BK>,
     {
+        // TODO see if a linear search is actually faster
         slice.binary_search_by(|value| Self::Key::borrow(value).cmp(key))
     }
 
@@ -91,7 +93,15 @@ impl<A: Ord + Clone> BTreeValue for Value<A> {
         slice.binary_search_by(|value| value.cmp(key))
     }
 
-    fn cmp_keys(&self, other: &Self) -> Ordering {
+    fn cmp_keys<BK>(&self, other: &BK) -> Ordering
+    where
+        BK: Ord + ?Sized,
+        Self::Key: Borrow<BK>,
+    {
+        Self::Key::borrow(self).cmp(other)
+    }
+
+    fn cmp_values(&self, other: &Self) -> Ordering {
         self.cmp(other)
     }
 }
@@ -111,13 +121,18 @@ impl<A: Ord + Clone> BTreeValue for Value<A> {
 /// [hashset::HashSet]: ../hashset/struct.HashSet.html
 /// [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 pub struct OrdSet<A> {
-    root: Node<Value<A>>,
+    root: Ref<Node<Value<A>>>,
 }
 
-impl<A> OrdSet<A> {
+impl<A> OrdSet<A>
+where
+    A: Ord + Clone,
+{
     /// Construct an empty set.
     pub fn new() -> Self {
-        OrdSet { root: Node::new() }
+        OrdSet {
+            root: Ref::from(Node::new()),
+        }
     }
 
     /// Construct a set with a single value.
@@ -134,7 +149,7 @@ impl<A> OrdSet<A> {
     /// ```
     pub fn singleton(a: A) -> Self {
         OrdSet {
-            root: Node::singleton(Value(a)),
+            root: Ref::from(Node::unit(Value(a))),
         }
     }
 
@@ -190,9 +205,7 @@ impl<A> OrdSet<A> {
     pub fn get_max(&self) -> Option<&A> {
         self.root.max().map(Deref::deref)
     }
-}
 
-impl<A: Ord + Clone> OrdSet<A> {
     // Create an iterator over the contents of the set.
     pub fn iter(&self) -> Iter<A> {
         Iter {
@@ -251,12 +264,18 @@ impl<A: Ord + Clone> OrdSet<A> {
     /// [insert]: #method.insert
     #[inline]
     pub fn insert(&mut self, a: A) -> Option<A> {
-        match self.root.insert(Value(a)) {
-            Insert::Replaced(Value(old_value)) => return Some(old_value),
-            Insert::Added => (),
-            Insert::Update(root) => self.root = root,
-            Insert::Split(left, median, right) => self.root = Node::from_split(left, median, right),
-        }
+        let new_root = {
+            let root = Ref::make_mut(&mut self.root);
+            match root.insert(Value(a)) {
+                Insert::Replaced(Value(old_value)) => return Some(old_value),
+                Insert::Added => return None,
+                Insert::Update(root) => Ref::from(root),
+                Insert::Split(left, median, right) => {
+                    Ref::from(Node::from_split(left, median, right))
+                }
+            }
+        };
+        self.root = new_root;
         None
     }
 
@@ -269,14 +288,16 @@ impl<A: Ord + Clone> OrdSet<A> {
         BA: Ord + ?Sized,
         A: Borrow<BA>,
     {
-        match self.root.remove(a) {
-            Remove::Update(value, root) => {
-                self.root = root;
-                Some(value.0)
+        let (new_root, removed_value) = {
+            let root = Ref::make_mut(&mut self.root);
+            match root.remove(a) {
+                Remove::Update(value, root) => (Ref::from(root), Some(value.0)),
+                Remove::Removed(value) => return Some(value.0),
+                Remove::NoChange => return None,
             }
-            Remove::Removed(value) => Some(value.0),
-            Remove::NoChange => None,
-        }
+        };
+        self.root = new_root;
+        removed_value
     }
 
     /// Remove the smallest value from a set.
@@ -549,7 +570,7 @@ impl<A> Clone for OrdSet<A> {
 
 impl<A: Ord + Clone> PartialEq for OrdSet<A> {
     fn eq(&self, other: &Self) -> bool {
-        self.root.ptr_eq(&other.root)
+        Ref::ptr_eq(&self.root, &other.root)
             || (self.len() == other.len() && self.diff(other).next().is_none())
     }
 }
@@ -579,7 +600,10 @@ impl<A: Ord + Clone + Hash> Hash for OrdSet<A> {
     }
 }
 
-impl<A> Default for OrdSet<A> {
+impl<A> Default for OrdSet<A>
+where
+    A: Ord + Clone,
+{
     fn default() -> Self {
         OrdSet::new()
     }

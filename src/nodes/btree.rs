@@ -6,6 +6,7 @@ use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::mem;
 use std::ops::IndexMut;
+use util::clone_ref;
 
 use util::Ref;
 
@@ -23,15 +24,17 @@ pub trait BTreeValue: Clone {
         BK: Ord + ?Sized,
         Self::Key: Borrow<BK>;
     fn search_value(slice: &[Self], value: &Self) -> Result<usize, usize>;
-    fn cmp_keys(&self, other: &Self) -> Ordering;
+    fn cmp_keys<BK>(&self, other: &BK) -> Ordering
+    where
+        BK: Ord + ?Sized,
+        Self::Key: Borrow<BK>;
+    fn cmp_values(&self, other: &Self) -> Ordering;
 }
 
-pub struct Node<A>(Ref<NodeData<A>>);
-
-struct NodeData<A> {
+pub struct Node<A> {
     count: usize,
     keys: Vec<A>,
-    children: Vec<Option<Node<A>>>,
+    children: Vec<Option<Ref<Node<A>>>>,
 }
 
 pub enum Insert<A> {
@@ -64,15 +67,12 @@ enum RemoveAction {
     ContinueDown(usize),
 }
 
-impl<A> Clone for Node<A> {
+impl<A> Clone for Node<A>
+where
+    A: Clone,
+{
     fn clone(&self) -> Self {
-        Node(self.0.clone())
-    }
-}
-
-impl<A: Clone> Clone for NodeData<A> {
-    fn clone(&self) -> Self {
-        NodeData {
+        Node {
             count: self.count,
             keys: self.keys.clone(),
             children: self.children.clone(),
@@ -80,7 +80,22 @@ impl<A: Clone> Clone for NodeData<A> {
     }
 }
 
-impl<A> NodeData<A> {
+impl<A> Default for Node<A> {
+    fn default() -> Self {
+        let mut children = Vec::with_capacity(NODE_SIZE + 1);
+        children.push(None);
+        Node {
+            count: 0,
+            keys: Vec::with_capacity(NODE_SIZE),
+            children,
+        }
+    }
+}
+
+impl<A> Node<A>
+where
+    A: Clone,
+{
     #[inline]
     fn has_room(&self) -> bool {
         self.keys.len() < NODE_SIZE
@@ -91,52 +106,33 @@ impl<A> NodeData<A> {
         self.keys.len() < MEDIAN
     }
 
+    #[inline]
+    fn is_leaf(&self) -> bool {
+        self.children[0].is_none()
+    }
+
     fn sum_up_children(&self) -> usize {
         let mut c = self.count;
-        for n in &self.children {
-            match *n {
+        for child in &self.children {
+            match child {
                 None => continue,
                 Some(ref node) => c += node.len(),
             }
         }
         c
     }
-}
 
-impl<A> Default for Node<A> {
-    fn default() -> Self {
-        let mut children = Vec::with_capacity(NODE_SIZE + 1);
-        children.push(None);
-        Node(Ref::new(NodeData {
-            count: 0,
-            keys: Vec::with_capacity(NODE_SIZE),
-            children,
-        }))
-    }
-}
-
-impl<A> Node<A> {
     #[inline]
     pub fn len(&self) -> usize {
-        self.0.count
+        self.count
     }
 
     #[inline]
-    fn maybe_len(node_or: &Option<Node<A>>) -> usize {
-        match *node_or {
+    fn maybe_len(node_or: &Option<Ref<Node<A>>>) -> usize {
+        match node_or {
             None => 0,
             Some(ref node) => node.len(),
         }
-    }
-
-    #[inline]
-    fn has_room(&self) -> bool {
-        self.0.has_room()
-    }
-
-    #[inline]
-    fn too_small(&self) -> bool {
-        self.0.too_small()
     }
 
     #[inline]
@@ -145,17 +141,17 @@ impl<A> Node<A> {
     }
 
     #[inline]
-    pub fn singleton(value: A) -> Self {
+    pub fn unit(value: A) -> Self {
         let mut keys = Vec::with_capacity(NODE_SIZE);
         keys.push(value);
         let mut children = Vec::with_capacity(NODE_SIZE + 1);
         children.push(None);
         children.push(None);
-        Node(Ref::new(NodeData {
+        Node {
             count: 1,
             keys,
             children,
-        }))
+        }
     }
 
     #[inline]
@@ -164,55 +160,57 @@ impl<A> Node<A> {
         let mut keys = Vec::with_capacity(NODE_SIZE);
         keys.push(median);
         let mut children = Vec::with_capacity(NODE_SIZE + 1);
-        children.push(Some(left));
-        children.push(Some(right));
-        Node(Ref::new(NodeData {
+        children.push(Some(Ref::from(left)));
+        children.push(Some(Ref::from(right)));
+        Node {
             count,
             keys,
             children,
-        }))
-    }
-
-    #[inline]
-    fn wrap(data: NodeData<A>) -> Self {
-        Node(Ref::new(data))
-    }
-
-    #[inline]
-    pub fn ptr_eq(&self, other: &Self) -> bool {
-        Ref::ptr_eq(&self.0, &other.0)
+        }
     }
 
     pub fn min(&self) -> Option<&A> {
-        match *self.0.children.first().unwrap() {
-            None => self.0.keys.first(),
+        match self.children.first().unwrap() {
+            None => self.keys.first(),
             Some(ref child) => child.min(),
         }
     }
 
     pub fn max(&self) -> Option<&A> {
-        match *self.0.children.last().unwrap() {
-            None => self.0.keys.last(),
+        match self.children.last().unwrap() {
+            None => self.keys.last(),
             Some(ref child) => child.max(),
         }
     }
 }
 
 impl<A: BTreeValue> Node<A> {
+    fn child_contains<BK>(&self, index: usize, key: &BK) -> bool
+    where
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
+        if let Some(Some(ref child)) = self.children.get(index) {
+            child.lookup(key).is_some()
+        } else {
+            false
+        }
+    }
+
     pub fn lookup<BK>(&self, key: &BK) -> Option<&A>
     where
         BK: Ord + ?Sized,
         A::Key: Borrow<BK>,
     {
-        if self.0.keys.is_empty() {
+        if self.keys.is_empty() {
             return None;
         }
         // Perform a binary search, resulting in either a match or
         // the index of the first higher key, meaning we search the
         // child to the left of it.
-        match A::search_key(&self.0.keys, key) {
-            Ok(index) => Some(&self.0.keys[index]),
-            Err(index) => match self.0.children[index] {
+        match A::search_key(&self.keys, key) {
+            Ok(index) => Some(&self.keys[index]),
+            Err(index) => match self.children[index] {
                 None => None,
                 Some(ref node) => node.lookup(key),
             },
@@ -224,134 +222,130 @@ impl<A: BTreeValue> Node<A> {
         BK: Ord + ?Sized,
         A::Key: Borrow<BK>,
     {
-        if self.0.keys.is_empty() {
+        if self.keys.is_empty() {
             return None;
         }
-        let node = Ref::make_mut(&mut self.0);
         // Perform a binary search, resulting in either a match or
         // the index of the first higher key, meaning we search the
         // child to the left of it.
-        match A::search_key(&node.keys, key) {
-            Ok(index) => Some(&mut node.keys[index]),
-            Err(index) => match node.children[index] {
+        match A::search_key(&self.keys, key) {
+            Ok(index) => Some(&mut self.keys[index]),
+            Err(index) => match self.children[index] {
                 None => None,
-                Some(ref mut child) => child.lookup_mut(key),
+                Some(ref mut child_ref) => {
+                    let child = Ref::make_mut(child_ref);
+                    child.lookup_mut(key)
+                }
             },
         }
     }
 
-    fn split(&self, value: A, ins_left: Option<Node<A>>, ins_right: Option<Node<A>>) -> Insert<A> {
-        let mut new_keys = self.0.keys.clone();
-        let mut new_children = self.0.children.clone();
+    fn split(
+        &mut self,
+        value: A,
+        ins_left: Option<Node<A>>,
+        ins_right: Option<Node<A>>,
+    ) -> Insert<A> {
+        let index = A::search_value(&self.keys, &value).unwrap_err();
+        self.children[index] = ins_left.map(Ref::from);
+        self.keys.insert(index, value);
+        self.children.insert(index + 1, ins_right.map(Ref::from));
 
-        match A::search_value(&new_keys, &value) {
-            Ok(_) => unreachable!(),
-            Err(index) => {
-                new_children[index] = ins_left;
-                new_keys.insert(index, value);
-                new_children.insert(index + 1, ins_right);
-            }
-        }
-        let mut left = NodeData {
+        let mut left = Node {
             count: MEDIAN,
-            keys: new_keys.drain(0..MEDIAN).collect(),
-            children: new_children.drain(0..MEDIAN + 1).collect(),
+            keys: self.keys.drain(0..MEDIAN).collect(),
+            children: self.children.drain(0..MEDIAN + 1).collect(),
         };
-        let mut right = NodeData {
+        let mut right = Node {
             count: MEDIAN,
-            keys: new_keys.drain(1..).collect(),
-            children: new_children,
+            keys: self.keys.drain(1..).collect(),
+            children: self.children.drain(..).collect(),
         };
         left.count = left.sum_up_children();
         right.count = right.sum_up_children();
-        Split(Node::wrap(left), new_keys.pop().unwrap(), Node::wrap(right))
+        Split(left, self.keys.pop().unwrap(), right)
     }
 
-    fn merge(pair: A, left: &Node<A>, right: &Node<A>) -> Node<A> {
-        let mut keys = Vec::with_capacity(NODE_SIZE);
-        keys.extend(left.0.keys.iter().cloned());
-        keys.push(pair);
-        keys.extend(right.0.keys.iter().cloned());
-        let mut children = Vec::with_capacity(NODE_SIZE + 1);
-        children.extend(left.0.children.iter().cloned());
-        children.extend(right.0.children.iter().cloned());
-        Node::wrap(NodeData {
-            count: left.len() + right.len() + 1,
+    fn merge(middle: A, left: Node<A>, right: Node<A>) -> Node<A> {
+        let count = left.len() + right.len() + 1;
+        let mut keys = left.keys;
+        keys.push(middle);
+        keys.extend(right.keys);
+        let mut children = left.children;
+        children.extend(right.children);
+        Node {
+            count,
             keys,
             children,
-        })
+        }
     }
 
-    fn pop_min(&mut self) -> (A, Option<Node<A>>) {
-        let node = Ref::make_mut(&mut self.0);
-        let pair = node.keys.remove(0);
-        let child = node.children.remove(0);
-        node.count -= 1 + Node::maybe_len(&child);
-        (pair, child)
+    fn pop_min(&mut self) -> (A, Option<Ref<Node<A>>>) {
+        let value = self.keys.remove(0);
+        let child = self.children.remove(0);
+        self.count -= 1 + Node::maybe_len(&child);
+        (value, child)
     }
 
-    fn pop_max(&mut self) -> (A, Option<Node<A>>) {
-        let node = Ref::make_mut(&mut self.0);
-        let pair = node.keys.pop().unwrap();
-        let child = node.children.pop().unwrap();
-        node.count -= 1 + Node::maybe_len(&child);
-        (pair, child)
+    fn pop_max(&mut self) -> (A, Option<Ref<Node<A>>>) {
+        let value = self.keys.pop().unwrap();
+        let child = self.children.pop().unwrap();
+        self.count -= 1 + Node::maybe_len(&child);
+        (value, child)
     }
 
-    fn push_min(&mut self, child: Option<Node<A>>, pair: A) {
-        let node = Ref::make_mut(&mut self.0);
-        node.count += 1 + Node::maybe_len(&child);
-        node.keys.insert(0, pair);
-        node.children.insert(0, child);
+    fn push_min(&mut self, child: Option<Ref<Node<A>>>, value: A) {
+        self.count += 1 + Node::maybe_len(&child);
+        self.keys.insert(0, value);
+        self.children.insert(0, child);
     }
 
-    fn push_max(&mut self, child: Option<Node<A>>, pair: A) {
-        let node = Ref::make_mut(&mut self.0);
-        node.count += 1 + Node::maybe_len(&child);
-        node.keys.push(pair);
-        node.children.push(child);
+    fn push_max(&mut self, child: Option<Ref<Node<A>>>, value: A) {
+        self.count += 1 + Node::maybe_len(&child);
+        self.keys.push(value);
+        self.children.push(child);
     }
 
     pub fn insert(&mut self, value: A) -> Insert<A> {
-        if self.0.keys.is_empty() {
-            let node = Ref::make_mut(&mut self.0);
-            node.keys.push(value);
-            node.children.push(None);
-            node.count += 1;
+        if self.keys.is_empty() {
+            self.keys.push(value);
+            self.children.push(None);
+            self.count += 1;
             return Insert::Added;
         }
-        let (median, left, right) = match A::search_value(&self.0.keys, &value) {
+        let (median, left, right) = match A::search_value(&self.keys, &value) {
             // Key exists in node
             Ok(index) => {
-                let mut node = Ref::make_mut(&mut self.0);
-                return Insert::Replaced(mem::replace(&mut node.keys[index], value));
+                return Insert::Replaced(mem::replace(&mut self.keys[index], value));
             }
             // Key is adjacent to some key in node
             Err(index) => {
                 let mut has_room = self.has_room();
-                let mut node = Ref::make_mut(&mut self.0);
-                let action = match node.children[index] {
+                let action = match self.children[index] {
                     // No child at location, this is the target node.
                     None => InsertAt,
                     // Child at location, pass it on.
-                    Some(ref mut child) => match child.insert(value.clone()) {
-                        Insert::Added => AddedAction,
-                        Insert::Replaced(value) => ReplacedAction(value),
-                        Insert::Update(_) => unreachable!(),
-                        Insert::Split(left, median, right) => InsertSplit(left, median, right),
-                    },
+                    Some(ref mut child_ref) => {
+                        let child = Ref::make_mut(child_ref);
+                        match child.insert(value.clone()) {
+                            Insert::Added => AddedAction,
+                            Insert::Replaced(value) => ReplacedAction(value),
+                            Insert::Update(_) => unreachable!(),
+                            Insert::Split(left, median, right) => InsertSplit(left, median, right),
+                        }
+                    }
                 };
                 match action {
                     ReplacedAction(value) => return Insert::Replaced(value),
                     AddedAction => {
-                        node.count += 1;
+                        self.count += 1;
                         return Insert::Added;
                     }
                     InsertAt => {
                         if has_room {
-                            node.keys.insert(index, value);
-                            node.children.insert(index + 1, None);
-                            node.count += 1;
+                            self.keys.insert(index, value);
+                            self.children.insert(index + 1, None);
+                            self.count += 1;
                             return Insert::Added;
                         } else {
                             (value, None, None)
@@ -359,10 +353,10 @@ impl<A: BTreeValue> Node<A> {
                     }
                     InsertSplit(left, median, right) => {
                         if has_room {
-                            node.children[index] = Some(left);
-                            node.keys.insert(index, median);
-                            node.children.insert(index + 1, Some(right));
-                            node.count += 1;
+                            self.children[index] = Some(Ref::from(left));
+                            self.keys.insert(index, median);
+                            self.children.insert(index + 1, Some(Ref::from(right)));
+                            self.count += 1;
                             return Insert::Added;
                         } else {
                             (median, Some(left), Some(right))
@@ -379,7 +373,7 @@ impl<A: BTreeValue> Node<A> {
         BK: Ord + ?Sized,
         A::Key: Borrow<BK>,
     {
-        let index = A::search_key(&self.0.keys, key);
+        let index = A::search_key(&self.keys, key);
         self.remove_index(index, key)
     }
 
@@ -391,16 +385,24 @@ impl<A: BTreeValue> Node<A> {
         let action = match index {
             // Key exists in node, remove it.
             Ok(index) => {
-                match (&self.0.children[index], &self.0.children[index + 1]) {
+                match (&self.children[index], &self.children[index + 1]) {
                     // If we're a leaf, just delete the entry.
                     (&None, &None) => RemoveAction::DeleteAt(index),
                     // If the left hand child has capacity, pull the predecessor up.
                     (&Some(ref left), _) if !left.too_small() => {
-                        RemoveAction::PullUp(left.0.keys.len() - 1, index, index)
+                        if left.is_leaf() {
+                            RemoveAction::PullUp(left.keys.len() - 1, index, index)
+                        } else {
+                            RemoveAction::StealFromLeft(index + 1)
+                        }
                     }
                     // If the right hand child has capacity, pull the successor up.
                     (_, &Some(ref right)) if !right.too_small() => {
-                        RemoveAction::PullUp(0, index, index + 1)
+                        if right.is_leaf() {
+                            RemoveAction::PullUp(0, index, index + 1)
+                        } else {
+                            RemoveAction::StealFromRight(index)
+                        }
                     }
                     // If neither child has capacity, we'll have to merge them.
                     (&Some(_), &Some(_)) => RemoveAction::Merge(index),
@@ -409,17 +411,17 @@ impl<A: BTreeValue> Node<A> {
                 }
             }
             // Key is adjacent to some key in node
-            Err(index) => match self.0.children[index] {
+            Err(index) => match self.children[index] {
                 // No child at location means key isn't in map.
                 None => return Remove::NoChange,
                 // Child at location, but it's at minimum capacity.
                 Some(ref child) if child.too_small() => {
                     let left = if index > 0 {
-                        self.0.children.get(index - 1)
+                        self.children.get(index - 1)
                     } else {
                         None
                     }; // index is usize and can't be negative, best make sure it never is.
-                    match (left, self.0.children.get(index + 1)) {
+                    match (left, self.children.get(index + 1)) {
                         // If it has a left sibling with capacity, steal a key from it.
                         (Some(&Some(ref old_left)), _) if !old_left.too_small() => {
                             RemoveAction::StealFromLeft(index)
@@ -443,29 +445,28 @@ impl<A: BTreeValue> Node<A> {
         };
         match action {
             RemoveAction::DeleteAt(index) => {
-                let mut node = Ref::make_mut(&mut self.0);
-                let pair = node.keys.remove(index);
-                node.children.remove(index);
-                node.count -= 1;
+                let pair = self.keys.remove(index);
+                self.children.remove(index);
+                self.count -= 1;
                 Remove::Removed(pair)
             }
             RemoveAction::PullUp(target_index, pull_to, child_index) => {
-                let mut node = Ref::make_mut(&mut self.0);
-                let mut children = &mut node.children;
+                let mut children = &mut self.children;
                 let mut update = None;
-                let mut pair;
-                if let Some(&mut Some(ref mut child)) = children.get_mut(child_index) {
+                let mut value;
+                if let Some(&mut Some(ref mut child_ref)) = children.get_mut(child_index) {
+                    let child = Ref::make_mut(child_ref);
                     match child.remove_index(Ok(target_index), key) {
                         Remove::NoChange => unreachable!(),
-                        Remove::Removed(pulled_pair) => {
-                            node.keys.push(pulled_pair);
-                            pair = node.keys.swap_remove(pull_to);
-                            node.count -= 1;
+                        Remove::Removed(pulled_value) => {
+                            self.keys.push(pulled_value);
+                            value = self.keys.swap_remove(pull_to);
+                            self.count -= 1;
                         }
-                        Remove::Update(pulled_pair, new_child) => {
-                            node.keys.push(pulled_pair);
-                            pair = node.keys.swap_remove(pull_to);
-                            node.count -= 1;
+                        Remove::Update(pulled_value, new_child) => {
+                            self.keys.push(pulled_value);
+                            value = self.keys.swap_remove(pull_to);
+                            self.count -= 1;
                             update = Some(new_child);
                         }
                     }
@@ -473,40 +474,34 @@ impl<A: BTreeValue> Node<A> {
                     unreachable!()
                 }
                 if let Some(new_child) = update {
-                    children[child_index] = Some(new_child);
+                    children[child_index] = Some(Ref::from(new_child));
                 }
-                Remove::Removed(pair)
+                Remove::Removed(value)
             }
             RemoveAction::Merge(index) => {
-                let mut merged_child = if let (Some(&Some(ref left)), Some(&Some(ref right))) =
-                    (self.0.children.get(index), self.0.children.get(index + 1))
-                {
-                    Node::merge(self.0.keys[index].clone(), left, right)
-                } else {
-                    unreachable!()
+                let left = self.children.remove(index).unwrap();
+                let right = mem::replace(&mut self.children[index], None).unwrap();
+                let value = self.keys.remove(index);
+                let mut merged_child = Node::merge(value, clone_ref(left), clone_ref(right));
+                let (removed, new_child) = match merged_child.remove(key) {
+                    Remove::NoChange => unreachable!(),
+                    Remove::Removed(removed) => (removed, merged_child),
+                    Remove::Update(removed, updated_child) => (removed, updated_child),
                 };
-                let mut node = Ref::make_mut(&mut self.0);
-                let pair = node.keys.remove(index);
-                let new_child = match merged_child.remove(key) {
-                    Remove::NoChange | Remove::Removed(_) => merged_child,
-                    Remove::Update(_, updated_child) => updated_child,
-                };
-                if node.keys.is_empty() {
+                if self.keys.is_empty() {
                     // If we've depleted the root node, the merged child becomes the root.
-                    Remove::Update(pair, new_child)
+                    Remove::Update(removed, new_child)
                 } else {
-                    node.count -= 1;
-                    node.children.remove(index + 1);
-                    node.children[index] = Some(new_child);
-                    Remove::Removed(pair)
+                    self.count -= 1;
+                    self.children[index] = Some(Ref::from(new_child));
+                    Remove::Removed(removed)
                 }
             }
             RemoveAction::StealFromLeft(index) => {
-                let mut node = Ref::make_mut(&mut self.0);
                 let mut update = None;
-                let mut out_pair;
+                let mut out_value;
                 {
-                    let mut children = node
+                    let mut children = self
                         .children
                         .index_mut(index - 1..index + 1)
                         .iter_mut()
@@ -517,12 +512,12 @@ impl<A: BTreeValue> Node<A> {
                                 unreachable!()
                             }
                         });
-                    let mut left = children.next().unwrap();
-                    let mut child = children.next().unwrap();
+                    let mut left = Ref::make_mut(children.next().unwrap());
+                    let mut child = Ref::make_mut(children.next().unwrap());
                     // Prepare the rebalanced node.
                     child.push_min(
-                        left.0.children.last().unwrap().clone(),
-                        node.keys[index - 1].clone(),
+                        left.children.last().unwrap().clone(),
+                        self.keys[index - 1].clone(),
                     );
                     match child.remove(key) {
                         Remove::NoChange => {
@@ -530,34 +525,33 @@ impl<A: BTreeValue> Node<A> {
                             child.pop_min();
                             return Remove::NoChange;
                         }
-                        Remove::Removed(pair) => {
+                        Remove::Removed(value) => {
                             // If we did remove something, we complete the rebalancing.
-                            let (left_pair, _) = left.pop_max();
-                            node.keys[index - 1] = left_pair;
-                            node.count -= 1;
-                            out_pair = pair;
+                            let (left_value, _) = left.pop_max();
+                            self.keys[index - 1] = left_value;
+                            self.count -= 1;
+                            out_value = value;
                         }
-                        Remove::Update(pair, new_child) => {
+                        Remove::Update(value, new_child) => {
                             // If we did remove something, we complete the rebalancing.
-                            let (left_pair, _) = left.pop_max();
-                            node.keys[index - 1] = left_pair;
+                            let (left_value, _) = left.pop_max();
+                            self.keys[index - 1] = left_value;
                             update = Some(new_child);
-                            node.count -= 1;
-                            out_pair = pair;
+                            self.count -= 1;
+                            out_value = value;
                         }
                     }
                 }
                 if let Some(new_child) = update {
-                    node.children[index] = Some(new_child);
+                    self.children[index] = Some(Ref::from(new_child));
                 }
-                Remove::Removed(out_pair)
+                Remove::Removed(out_value)
             }
             RemoveAction::StealFromRight(index) => {
-                let mut node = Ref::make_mut(&mut self.0);
                 let mut update = None;
-                let mut out_pair;
+                let mut out_value;
                 {
-                    let mut children = node.children.index_mut(index..index + 2).iter_mut().map(
+                    let mut children = self.children.index_mut(index..index + 2).iter_mut().map(
                         |n| {
                             if let Some(ref mut o) = *n {
                                 o
@@ -566,103 +560,99 @@ impl<A: BTreeValue> Node<A> {
                             }
                         },
                     );
-                    let mut child = children.next().unwrap();
-                    let mut right = children.next().unwrap();
+                    let mut child = Ref::make_mut(children.next().unwrap());
+                    let mut right = Ref::make_mut(children.next().unwrap());
                     // Prepare the rebalanced node.
-                    child.push_max(right.0.children[0].clone(), node.keys[index].clone());
+                    child.push_max(right.children[0].clone(), self.keys[index].clone());
                     match child.remove(key) {
                         Remove::NoChange => {
                             // Key wasn't there, we need to revert the steal.
                             child.pop_max();
                             return Remove::NoChange;
                         }
-                        Remove::Removed(pair) => {
+                        Remove::Removed(value) => {
                             // If we did remove something, we complete the rebalancing.
-                            let (right_pair, _) = right.pop_min();
-                            node.keys[index] = right_pair;
-                            node.count -= 1;
-                            out_pair = pair;
+                            let (right_value, _) = right.pop_min();
+                            self.keys[index] = right_value;
+                            self.count -= 1;
+                            out_value = value;
                         }
-                        Remove::Update(pair, new_child) => {
+                        Remove::Update(value, new_child) => {
                             // If we did remove something, we complete the rebalancing.
-                            let (right_pair, _) = right.pop_min();
-                            node.keys[index] = right_pair;
+                            let (right_value, _) = right.pop_min();
+                            self.keys[index] = right_value;
                             update = Some(new_child);
-                            node.count -= 1;
-                            out_pair = pair;
+                            self.count -= 1;
+                            out_value = value;
                         }
                     }
                 }
                 if let Some(new_child) = update {
-                    node.children[index] = Some(new_child);
+                    self.children[index] = Some(Ref::from(new_child));
                 }
-                Remove::Removed(out_pair)
+                Remove::Removed(out_value)
             }
             RemoveAction::MergeFirst(index) => {
-                let mut merged = if let (Some(&Some(ref left)), Some(&Some(ref right))) =
-                    (self.0.children.get(index), self.0.children.get(index + 1))
+                if self.keys[index].cmp_keys(key) != Ordering::Equal
+                    && !self.child_contains(index, key)
+                    && !self.child_contains(index + 1, key)
                 {
-                    Node::merge(self.0.keys[index].clone(), left, right)
-                } else {
-                    unreachable!()
-                };
-                let mut node = Ref::make_mut(&mut self.0);
+                    return Remove::NoChange;
+                }
+                let left = self.children.remove(index).unwrap();
+                let right = mem::replace(&mut self.children[index], None).unwrap();
+                let middle = self.keys.remove(index);
+                let mut merged = Node::merge(middle, clone_ref(left), clone_ref(right));
                 let mut update;
-                let mut out_pair;
-                {
-                    match merged.remove(key) {
-                        Remove::NoChange => return Remove::NoChange,
-                        Remove::Removed(pair) => {
-                            if node.keys.len() == 1 {
-                                return Remove::Update(pair, merged);
-                            }
-                            node.count -= 1;
-                            node.keys.remove(index);
-                            node.children.remove(index);
-                            update = Some(merged);
-                            out_pair = pair;
+                let mut out_value;
+                match merged.remove(key) {
+                    Remove::NoChange => {
+                        panic!("nodes::btree::Node::remove: caught an absent key too late while merging");
+                    }
+                    Remove::Removed(value) => {
+                        if self.keys.is_empty() {
+                            return Remove::Update(value, merged);
                         }
-                        Remove::Update(pair, new_child) => {
-                            if node.keys.len() == 1 {
-                                return Remove::Update(pair, new_child);
-                            }
-                            node.count -= 1;
-                            node.keys.remove(index);
-                            node.children.remove(index);
-                            update = Some(new_child);
-                            out_pair = pair;
+                        self.count -= 1;
+                        update = merged;
+                        out_value = value;
+                    }
+                    Remove::Update(value, new_child) => {
+                        if self.keys.is_empty() {
+                            return Remove::Update(value, new_child);
                         }
+                        self.count -= 1;
+                        update = new_child;
+                        out_value = value;
                     }
                 }
-                if let Some(new_child) = update {
-                    node.children[index] = Some(new_child);
-                }
-                Remove::Removed(out_pair)
+                self.children[index] = Some(Ref::from(update));
+                Remove::Removed(out_value)
             }
             RemoveAction::ContinueDown(index) => {
-                let mut node = Ref::make_mut(&mut self.0);
                 let mut update = None;
-                let mut out_pair;
-                if let Some(&mut Some(ref mut child)) = node.children.get_mut(index) {
+                let mut out_value;
+                if let Some(&mut Some(ref mut child_ref)) = self.children.get_mut(index) {
+                    let child = Ref::make_mut(child_ref);
                     match child.remove(key) {
                         Remove::NoChange => return Remove::NoChange,
-                        Remove::Removed(pair) => {
-                            node.count -= 1;
-                            out_pair = pair;
+                        Remove::Removed(value) => {
+                            self.count -= 1;
+                            out_value = value;
                         }
-                        Remove::Update(pair, new_child) => {
+                        Remove::Update(value, new_child) => {
                             update = Some(new_child);
-                            node.count -= 1;
-                            out_pair = pair;
+                            self.count -= 1;
+                            out_value = value;
                         }
                     }
                 } else {
                     unreachable!()
                 }
                 if let Some(new_child) = update {
-                    node.children[index] = Some(new_child);
+                    self.children[index] = Some(Ref::from(new_child));
                 }
-                Remove::Removed(out_pair)
+                Remove::Removed(out_value)
             }
         }
     }
@@ -694,37 +684,37 @@ impl<'a, A: 'a + Clone> Iter<'a, A> {
         }
     }
 
-    fn push_node(stack: &mut Vec<IterItem<'a, A>>, maybe_node: &'a Option<Node<A>>) {
+    fn push_node(stack: &mut Vec<IterItem<'a, A>>, maybe_node: &'a Option<Ref<Node<A>>>) {
         if let Some(ref node) = *maybe_node {
-            stack.push(IterItem::Consider(node))
+            stack.push(IterItem::Consider(&node))
         }
     }
 
     fn push(stack: &mut Vec<IterItem<'a, A>>, node: &'a Node<A>) {
-        for n in 0..node.0.keys.len() {
-            let i = node.0.keys.len() - n;
-            Iter::push_node(stack, &node.0.children[i]);
-            stack.push(IterItem::Yield(&node.0.keys[i - 1]));
+        for n in 0..node.keys.len() {
+            let i = node.keys.len() - n;
+            Iter::push_node(stack, &node.children[i]);
+            stack.push(IterItem::Yield(&node.keys[i - 1]));
         }
-        Iter::push_node(stack, &node.0.children[0]);
+        Iter::push_node(stack, &node.children[0]);
     }
 
     fn push_fwd(&mut self, node: &'a Node<A>) {
         Iter::push(&mut self.fwd_stack, node)
     }
 
-    fn push_node_back(&mut self, maybe_node: &'a Option<Node<A>>) {
+    fn push_node_back(&mut self, maybe_node: &'a Option<Ref<Node<A>>>) {
         if let Some(ref node) = *maybe_node {
-            self.back_stack.push(IterItem::Consider(node))
+            self.back_stack.push(IterItem::Consider(&node))
         }
     }
 
     fn push_back(&mut self, node: &'a Node<A>) {
-        for i in 0..node.0.keys.len() {
-            self.push_node_back(&node.0.children[i]);
-            self.back_stack.push(IterItem::Yield(&node.0.keys[i]));
+        for i in 0..node.keys.len() {
+            self.push_node_back(&node.children[i]);
+            self.back_stack.push(IterItem::Yield(&node.keys[i]));
         }
-        self.push_node_back(&node.0.children[node.0.keys.len()]);
+        self.push_node_back(&node.children[node.keys.len()]);
     }
 }
 
@@ -744,7 +734,7 @@ where
                 Some(IterItem::Consider(node)) => self.push_fwd(&node),
                 Some(IterItem::Yield(value)) => {
                     if let Some(ref last) = self.back_last {
-                        if value.cmp_keys(last) != Ordering::Less {
+                        if value.cmp_values(last) != Ordering::Less {
                             self.fwd_stack.clear();
                             self.back_stack.clear();
                             self.remaining = 0;
@@ -778,7 +768,7 @@ where
                 Some(IterItem::Consider(node)) => self.push_back(&node),
                 Some(IterItem::Yield(value)) => {
                     if let Some(ref last) = self.fwd_last {
-                        if value.cmp_keys(last) != Ordering::Greater {
+                        if value.cmp_values(last) != Ordering::Greater {
                             self.fwd_stack.clear();
                             self.back_stack.clear();
                             self.remaining = 0;
@@ -822,39 +812,38 @@ impl<A: Clone> ConsumingIter<A> {
         }
     }
 
-    fn push_node(stack: &mut Vec<ConsumingIterItem<A>>, maybe_node: &Option<Node<A>>) {
-        if let Some(ref node) = *maybe_node {
-            stack.push(ConsumingIterItem::Consider(node.clone()))
+    fn push_node(stack: &mut Vec<ConsumingIterItem<A>>, maybe_node: Option<Ref<Node<A>>>) {
+        if let Some(node) = maybe_node {
+            stack.push(ConsumingIterItem::Consider(clone_ref(node)))
         }
     }
 
-    fn push(stack: &mut Vec<ConsumingIterItem<A>>, node: &Node<A>) {
-        for n in 0..node.0.keys.len() {
-            let i = node.0.keys.len() - n;
-            ConsumingIter::push_node(stack, &node.0.children[i]);
-            stack.push(ConsumingIterItem::Yield(node.0.keys[i - 1].clone()));
+    fn push(stack: &mut Vec<ConsumingIterItem<A>>, mut node: Node<A>) {
+        for _n in 0..node.keys.len() {
+            ConsumingIter::push_node(stack, node.children.pop().unwrap());
+            stack.push(ConsumingIterItem::Yield(node.keys.pop().unwrap()));
         }
-        ConsumingIter::push_node(stack, &node.0.children[0]);
+        ConsumingIter::push_node(stack, node.children.pop().unwrap());
     }
 
-    fn push_fwd(&mut self, node: &Node<A>) {
+    fn push_fwd(&mut self, node: Node<A>) {
         ConsumingIter::push(&mut self.fwd_stack, node)
     }
 
-    fn push_node_back(&mut self, maybe_node: &Option<Node<A>>) {
-        if let Some(ref node) = *maybe_node {
+    fn push_node_back(&mut self, maybe_node: Option<Ref<Node<A>>>) {
+        if let Some(node) = maybe_node {
             self.back_stack
-                .push(ConsumingIterItem::Consider(node.clone()))
+                .push(ConsumingIterItem::Consider(clone_ref(node)))
         }
     }
 
-    fn push_back(&mut self, node: &Node<A>) {
-        for i in 0..node.0.keys.len() {
-            self.push_node_back(&node.0.children[i]);
+    fn push_back(&mut self, mut node: Node<A>) {
+        for _i in 0..node.keys.len() {
+            self.push_node_back(node.children.remove(0));
             self.back_stack
-                .push(ConsumingIterItem::Yield(node.0.keys[i].clone()));
+                .push(ConsumingIterItem::Yield(node.keys.remove(0)));
         }
-        self.push_node_back(&node.0.children[node.0.keys.len()]);
+        self.push_node_back(node.children.pop().unwrap());
     }
 }
 
@@ -871,10 +860,10 @@ where
                     self.remaining = 0;
                     return None;
                 }
-                Some(ConsumingIterItem::Consider(node)) => self.push_fwd(&node),
+                Some(ConsumingIterItem::Consider(node)) => self.push_fwd(node),
                 Some(ConsumingIterItem::Yield(value)) => {
                     if let Some(ref last) = self.back_last {
-                        if value.cmp_keys(last) != Ordering::Less {
+                        if value.cmp_values(last) != Ordering::Less {
                             self.fwd_stack.clear();
                             self.back_stack.clear();
                             self.remaining = 0;
@@ -905,10 +894,10 @@ where
                     self.remaining = 0;
                     return None;
                 }
-                Some(ConsumingIterItem::Consider(node)) => self.push_back(&node),
+                Some(ConsumingIterItem::Consider(node)) => self.push_back(node),
                 Some(ConsumingIterItem::Yield(value)) => {
                     if let Some(ref last) = self.fwd_last {
-                        if value.cmp_keys(last) != Ordering::Greater {
+                        if value.cmp_values(last) != Ordering::Greater {
                             self.fwd_stack.clear();
                             self.back_stack.clear();
                             self.remaining = 0;
@@ -943,12 +932,12 @@ pub enum DiffItem<'a, A: 'a> {
 impl<'a, A: 'a> DiffIter<'a, A> {
     pub fn new(old: &'a Node<A>, new: &'a Node<A>) -> Self {
         DiffIter {
-            old_stack: if old.0.keys.is_empty() {
+            old_stack: if old.keys.is_empty() {
                 Vec::new()
             } else {
                 vec![IterItem::Consider(old)]
             },
-            new_stack: if new.0.keys.is_empty() {
+            new_stack: if new.keys.is_empty() {
                 Vec::new()
             } else {
                 vec![IterItem::Consider(new)]
@@ -977,20 +966,18 @@ where
                 },
                 (Some(old), Some(new)) => match (old, new) {
                     (IterItem::Consider(old), IterItem::Consider(new)) => {
-                        if !Ref::ptr_eq(&old.0, &new.0) {
-                            match old.0.keys[0].cmp_keys(&new.0.keys[0]) {
-                                Ordering::Less => {
-                                    Iter::push(&mut self.old_stack, &old);
-                                    self.new_stack.push(IterItem::Consider(new));
-                                }
-                                Ordering::Greater => {
-                                    self.old_stack.push(IterItem::Consider(old));
-                                    Iter::push(&mut self.new_stack, &new);
-                                }
-                                Ordering::Equal => {
-                                    Iter::push(&mut self.old_stack, &old);
-                                    Iter::push(&mut self.new_stack, &new);
-                                }
+                        match old.keys[0].cmp_values(&new.keys[0]) {
+                            Ordering::Less => {
+                                Iter::push(&mut self.old_stack, &old);
+                                self.new_stack.push(IterItem::Consider(new));
+                            }
+                            Ordering::Greater => {
+                                self.old_stack.push(IterItem::Consider(old));
+                                Iter::push(&mut self.new_stack, &new);
+                            }
+                            Ordering::Equal => {
+                                Iter::push(&mut self.old_stack, &old);
+                                Iter::push(&mut self.new_stack, &new);
                             }
                         }
                     }
@@ -1002,7 +989,7 @@ where
                         self.old_stack.push(IterItem::Yield(old));
                         Iter::push(&mut self.new_stack, &new);
                     }
-                    (IterItem::Yield(old), IterItem::Yield(new)) => match old.cmp_keys(&new) {
+                    (IterItem::Yield(old), IterItem::Yield(new)) => match old.cmp_values(&new) {
                         Ordering::Less => {
                             self.new_stack.push(IterItem::Yield(new));
                             return Some(DiffItem::Remove(old));

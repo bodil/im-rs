@@ -25,6 +25,7 @@ use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::{FromIterator, Iterator, Sum};
 use std::mem;
 use std::ops::{Add, Index, IndexMut};
+use util::Ref;
 
 use hashmap::HashMap;
 use nodes::btree::{BTreeValue, Insert, Node, Remove};
@@ -81,7 +82,15 @@ impl<K: Ord + Clone, V: Clone> BTreeValue for (K, V) {
         slice.binary_search_by(|value| value.0.cmp(&key.0))
     }
 
-    fn cmp_keys(&self, other: &Self) -> Ordering {
+    fn cmp_keys<BK>(&self, other: &BK) -> Ordering
+    where
+        BK: Ord + ?Sized,
+        Self::Key: Borrow<BK>,
+    {
+        Self::Key::borrow(&self.0).cmp(other)
+    }
+
+    fn cmp_values(&self, other: &Self) -> Ordering {
         self.0.cmp(&other.0)
     }
 }
@@ -100,13 +109,19 @@ impl<K: Ord + Clone, V: Clone> BTreeValue for (K, V) {
 /// [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 /// [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 pub struct OrdMap<K, V> {
-    root: Node<(K, V)>,
+    root: Ref<Node<(K, V)>>,
 }
 
-impl<K, V> OrdMap<K, V> {
+impl<K, V> OrdMap<K, V>
+where
+    K: Ord + Clone,
+    V: Clone,
+{
     /// Construct an empty map.
     pub fn new() -> Self {
-        OrdMap { root: Node::new() }
+        OrdMap {
+            root: Ref::from(Node::new()),
+        }
     }
 
     /// Construct a map with a single mapping.
@@ -126,7 +141,7 @@ impl<K, V> OrdMap<K, V> {
     /// ```
     pub fn singleton(key: K, value: V) -> Self {
         OrdMap {
-            root: Node::singleton((key, value)),
+            root: Ref::from(Node::unit((key, value))),
         }
     }
 
@@ -218,9 +233,7 @@ impl<K, V> OrdMap<K, V> {
     pub fn get_min(&self) -> Option<&(K, V)> {
         self.root.min()
     }
-}
 
-impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// Get an iterator over the key/value pairs of a map.
     pub fn iter(&self) -> Iter<'_, (K, V)> {
         Iter::new(&self.root)
@@ -281,7 +294,8 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
         BK: Ord + ?Sized,
         K: Borrow<BK>,
     {
-        self.root.lookup_mut(key).map(|(_, v)| v)
+        let root = Ref::make_mut(&mut self.root);
+        root.lookup_mut(key).map(|(_, v)| v)
     }
 
     /// Test for the presence of a key in a map.
@@ -341,12 +355,18 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
     /// [insert]: #method.insert
     #[inline]
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        match self.root.insert((key, value)) {
-            Insert::Replaced((_, old_value)) => return Some(old_value),
-            Insert::Added => (),
-            Insert::Update(root) => self.root = root,
-            Insert::Split(left, median, right) => self.root = Node::from_split(left, median, right),
-        }
+        let new_root = {
+            let root = Ref::make_mut(&mut self.root);
+            match root.insert((key, value)) {
+                Insert::Replaced((_, old_value)) => return Some(old_value),
+                Insert::Added => return None,
+                Insert::Update(root) => Ref::from(root),
+                Insert::Split(left, median, right) => {
+                    Ref::from(Node::from_split(left, median, right))
+                }
+            }
+        };
+        self.root = new_root;
         None
     }
 
@@ -386,14 +406,16 @@ impl<K: Ord + Clone, V: Clone> OrdMap<K, V> {
         BK: Ord + ?Sized,
         K: Borrow<BK>,
     {
-        match self.root.remove(k) {
-            Remove::NoChange => None,
-            Remove::Removed(pair) => Some(pair),
-            Remove::Update(pair, root) => {
-                self.root = root;
-                Some(pair)
+        let (new_root, removed_value) = {
+            let root = Ref::make_mut(&mut self.root);
+            match root.remove(k) {
+                Remove::NoChange => return None,
+                Remove::Removed(pair) => return Some(pair),
+                Remove::Update(pair, root) => (Ref::from(root), Some(pair)),
             }
-        }
+        };
+        self.root = new_root;
+        removed_value
     }
 
     /// Construct a new map by inserting a key/value mapping into a
@@ -1196,7 +1218,7 @@ where
     V: Eq + Clone,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.root.ptr_eq(&other.root)
+        Ref::ptr_eq(&self.root, &other.root)
             || (self.len() == other.len() && self.diff(other).next().is_none())
     }
 }
@@ -1238,9 +1260,13 @@ where
     }
 }
 
-impl<K, V> Default for OrdMap<K, V> {
+impl<K, V> Default for OrdMap<K, V>
+where
+    K: Ord + Clone,
+    V: Clone,
+{
     fn default() -> Self {
-        ordmap![]
+        Self::new()
     }
 }
 
@@ -1319,7 +1345,8 @@ where
     V: Clone,
 {
     fn index_mut(&mut self, key: &BK) -> &mut Self::Output {
-        match self.root.lookup_mut(key) {
+        let root = Ref::make_mut(&mut self.root);
+        match root.lookup_mut(key) {
             None => panic!("OrdMap::index: invalid key"),
             Some(&mut (_, ref mut value)) => value,
         }
@@ -1955,7 +1982,7 @@ mod test {
         }
 
         #[test]
-        fn insert_and_length(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+        fn insert_and_length(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..1000)) {
             let mut map: OrdMap<i16, i16> = OrdMap::new();
             for (k, v) in m.iter() {
                 map = map.update(*k, *v)
@@ -1964,21 +1991,21 @@ mod test {
         }
 
         #[test]
-        fn from_iterator(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+        fn from_iterator(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..1000)) {
             let map: OrdMap<i16, i16> =
                 FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             assert_eq!(m.len(), map.len());
         }
 
         #[test]
-        fn iterate_over(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+        fn iterate_over(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..1000)) {
             let map: OrdMap<i16, i16> =
                 FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             assert_eq!(m.len(), map.iter().count());
         }
 
         #[test]
-        fn equality(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..128)) {
+        fn equality(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..1000)) {
             let map1: OrdMap<i16, i16> =
                 FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             let map2: OrdMap<i16, i16> =
@@ -1987,7 +2014,7 @@ mod test {
         }
 
         #[test]
-        fn lookup(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+        fn lookup(ref m in ord_map(i16::ANY, i16::ANY, 0..1000)) {
             let map: OrdMap<i16, i16> =
                 FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             for (k, v) in m {
@@ -1996,7 +2023,7 @@ mod test {
         }
 
         #[test]
-        fn remove(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+        fn remove(ref m in ord_map(i16::ANY, i16::ANY, 0..1000)) {
             let mut map: OrdMap<i16, i16> =
                 FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
             for k in m.keys() {
@@ -2009,7 +2036,7 @@ mod test {
         }
 
         #[test]
-        fn insert_mut(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
+        fn insert_mut(ref m in ord_map(i16::ANY, i16::ANY, 0..1000)) {
             let mut mut_map = OrdMap::new();
             let mut map = OrdMap::new();
             for (k, v) in m.iter() {
@@ -2020,21 +2047,32 @@ mod test {
         }
 
         #[test]
-        fn remove_mut(ref m in collection::hash_map(i16::ANY, i16::ANY, 0..64)) {
-            let mut map: OrdMap<i16, i16> =
-                FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
-            for k in m.keys() {
-                let l = map.len();
-                assert_eq!(m.get(k).cloned(), map.get(k).cloned());
-                map.remove(k);
-                assert_eq!(None, map.get(k));
-                assert_eq!(l - 1, map.len());
+        fn remove_mut(ref orig in ord_map(i16::ANY, i16::ANY, 0..1000)) {
+            let mut map = orig.clone();
+            for key in orig.keys() {
+                let len = map.len();
+                assert_eq!(orig.get(key), map.get(key));
+                assert_eq!(orig.get(key).cloned(), map.remove(key));
+                assert_eq!(None, map.get(key));
+                assert_eq!(len - 1, map.len());
+            }
+        }
+
+        #[test]
+        fn remove_alien(ref orig in collection::hash_map(i16::ANY, i16::ANY, 0..1000)) {
+            let mut map = OrdMap::<i16, i16>::from(orig.clone());
+            for key in orig.keys() {
+                let len = map.len();
+                assert_eq!(orig.get(key), map.get(key));
+                assert_eq!(orig.get(key).cloned(), map.remove(key));
+                assert_eq!(None, map.get(key));
+                assert_eq!(len - 1, map.len());
             }
         }
 
         #[test]
         fn delete_and_reinsert(
-            ref input in collection::hash_map(i16::ANY, i16::ANY, 1..100),
+            ref input in collection::hash_map(i16::ANY, i16::ANY, 1..1000),
             index_rand in usize::ANY
         ) {
             let index = *input.keys().nth(index_rand % input.len()).unwrap();
@@ -2049,7 +2087,7 @@ mod test {
         }
 
         #[test]
-        fn exact_size_iterator(ref m in ord_map(i16::ANY, i16::ANY, 1..100)) {
+        fn exact_size_iterator(ref m in ord_map(i16::ANY, i16::ANY, 1..1000)) {
             let mut should_be = m.len();
             let mut it = m.iter();
             loop {
