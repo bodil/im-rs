@@ -11,26 +11,28 @@ use util::swap_indices as swap;
 //    http://www.cs.princeton.edu/~rs/talks/QuicksortIsOptimal.pdf
 // Should be O(n) to O(n log n)
 #[cfg_attr(feature = "cargo-clippy", allow(many_single_char_names))]
-pub fn quicksort<V, F>(vector: &mut V, l: usize, r: usize, cmp: &F)
+pub fn quicksort<V, F>(vector: &mut V, left: usize, right: usize, cmp: &F)
 where
     V: IndexMut<usize>,
     V::Output: Sized,
     F: Fn(&V::Output, &V::Output) -> Ordering,
 {
-    if r <= l {
+    if right <= left {
         return;
     }
 
+    let l = left as isize;
+    let r = right as isize;
     let mut i = l;
     let mut j = r;
-    let mut p = i;
-    let mut q = j;
+    let mut p = l - 1;
+    let mut q = r;
     loop {
-        while cmp(&vector[i], &vector[r]) == Ordering::Less {
-            i += 1
+        while cmp(&vector[i as usize], &vector[r as usize]) == Ordering::Less {
+            i += 1;
         }
         j -= 1;
-        while cmp(&vector[r], &vector[j]) == Ordering::Less {
+        while cmp(&vector[r as usize], &vector[j as usize]) == Ordering::Less {
             if j == l {
                 break;
             }
@@ -39,38 +41,37 @@ where
         if i >= j {
             break;
         }
-        swap(vector, i, j);
-        if cmp(&vector[i], &vector[r]) == Ordering::Equal {
+        swap(vector, i as usize, j as usize);
+        if cmp(&vector[i as usize], &vector[r as usize]) == Ordering::Equal {
             p += 1;
-            swap(vector, p, i);
+            swap(vector, p as usize, i as usize);
         }
-        if cmp(&vector[r], &vector[j]) == Ordering::Equal {
+        if cmp(&vector[r as usize], &vector[j as usize]) == Ordering::Equal {
             q -= 1;
-            swap(vector, j, q);
+            swap(vector, j as usize, q as usize);
         }
-        i += 1;
     }
-    swap(vector, i, r);
+    swap(vector, i as usize, r as usize);
 
-    let mut jp: isize = i as isize - 1;
-    let mut k = l;
+    j = i - 1;
     i += 1;
+    let mut k = l;
     while k < p {
-        swap(vector, k, jp as usize);
-        jp -= 1;
+        swap(vector, k as usize, j as usize);
+        j -= 1;
         k += 1;
     }
     k = r - 1;
     while k > q {
-        swap(vector, i, k);
+        swap(vector, i as usize, k as usize);
         k -= 1;
         i += 1;
     }
 
-    if jp >= 0 {
-        quicksort(vector, l, jp as usize, cmp);
+    if j >= 0 {
+        quicksort(vector, left, j as usize, cmp);
     }
-    quicksort(vector, i, r, cmp);
+    quicksort(vector, i as usize, right, cmp);
 }
 
 #[cfg(test)]
