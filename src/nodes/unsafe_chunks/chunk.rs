@@ -8,20 +8,18 @@ use std::mem::{self, ManuallyDrop};
 use std::ops::{Index, IndexMut};
 use std::ptr;
 
-type ChunkIndex = u8;
 pub const CHUNK_SIZE: usize = 64;
-const CHUNK_ISIZE: ChunkIndex = CHUNK_SIZE as ChunkIndex;
 
 pub struct Chunk<A> {
-    left: ChunkIndex,
-    right: ChunkIndex,
+    left: usize,
+    right: usize,
     values: ManuallyDrop<[A; CHUNK_SIZE]>,
 }
 
 impl<A> Drop for Chunk<A> {
     fn drop(&mut self) {
         if mem::needs_drop::<A>() {
-            for i in (self.left as usize)..(self.right as usize) {
+            for i in self.left..self.right {
                 unsafe { Chunk::force_drop(i, self) }
             }
         }
@@ -34,7 +32,7 @@ impl<A: Clone> Clone for Chunk<A> {
         out.left = self.left;
         out.right = self.right;
         for index in self.left..self.right {
-            unsafe { Chunk::force_write(index, self.values[(index) as usize].clone(), &mut out) }
+            unsafe { Chunk::force_write(index, self.values[index].clone(), &mut out) }
         }
         out
     }
@@ -76,7 +74,7 @@ impl<A> Chunk<A> {
 
     #[inline]
     pub fn len(&self) -> usize {
-        (self.right - self.left) as usize
+        self.right - self.left
     }
 
     #[inline]
@@ -86,19 +84,19 @@ impl<A> Chunk<A> {
 
     #[inline]
     pub fn is_full(&self) -> bool {
-        self.left == 0 && self.right == CHUNK_ISIZE
+        self.left == 0 && self.right == CHUNK_SIZE
     }
 
     /// Copy the value at an index, discarding ownership of the copied value
     #[inline]
-    unsafe fn force_read(index: ChunkIndex, chunk: &Self) -> A {
-        ptr::read(&chunk.values[index as usize])
+    unsafe fn force_read(index: usize, chunk: &Self) -> A {
+        ptr::read(&chunk.values[index])
     }
 
     /// Write a value at an index without trying to drop what's already there
     #[inline]
-    unsafe fn force_write(index: ChunkIndex, value: A, chunk: &mut Self) {
-        ptr::write(&mut chunk.values[index as usize], value)
+    unsafe fn force_write(index: usize, value: A, chunk: &mut Self) {
+        ptr::write(&mut chunk.values[index], value)
     }
 
     /// Drop the value at an index
@@ -109,31 +107,17 @@ impl<A> Chunk<A> {
 
     /// Copy a range within a chunk
     #[inline]
-    unsafe fn force_copy(from: ChunkIndex, to: ChunkIndex, count: usize, chunk: &mut Self) {
+    unsafe fn force_copy(from: usize, to: usize, count: usize, chunk: &mut Self) {
         if count > 0 {
-            ptr::copy(
-                &chunk.values[from as usize],
-                &mut chunk.values[to as usize],
-                count,
-            )
+            ptr::copy(&chunk.values[from], &mut chunk.values[to], count)
         }
     }
 
     /// Copy a range between chunks
     #[inline]
-    unsafe fn force_copy_to(
-        from: ChunkIndex,
-        to: ChunkIndex,
-        count: usize,
-        chunk: &Self,
-        other: &mut Self,
-    ) {
+    unsafe fn force_copy_to(from: usize, to: usize, count: usize, chunk: &Self, other: &mut Self) {
         if count > 0 {
-            ptr::copy_nonoverlapping(
-                &chunk.values[from as usize],
-                &mut other.values[to as usize],
-                count,
-            )
+            ptr::copy_nonoverlapping(&chunk.values[from], &mut other.values[to], count)
         }
     }
 
@@ -142,12 +126,12 @@ impl<A> Chunk<A> {
             panic!("Chunk::push_front: can't push to full chunk");
         }
         if self.is_empty() {
-            self.left = CHUNK_ISIZE;
-            self.right = CHUNK_ISIZE;
+            self.left = CHUNK_SIZE;
+            self.right = CHUNK_SIZE;
         } else if self.left == 0 {
-            self.left = CHUNK_ISIZE - self.right;
-            unsafe { Chunk::force_copy(0, self.left, self.right as usize, self) };
-            self.right = CHUNK_ISIZE;
+            self.left = CHUNK_SIZE - self.right;
+            unsafe { Chunk::force_copy(0, self.left, self.right, self) };
+            self.right = CHUNK_SIZE;
         }
         self.left -= 1;
         unsafe { Chunk::force_write(self.left, value, self) }
@@ -160,9 +144,9 @@ impl<A> Chunk<A> {
         if self.is_empty() {
             self.left = 0;
             self.right = 0;
-        } else if self.right == CHUNK_ISIZE {
+        } else if self.right == CHUNK_SIZE {
             unsafe { Chunk::force_copy(self.left, 0, self.len(), self) };
-            self.right = CHUNK_ISIZE - self.left;
+            self.right = CHUNK_SIZE - self.left;
             self.left = 0;
         }
         unsafe { Chunk::force_write(self.right, value, self) }
@@ -194,11 +178,11 @@ impl<A> Chunk<A> {
             if index >= self.len() {
                 panic!("Chunk::drop_left: index out of bounds");
             }
-            let start = self.left as usize;
+            let start = self.left;
             for i in start..(start + index) {
                 unsafe { Chunk::force_drop(i, self) }
             }
-            self.left += index as ChunkIndex;
+            self.left += index;
         }
     }
 
@@ -210,11 +194,11 @@ impl<A> Chunk<A> {
         if index == self.len() {
             return;
         }
-        let start = (self.left as usize) + index;
-        for i in start..(self.right as usize) {
+        let start = self.left + index;
+        for i in start..self.right {
             unsafe { Chunk::force_drop(i, self) }
         }
-        self.right = start as ChunkIndex;
+        self.right = start;
     }
 
     /// Split a chunk into two, the original chunk containing
@@ -228,26 +212,26 @@ impl<A> Chunk<A> {
             return Self::new();
         }
         let mut right_chunk = Self::new();
-        let start = self.left + (index as ChunkIndex);
+        let start = self.left + index;
         let len = self.right - start;
-        unsafe { Chunk::force_copy_to(start, 0, len as usize, self, &mut right_chunk) };
+        unsafe { Chunk::force_copy_to(start, 0, len, self, &mut right_chunk) };
         right_chunk.right = len;
-        self.right = start as ChunkIndex;
+        self.right = start;
         right_chunk
     }
 
     pub fn extend(&mut self, other: &mut Self) {
-        let self_len = self.len() as ChunkIndex;
-        let other_len = other.len() as ChunkIndex;
-        if self_len + other_len > CHUNK_ISIZE {
+        let self_len = self.len();
+        let other_len = other.len();
+        if self_len + other_len > CHUNK_SIZE {
             panic!("Chunk::extend: chunk size overflow");
         }
-        if self.left > 0 && self.right + other_len > CHUNK_ISIZE {
-            unsafe { Chunk::force_copy(self.left, 0, self_len as usize, self) };
+        if self.left > 0 && self.right + other_len > CHUNK_SIZE {
+            unsafe { Chunk::force_copy(self.left, 0, self_len, self) };
             self.right -= self.left;
             self.left = 0;
         }
-        unsafe { Chunk::force_copy_to(other.left, self.right, other_len as usize, other, self) };
+        unsafe { Chunk::force_copy_to(other.left, self.right, other_len, other, self) };
         self.right += other_len;
         other.left = 0;
         other.right = 0;
@@ -257,13 +241,13 @@ impl<A> Chunk<A> {
         if self.is_full() {
             panic!("Chunk::insert: chunk is full");
         }
-        let real_index = index as ChunkIndex + self.left;
+        let real_index = index + self.left;
         if real_index < self.left || real_index > self.right {
             panic!("Chunk::insert: index out of bounds");
         }
         let left_size = index;
-        let right_size = (self.right - real_index) as usize;
-        if self.right == CHUNK_ISIZE || (self.left > 0 && left_size < right_size) {
+        let right_size = self.right - real_index;
+        if self.right == CHUNK_SIZE || (self.left > 0 && left_size < right_size) {
             unsafe {
                 Chunk::force_copy(self.left, self.left - 1, left_size, self);
                 Chunk::force_write(real_index - 1, value, self);
@@ -279,13 +263,13 @@ impl<A> Chunk<A> {
     }
 
     pub fn remove(&mut self, index: usize) {
-        let real_index = index as ChunkIndex + self.left;
+        let real_index = index + self.left;
         if real_index < self.left || real_index >= self.right {
             panic!("Chunk::remove: index out of bounds");
         }
-        unsafe { Chunk::force_drop(real_index as usize, self) };
+        unsafe { Chunk::force_drop(real_index, self) };
         let left_size = index;
-        let right_size = (self.right - real_index - 1) as usize;
+        let right_size = self.right - real_index - 1;
         if left_size < right_size {
             unsafe { Chunk::force_copy(self.left, self.left + 1, left_size, self) };
             self.left += 1;
@@ -297,8 +281,8 @@ impl<A> Chunk<A> {
 
     #[inline]
     pub fn get(&self, index: usize) -> Option<&A> {
-        let real_index = self.left as usize + index;
-        if real_index >= self.right as usize {
+        let real_index = self.left + index;
+        if real_index >= self.right {
             None
         } else {
             Some(&self.values[real_index])
@@ -307,8 +291,8 @@ impl<A> Chunk<A> {
 
     #[inline]
     pub fn get_mut(&mut self, index: usize) -> Option<&mut A> {
-        let real_index = self.left as usize + index;
-        if real_index >= self.right as usize {
+        let real_index = self.left + index;
+        if real_index >= self.right {
             None
         } else {
             Some(&mut self.values[real_index])
