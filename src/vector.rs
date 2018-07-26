@@ -776,7 +776,7 @@ impl<A: Clone> Vector<A> {
     /// # }
     /// ```
     pub fn split_off(&mut self, index: usize) -> Self {
-        assert!(index < self.len());
+        assert!(index <= self.len());
 
         let mut local_index = index;
 
@@ -1832,7 +1832,7 @@ mod test {
 
         #[test]
         fn split(ref vec in vec(i32::ANY, 1..2000), split_pos in usize::ANY) {
-            let split_index = split_pos % vec.len();
+            let split_index = split_pos % (vec.len() + 1);
             let mut left = Vector::from_iter(vec.iter().cloned());
             let right = left.split_off(split_index);
             assert_eq!(left.len(), split_index);
