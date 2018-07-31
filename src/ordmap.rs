@@ -602,9 +602,9 @@ where
     ///
     /// Time: O(n log n)
     #[inline]
-    pub fn union_with<F>(self, other: Self, f: F) -> Self
+    pub fn union_with<F>(self, other: Self, mut f: F) -> Self
     where
-        F: Fn(V, V) -> V,
+        F: FnMut(V, V) -> V,
     {
         self.union_with_key(other, |_, v1, v2| f(v1, v2))
     }
@@ -635,9 +635,9 @@ where
     /// ));
     /// # }
     /// ```
-    pub fn union_with_key<F>(mut self, other: Self, f: F) -> Self
+    pub fn union_with_key<F>(mut self, other: Self, mut f: F) -> Self
     where
-        F: Fn(&K, V, V) -> V,
+        F: FnMut(&K, V, V) -> V,
     {
         for (key, right_value) in other {
             match self.remove(&key) {
@@ -743,9 +743,9 @@ where
     ///
     /// Time: O(n log n)
     #[inline]
-    pub fn difference_with<F>(self, other: Self, f: F) -> Self
+    pub fn difference_with<F>(self, other: Self, mut f: F) -> Self
     where
-        F: Fn(V, V) -> Option<V>,
+        F: FnMut(V, V) -> Option<V>,
     {
         self.difference_with_key(other, |_, a, b| f(a, b))
     }
@@ -771,9 +771,9 @@ where
     /// ));
     /// # }
     /// ```
-    pub fn difference_with_key<F>(mut self, other: Self, f: F) -> Self
+    pub fn difference_with_key<F>(mut self, other: Self, mut f: F) -> Self
     where
-        F: Fn(&K, V, V) -> Option<V>,
+        F: FnMut(&K, V, V) -> Option<V>,
     {
         let mut out = Self::default();
         for (key, right_value) in other {
@@ -817,11 +817,11 @@ where
     ///
     /// Time: O(n log n)
     #[inline]
-    pub fn intersection_with<B, C, F>(self, other: OrdMap<K, B>, f: F) -> OrdMap<K, C>
+    pub fn intersection_with<B, C, F>(self, other: OrdMap<K, B>, mut f: F) -> OrdMap<K, C>
     where
         B: Clone,
         C: Clone,
-        F: Fn(V, B) -> C,
+        F: FnMut(V, B) -> C,
     {
         self.intersection_with_key(other, |_, v1, v2| f(v1, v2))
     }
@@ -847,11 +847,11 @@ where
     /// ));
     /// # }
     /// ```
-    pub fn intersection_with_key<B, C, F>(mut self, other: OrdMap<K, B>, f: F) -> OrdMap<K, C>
+    pub fn intersection_with_key<B, C, F>(mut self, other: OrdMap<K, B>, mut f: F) -> OrdMap<K, C>
     where
         B: Clone,
         C: Clone,
-        F: Fn(&K, V, B) -> C,
+        F: FnMut(&K, V, B) -> C,
     {
         let mut out = OrdMap::<K, C>::default();
         for (key, right_value) in other {
@@ -873,10 +873,10 @@ where
     /// Use the provided function to decide whether values are equal.
     ///
     /// Time: O(n log n)
-    pub fn is_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
+    pub fn is_submap_by<B, RM, F>(&self, other: RM, mut cmp: F) -> bool
     where
         B: Clone,
-        F: Fn(&V, &B) -> bool,
+        F: FnMut(&V, &B) -> bool,
         RM: Borrow<OrdMap<K, B>>,
     {
         self.iter()
@@ -894,7 +894,7 @@ where
     pub fn is_proper_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
     where
         B: Clone,
-        F: Fn(&V, &B) -> bool,
+        F: FnMut(&V, &B) -> bool,
         RM: Borrow<OrdMap<K, B>>,
     {
         self.len() != other.borrow().len() && self.is_submap_by(other, cmp)
