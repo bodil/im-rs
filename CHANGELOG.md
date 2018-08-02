@@ -9,6 +9,8 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- As `std::ops::RangeBounds` is now stabilised in Rust 1.28, the `Vector::slice`
+  method is now unconditionally available on the stable channel.
 - Union/difference/intersection/is_submap methods on `HashMap` and `OrdMap` that
   take functions now take `FnMut` instead of `Fn`. This should not affect any
   existing code. (#34)

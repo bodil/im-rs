@@ -48,7 +48,6 @@ use std::iter::{Chain, FromIterator, FusedIterator};
 use std::mem::{replace, swap};
 use std::ops::{Add, Index, IndexMut};
 
-#[cfg(has_range_bound)]
 use std::ops::{Bound, RangeBounds};
 
 use nodes::chunk::{
@@ -948,7 +947,6 @@ impl<A: Clone> Vector<A> {
     /// vector.
     ///
     /// Time: O(log n)
-    #[cfg(has_range_bound)]
     pub fn slice<R>(&mut self, range: R) -> Self
     where
         R: RangeBounds<usize>,
@@ -1327,7 +1325,8 @@ impl<A: Clone + Eq> PartialEq for Vector<A> {
             (left.is_empty() && right.is_empty()) || Ref::ptr_eq(left, right)
         }
 
-        if cmp_chunk(&self.outer_f, &other.outer_f) && cmp_chunk(&self.inner_f, &other.inner_f)
+        if cmp_chunk(&self.outer_f, &other.outer_f)
+            && cmp_chunk(&self.inner_f, &other.inner_f)
             && ((self.middle.is_empty() && other.middle.is_empty())
                 || Ref::ptr_eq(&self.middle, &other.middle))
             && cmp_chunk(&self.inner_b, &other.inner_b)
