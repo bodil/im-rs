@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic
 Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Union/difference/intersection/is_submap methods on `HashMap` and `OrdMap` that
+  take functions now take `FnMut` instead of `Fn`. This should not affect any
+  existing code. (#34)
+
+### Fixed
+- `Vector::split_off` can now take an index equal to the length of the vector,
+   yielding an empty vector as the split result. (#33)
+
 ## [11.0.1] - 2018-07-23
 
 ### Fixed
