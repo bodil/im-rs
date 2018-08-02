@@ -129,6 +129,7 @@ where
     A: Ord + Clone,
 {
     /// Construct an empty set.
+    #[must_use]
     pub fn new() -> Self {
         OrdSet {
             root: Ref::from(Node::new()),
@@ -147,6 +148,7 @@ where
     /// assert!(set.contains(&123));
     /// # }
     /// ```
+    #[must_use]
     pub fn singleton(a: A) -> Self {
         OrdSet {
             root: Ref::from(Node::unit(Value(a))),
@@ -171,6 +173,8 @@ where
     /// );
     /// # }
     /// ```
+    #[inline]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.root.len() == 0
     }
@@ -188,6 +192,8 @@ where
     /// assert_eq!(3, ordset![1, 2, 3].len());
     /// # }
     /// ```
+    #[inline]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.root.len()
     }
@@ -195,6 +201,7 @@ where
     /// Get the smallest value in a set.
     ///
     /// If the set is empty, returns `None`.
+    #[must_use]
     pub fn get_min(&self) -> Option<&A> {
         self.root.min().map(Deref::deref)
     }
@@ -202,11 +209,13 @@ where
     /// Get the largest value in a set.
     ///
     /// If the set is empty, returns `None`.
+    #[must_use]
     pub fn get_max(&self) -> Option<&A> {
         self.root.max().map(Deref::deref)
     }
 
     // Create an iterator over the contents of the set.
+    #[must_use]
     pub fn iter(&self) -> Iter<A> {
         Iter {
             it: NodeIter::new(&self.root),
@@ -224,6 +233,7 @@ where
     /// Time: O(n) (where n is the number of unique elements across
     /// the two sets, minus the number of elements belonging to nodes
     /// shared between them)
+    #[must_use]
     pub fn diff<'a>(&'a self, other: &'a Self) -> DiffIter<A> {
         DiffIter {
             it: NodeDiffIter::new(&self.root, &other.root),
@@ -233,6 +243,8 @@ where
     /// Test if a value is part of a set.
     ///
     /// Time: O(log n)
+    #[inline]
+    #[must_use]
     pub fn contains<BA>(&self, a: &BA) -> bool
     where
         BA: Ord + ?Sized,
@@ -342,6 +354,7 @@ where
     /// );
     /// # }
     /// ```
+    #[must_use]
     pub fn update(&self, a: A) -> Self {
         let mut out = self.clone();
         out.insert(a);
@@ -352,6 +365,7 @@ where
     /// the set.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn without<BA>(&self, a: &BA) -> Self
     where
         BA: Ord + ?Sized,
@@ -366,6 +380,7 @@ where
     /// well as the updated set.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn without_min(&self) -> (Option<A>, Self) {
         match self.get_min() {
             Some(v) => (Some(v.clone()), self.without(&v)),
@@ -377,6 +392,7 @@ where
     /// well as the updated set.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn without_max(&self) -> (Option<A>, Self) {
         match self.get_max() {
             Some(v) => (Some(v.clone()), self.without(&v)),
@@ -400,6 +416,7 @@ where
     /// assert_eq!(expected, set1.union(set2));
     /// # }
     /// ```
+    #[must_use]
     pub fn union(mut self, other: Self) -> Self {
         for value in other {
             self.insert(value);
@@ -410,6 +427,7 @@ where
     /// Construct the union of multiple sets.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn unions<I>(i: I) -> Self
     where
         I: IntoIterator<Item = Self>,
@@ -433,6 +451,7 @@ where
     /// assert_eq!(expected, set1.difference(set2));
     /// # }
     /// ```
+    #[must_use]
     pub fn difference(mut self, other: Self) -> Self {
         for value in other {
             if self.remove(&value).is_none() {
@@ -458,6 +477,7 @@ where
     /// assert_eq!(expected, set1.intersection(set2));
     /// # }
     /// ```
+    #[must_use]
     pub fn intersection(self, other: Self) -> Self {
         let mut out = Self::default();
         for value in other {
@@ -472,6 +492,7 @@ where
     /// all values in our set must also be in the other set.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn is_subset<RS>(&self, other: RS) -> bool
     where
         RS: Borrow<Self>,
@@ -485,6 +506,7 @@ where
     /// proper subset must also be smaller than the other set.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn is_proper_subset<RS>(&self, other: RS) -> bool
     where
         RS: Borrow<Self>,
@@ -499,6 +521,7 @@ where
     /// The `split` value itself is discarded.
     ///
     /// Time: O(n)
+    #[must_use]
     pub fn split<BA>(self, split: &BA) -> (Self, Self)
     where
         BA: Ord + ?Sized,
@@ -517,6 +540,7 @@ where
     /// otherwise.
     ///
     /// Time: O(n)
+    #[must_use]
     pub fn split_member<BA>(self, split: &BA) -> (Self, bool, Self)
     where
         BA: Ord + ?Sized,
@@ -545,6 +569,7 @@ where
     /// set.
     ///
     /// Time: O(n)
+    #[must_use]
     pub fn take(&self, n: usize) -> Self {
         self.iter().take(n).cloned().collect()
     }
@@ -553,6 +578,7 @@ where
     /// given set.
     ///
     /// Time: O(n)
+    #[must_use]
     pub fn skip(&self, n: usize) -> Self {
         self.iter().skip(n).cloned().collect()
     }
@@ -885,8 +911,7 @@ pub mod proptest {
             .prop_map(OrdSet::from)
             .prop_filter("OrdSet minimum size".to_owned(), move |s| {
                 s.len() >= size.start
-            })
-            .boxed()
+            }).boxed()
     }
 }
 

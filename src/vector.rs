@@ -145,6 +145,7 @@ pub struct Vector<A> {
 
 impl<A: Clone> Vector<A> {
     /// Construct an empty vector.
+    #[must_use]
     pub fn new() -> Self {
         Vector {
             length: 0,
@@ -158,6 +159,7 @@ impl<A: Clone> Vector<A> {
     }
 
     /// Construct a vector with a single value.
+    #[must_use]
     pub fn singleton(a: A) -> Self {
         let mut out = Self::new();
         out.push_back(a);
@@ -177,6 +179,7 @@ impl<A: Clone> Vector<A> {
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.length
     }
@@ -197,6 +200,7 @@ impl<A: Clone> Vector<A> {
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -205,6 +209,7 @@ impl<A: Clone> Vector<A> {
     ///
     /// Time: O(1)
     #[inline]
+    #[must_use]
     pub fn iter(&self) -> Iter<A> {
         Iter::new(self)
     }
@@ -213,6 +218,7 @@ impl<A: Clone> Vector<A> {
     ///
     /// Time: O(1)
     #[inline]
+    #[must_use]
     pub fn iter_mut(&mut self) -> IterMut<A> {
         IterMut::new(self)
     }
@@ -234,6 +240,7 @@ impl<A: Clone> Vector<A> {
     /// assert_eq!(None, vec.get(5));
     /// # }
     /// ```
+    #[must_use]
     pub fn get(&self, index: usize) -> Option<&A> {
         if index >= self.len() {
             return None;
@@ -286,6 +293,7 @@ impl<A: Clone> Vector<A> {
     /// assert_eq!(vector!["Joe", "Mike", "Bjarne"], vec);
     /// # }
     /// ```
+    #[must_use]
     pub fn get_mut(&mut self, index: usize) -> Option<&mut A> {
         if index >= self.len() {
             return None;
@@ -327,6 +335,7 @@ impl<A: Clone> Vector<A> {
     ///
     /// Time: O(log n)
     #[inline]
+    #[must_use]
     pub fn front(&self) -> Option<&A> {
         self.get(0)
     }
@@ -337,6 +346,7 @@ impl<A: Clone> Vector<A> {
     ///
     /// Time: O(log n)
     #[inline]
+    #[must_use]
     pub fn front_mut(&mut self) -> Option<&mut A> {
         self.get_mut(0)
     }
@@ -351,6 +361,7 @@ impl<A: Clone> Vector<A> {
     ///
     /// [front]: #method.front
     #[inline]
+    #[must_use]
     pub fn head(&self) -> Option<&A> {
         self.get(0)
     }
@@ -360,6 +371,7 @@ impl<A: Clone> Vector<A> {
     /// If the vector is empty, `None` is returned.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn back(&self) -> Option<&A> {
         if self.is_empty() {
             None
@@ -373,6 +385,7 @@ impl<A: Clone> Vector<A> {
     /// If the vector is empty, `None` is returned.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn back_mut(&mut self) -> Option<&mut A> {
         if self.is_empty() {
             None
@@ -392,6 +405,7 @@ impl<A: Clone> Vector<A> {
     ///
     /// [back]: #method.back
     #[inline]
+    #[must_use]
     pub fn last(&self) -> Option<&A> {
         self.back()
     }
@@ -415,6 +429,7 @@ impl<A: Clone> Vector<A> {
     /// assert_eq!(None, vec.index_of(&31337));
     /// # }
     /// ```
+    #[must_use]
     pub fn index_of(&self, value: &A) -> Option<usize>
     where
         A: PartialEq,
@@ -447,6 +462,7 @@ impl<A: Clone> Vector<A> {
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn contains(&self, value: &A) -> bool
     where
         A: PartialEq,
@@ -470,6 +486,7 @@ impl<A: Clone> Vector<A> {
     /// assert_eq!(vector![1, 5, 3], vec.update(1, 5));
     /// # }
     /// ```
+    #[must_use]
     pub fn update(&self, index: usize, value: A) -> Self {
         let mut out = self.clone();
         out[index] = value;
@@ -894,6 +911,7 @@ impl<A: Clone> Vector<A> {
     /// start of the current vector.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn skip(&self, count: usize) -> Self {
         // FIXME can be made more efficient by dropping the unwanted side without constructing it
         self.clone().split_off(count)
@@ -903,6 +921,7 @@ impl<A: Clone> Vector<A> {
     /// current vector.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn take(&self, count: usize) -> Self {
         // FIXME can be made more efficient by dropping the unwanted side without constructing it
         let mut left = self.clone();
@@ -922,7 +941,6 @@ impl<A: Clone> Vector<A> {
         self.split_off(len);
     }
 
-    #[cfg(has_range_bound)]
     /// Extract a slice from a vector.
     ///
     /// Remove the elements from `start_index` until `end_index` in
@@ -930,6 +948,7 @@ impl<A: Clone> Vector<A> {
     /// vector.
     ///
     /// Time: O(log n)
+    #[cfg(has_range_bound)]
     pub fn slice<R>(&mut self, range: R) -> Self
     where
         R: RangeBounds<usize>,
@@ -1057,6 +1076,7 @@ impl<A: Clone> Vector<A> {
     /// Time: O(log n)
     ///
     /// [sort_by]: #method.sort_by
+    #[must_use]
     pub fn binary_search_by<F>(&self, mut f: F) -> Result<usize, usize>
     where
         F: FnMut(&A) -> Ordering,
@@ -1090,6 +1110,7 @@ impl<A: Clone> Vector<A> {
     /// maintain sorted order.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn binary_search(&self, value: &A) -> Result<usize, usize>
     where
         A: Ord,
@@ -1111,6 +1132,7 @@ impl<A: Clone> Vector<A> {
     /// Time: O(log n)
     ///
     /// [sort_by_key]: #method.sort_by_key
+    #[must_use]
     pub fn binary_search_by_key<B, F>(&self, b: &B, mut f: F) -> Result<usize, usize>
     where
         F: FnMut(&A) -> B,

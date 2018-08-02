@@ -45,7 +45,7 @@ fn ordmap_lookup_n(size: usize, b: &mut Bencher) {
     let m: OrdMap<i64, i64> = OrdMap::from_iter(keys.into_iter().map(|i| (i, 1)));
     b.iter(|| {
         for i in &order {
-            m.get(i);
+            let _ = m.get(i);
         }
     })
 }

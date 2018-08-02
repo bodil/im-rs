@@ -69,6 +69,7 @@ where
 ///
 /// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
 /// [std::option::Option::None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
+#[must_use]
 pub fn unfold<F, S, A>(value: S, f: F) -> Unfold<F, S>
 where
     F: Fn(&S) -> Option<(A, S)>,
@@ -112,6 +113,7 @@ where
 /// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
 /// [std::option::Option::None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
 /// [unfold]: ./fn.unfold.html
+#[must_use]
 pub fn unfold_mut<F, S, A>(value: S, f: F) -> UnfoldMut<F, S>
 where
     F: Fn(&mut S) -> Option<A>,

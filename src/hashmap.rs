@@ -131,6 +131,7 @@ where
 {
     /// Construct an empty hash map.
     #[inline]
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -151,6 +152,7 @@ where
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn singleton(k: K, v: V) -> HashMap<K, V> {
         HashMap::new().update(k, v)
     }
@@ -180,6 +182,7 @@ where
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -202,6 +205,7 @@ where
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.size
     }
@@ -237,6 +241,7 @@ where
 
     /// Construct an empty hash map using the provided hasher.
     #[inline]
+    #[must_use]
     pub fn with_hasher<RS>(hasher: RS) -> Self
     where
         Ref<S>: From<RS>,
@@ -251,6 +256,7 @@ where
     /// Get a reference to the map's [`BuildHasher`][BuildHasher].
     ///
     /// [BuildHasher]: https://doc.rust-lang.org/std/hash/trait.BuildHasher.html
+    #[must_use]
     pub fn hasher(&self) -> &Ref<S> {
         &self.hasher
     }
@@ -258,6 +264,7 @@ where
     /// Construct an empty hash map using the same hasher as the
     /// current hash map.
     #[inline]
+    #[must_use]
     pub fn new_from<K1, V1>(&self) -> HashMap<K1, V1, S>
     where
         K1: Hash + Eq + Clone,
@@ -278,6 +285,7 @@ where
     /// They will, however, come out in the same order every time for
     /// the same map.
     #[inline]
+    #[must_use]
     pub fn iter(&self) -> Iter<'_, K, V> {
         Iter {
             it: NodeIter::new(&self.root, self.size),
@@ -292,6 +300,7 @@ where
     /// They will, however, come out in the same order every time for
     /// the same map.
     #[inline]
+    #[must_use]
     pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         let root = Ref::make_mut(&mut self.root);
         IterMut {
@@ -307,6 +316,7 @@ where
     /// They will, however, come out in the same order every time for
     /// the same map.
     #[inline]
+    #[must_use]
     pub fn keys(&self) -> Keys<K, V> {
         Keys {
             it: NodeIter::new(&self.root, self.size),
@@ -321,6 +331,7 @@ where
     /// They will, however, come out in the same order every time for
     /// the same map.
     #[inline]
+    #[must_use]
     pub fn values(&self) -> Values<K, V> {
         Values {
             it: NodeIter::new(&self.root, self.size),
@@ -344,6 +355,7 @@ where
     /// );
     /// # }
     /// ```
+    #[must_use]
     pub fn get<BK>(&self, key: &BK) -> Option<&V>
     where
         BK: Hash + Eq + ?Sized,
@@ -372,6 +384,7 @@ where
     /// );
     /// # }
     /// ```
+    #[must_use]
     pub fn get_mut<BK>(&mut self, key: &BK) -> Option<&mut V>
     where
         BK: Hash + Eq + ?Sized,
@@ -404,6 +417,7 @@ where
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn contains_key<BK>(&self, k: &BK) -> bool
     where
         BK: Hash + Eq + ?Sized,
@@ -511,6 +525,7 @@ where
     /// Time: O(log n)
     ///
     /// [Entry]: enum.Entry.html
+    #[must_use]
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V, S> {
         let hash = hash_key(&*self.hasher, &key);
         if self.root.get(hash, 0, &key).is_some() {
@@ -549,6 +564,7 @@ where
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn update(&self, k: K, v: V) -> Self {
         let mut out = self.clone();
         out.insert(k, v);
@@ -563,6 +579,7 @@ where
     /// and insert the result as the new value.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn update_with<F>(&self, k: K, v: V, f: F) -> Self
     where
         F: FnOnce(V, V) -> V,
@@ -581,6 +598,7 @@ where
     /// value, and insert the result as the new value.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn update_with_key<F>(&self, k: K, v: V, f: F) -> Self
     where
         F: FnOnce(&K, V, V) -> V,
@@ -603,6 +621,7 @@ where
     /// value, and insert the result as the new value.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn update_lookup_with_key<F>(&self, k: K, v: V, f: F) -> (Option<V>, Self)
     where
         F: FnOnce(&K, &V, V) -> V,
@@ -628,6 +647,7 @@ where
     /// Time: O(log n)
     ///
     /// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
+    #[must_use]
     pub fn alter<F>(&self, f: F, k: K) -> Self
     where
         F: FnOnce(Option<V>) -> Option<V>,
@@ -647,6 +667,7 @@ where
     /// mapping for `key` if it's present.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn without<BK>(&self, k: &BK) -> Self
     where
         BK: Hash + Eq + ?Sized,
@@ -662,6 +683,7 @@ where
     /// the removed value as well as the updated map.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn extract<BK>(&self, k: &BK) -> Option<(V, Self)>
     where
         BK: Hash + Eq + ?Sized,
@@ -674,6 +696,7 @@ where
     /// the removed key and value as well as the updated list.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn extract_with_key<BK>(&self, k: &BK) -> Option<(K, V, Self)>
     where
         BK: Hash + Eq + ?Sized,
@@ -700,7 +723,7 @@ where
     /// assert_eq!(expected, map1.union(map2));
     /// # }
     /// ```
-    #[inline]
+    #[must_use]
     pub fn union(mut self, other: Self) -> Self {
         for (k, v) in other {
             self.entry(k).or_insert(v);
@@ -718,6 +741,7 @@ where
     ///
     /// Time: O(n log n)
     #[inline]
+    #[must_use]
     pub fn union_with<F>(self, other: Self, mut f: F) -> Self
     where
         F: FnMut(V, V) -> V,
@@ -751,6 +775,7 @@ where
     /// ));
     /// # }
     /// ```
+    #[must_use]
     pub fn union_with_key<F>(mut self, other: Self, mut f: F) -> Self
     where
         F: FnMut(&K, V, V) -> V,
@@ -786,6 +811,7 @@ where
     /// assert_eq!(expected, HashMap::unions(vec![map1, map2]));
     /// # }
     /// ```
+    #[must_use]
     pub fn unions<I>(i: I) -> Self
     where
         S: Default,
@@ -804,6 +830,7 @@ where
     /// should return the value to be inserted in the resulting map.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn unions_with<I, F>(i: I, f: F) -> Self
     where
         S: Default,
@@ -825,6 +852,7 @@ where
     /// return the value to be inserted in the resulting map.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn unions_with_key<I, F>(i: I, f: F) -> Self
     where
         S: Default,
@@ -853,6 +881,7 @@ where
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn difference(self, other: Self) -> Self {
         self.difference_with_key(other, |_, _, _| None)
     }
@@ -862,6 +891,7 @@ where
     ///
     /// Time: O(n log n)
     #[inline]
+    #[must_use]
     pub fn difference_with<F>(self, other: Self, mut f: F) -> Self
     where
         F: FnMut(V, V) -> Option<V>,
@@ -890,6 +920,7 @@ where
     /// ));
     /// # }
     /// ```
+    #[must_use]
     pub fn difference_with_key<F>(mut self, other: Self, mut f: F) -> Self
     where
         F: FnMut(&K, V, V) -> Option<V>,
@@ -926,6 +957,7 @@ where
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn intersection(self, other: Self) -> Self {
         self.intersection_with_key(other, |_, v, _| v)
     }
@@ -936,6 +968,7 @@ where
     ///
     /// Time: O(n log n)
     #[inline]
+    #[must_use]
     pub fn intersection_with<B, C, F>(self, other: HashMap<K, B, S>, mut f: F) -> HashMap<K, C, S>
     where
         B: Clone,
@@ -966,6 +999,7 @@ where
     /// ));
     /// # }
     /// ```
+    #[must_use]
     pub fn intersection_with_key<B, C, F>(
         mut self,
         other: HashMap<K, B, S>,
@@ -996,6 +1030,7 @@ where
     /// Use the provided function to decide whether values are equal.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn is_submap_by<B, RM, F>(&self, other: RM, mut cmp: F) -> bool
     where
         B: Clone,
@@ -1014,6 +1049,7 @@ where
     /// Use the provided function to decide whether values are equal.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn is_proper_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
     where
         B: Clone,
@@ -1040,6 +1076,8 @@ where
     /// assert!(map1.is_submap(map2));
     /// # }
     /// ```
+    #[inline]
+    #[must_use]
     pub fn is_submap<RM>(&self, other: RM) -> bool
     where
         V: PartialEq,
@@ -1070,6 +1108,8 @@ where
     /// assert!(!map3.is_proper_submap(map4));
     /// # }
     /// ```
+    #[inline]
+    #[must_use]
     pub fn is_proper_submap<RM>(&self, other: RM) -> bool
     where
         V: PartialEq,
@@ -1137,6 +1177,7 @@ where
     }
 
     /// Get the key for this entry.
+    #[must_use]
     pub fn key(&self) -> &K {
         match self {
             Entry::Occupied(entry) => entry.key(),
@@ -1177,6 +1218,7 @@ where
     S: 'a + BuildHasher,
 {
     /// Get the key for this entry.
+    #[must_use]
     pub fn key(&self) -> &K {
         &self.key
     }
@@ -1190,17 +1232,20 @@ where
     }
 
     /// Get the current value.
+    #[must_use]
     pub fn get(&self) -> &V {
         &self.map.root.get(self.hash, 0, &self.key).unwrap().1
     }
 
     /// Get a mutable reference to the current value.
+    #[must_use]
     pub fn get_mut(&mut self) -> &mut V {
         let root = Ref::make_mut(&mut self.map.root);
         &mut root.get_mut(self.hash, 0, &self.key).unwrap().1
     }
 
     /// Convert this entry into a mutable reference.
+    #[must_use]
     pub fn into_mut(self) -> &'a mut V {
         let root = Ref::make_mut(&mut self.map.root);
         &mut root.get_mut(self.hash, 0, &self.key).unwrap().1
@@ -1236,11 +1281,13 @@ where
     S: 'a + BuildHasher,
 {
     /// Get the key for this entry.
+    #[must_use]
     pub fn key(&self) -> &K {
         &self.key
     }
 
     /// Convert this entry into its key.
+    #[must_use]
     pub fn into_key(self) -> K {
         self.key
     }
@@ -1874,8 +1921,7 @@ pub mod proptest {
             .prop_map(HashMap::from)
             .prop_filter("Map minimum size".to_owned(), move |m| {
                 m.len() >= size.start
-            })
-            .boxed()
+            }).boxed()
     }
 }
 

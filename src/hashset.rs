@@ -131,6 +131,7 @@ where
     A: Hash + Eq + Clone,
 {
     /// Construct an empty set.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -148,6 +149,7 @@ where
     /// assert!(set.contains(&123));
     /// # }
     /// ```
+    #[must_use]
     pub fn singleton(a: A) -> Self {
         HashSet::new().update(a)
     }
@@ -172,6 +174,8 @@ impl<A, S> HashSet<A, S> {
     /// );
     /// # }
     /// ```
+    #[inline]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -189,6 +193,8 @@ impl<A, S> HashSet<A, S> {
     /// assert_eq!(3, hashset![1, 2, 3].len());
     /// # }
     /// ```
+    #[inline]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.size
     }
@@ -220,6 +226,7 @@ where
 
     /// Construct an empty hash set using the provided hasher.
     #[inline]
+    #[must_use]
     pub fn with_hasher<RS>(hasher: RS) -> Self
     where
         Ref<S>: From<RS>,
@@ -234,12 +241,14 @@ where
     /// Get a reference to the set's [`BuildHasher`][BuildHasher].
     ///
     /// [BuildHasher]: https://doc.rust-lang.org/std/hash/trait.BuildHasher.html
+    #[must_use]
     pub fn hasher(&self) -> &Ref<S> {
         &self.hasher
     }
 
     /// Construct an empty hash set using the same hasher as the current hash set.
     #[inline]
+    #[must_use]
     pub fn new_from<A1>(&self) -> HashSet<A1, S>
     where
         A1: Hash + Eq + Clone,
@@ -258,6 +267,7 @@ where
     /// Items will not come out in insertion order or sort order.
     /// They will, however, come out in the same order every time for
     /// the same set.
+    #[must_use]
     pub fn iter(&self) -> Iter<'_, A> {
         Iter {
             it: NodeIter::new(&self.root, self.size),
@@ -270,6 +280,7 @@ where
     /// hasher, but no other ordering guarantee is offered.  Items will not come
     /// out in insertion order or sort order.  They will, however, come out in
     /// the same order every time for the same set.
+    #[must_use]
     pub fn iter_mut(&mut self) -> IterMut<'_, A> {
         let root = Ref::make_mut(&mut self.root);
         IterMut {
@@ -280,6 +291,7 @@ where
     /// Test if a value is part of a set.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn contains<BA>(&self, a: &BA) -> bool
     where
         BA: Hash + Eq + ?Sized,
@@ -339,6 +351,7 @@ where
     /// );
     /// # }
     /// ```
+    #[must_use]
     pub fn update(&self, a: A) -> Self {
         let mut out = self.clone();
         out.insert(a);
@@ -349,6 +362,7 @@ where
     /// the set.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn without<BA>(&self, a: &BA) -> Self
     where
         BA: Hash + Eq + ?Sized,
@@ -396,6 +410,7 @@ where
     /// assert_eq!(expected, set1.union(set2));
     /// # }
     /// ```
+    #[must_use]
     pub fn union(mut self, other: Self) -> Self {
         for value in other {
             self.insert(value);
@@ -406,6 +421,7 @@ where
     /// Construct the union of multiple sets.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn unions<I>(i: I) -> Self
     where
         I: IntoIterator<Item = Self>,
@@ -430,6 +446,7 @@ where
     /// assert_eq!(expected, set1.difference(set2));
     /// # }
     /// ```
+    #[must_use]
     pub fn difference(mut self, other: Self) -> Self {
         for value in other {
             if self.remove(&value).is_none() {
@@ -455,6 +472,7 @@ where
     /// assert_eq!(expected, set1.intersection(set2));
     /// # }
     /// ```
+    #[must_use]
     pub fn intersection(self, other: Self) -> Self {
         let mut out = self.new_from();
         for value in other {
@@ -469,6 +487,7 @@ where
     /// all values in our set must also be in the other set.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn is_subset<RS>(&self, other: RS) -> bool
     where
         RS: Borrow<Self>,
@@ -482,6 +501,7 @@ where
     /// proper subset must also be smaller than the other set.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn is_proper_subset<RS>(&self, other: RS) -> bool
     where
         RS: Borrow<Self>,
@@ -958,8 +978,7 @@ pub mod proptest {
             .prop_map(HashSet::from)
             .prop_filter("HashSet minimum size".to_owned(), move |s| {
                 s.len() >= size.start
-            })
-            .boxed()
+            }).boxed()
     }
 }
 

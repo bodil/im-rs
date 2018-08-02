@@ -118,6 +118,7 @@ where
     V: Clone,
 {
     /// Construct an empty map.
+    #[must_use]
     pub fn new() -> Self {
         OrdMap {
             root: Ref::from(Node::new()),
@@ -139,6 +140,7 @@ where
     /// );
     /// # }
     /// ```
+    #[must_use]
     pub fn singleton(key: K, value: V) -> Self {
         OrdMap {
             root: Ref::from(Node::unit((key, value))),
@@ -164,6 +166,7 @@ where
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -186,6 +189,7 @@ where
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.root.len()
     }
@@ -208,6 +212,7 @@ where
     /// }.get_max());
     /// # }
     /// ```
+    #[must_use]
     pub fn get_max(&self) -> Option<&(K, V)> {
         self.root.max()
     }
@@ -230,21 +235,25 @@ where
     /// }.get_min());
     /// # }
     /// ```
+    #[must_use]
     pub fn get_min(&self) -> Option<&(K, V)> {
         self.root.min()
     }
 
     /// Get an iterator over the key/value pairs of a map.
+    #[must_use]
     pub fn iter(&self) -> Iter<'_, (K, V)> {
         Iter::new(&self.root)
     }
 
     /// Get an iterator over a map's keys.
+    #[must_use]
     pub fn keys(&self) -> Keys<'_, K, V> {
         Keys { it: self.iter() }
     }
 
     /// Get an iterator over a map's values.
+    #[must_use]
     pub fn values(&self) -> Values<'_, K, V> {
         Values { it: self.iter() }
     }
@@ -260,6 +269,7 @@ where
     /// Time: O(n) (where n is the number of unique elements across
     /// the two maps, minus the number of elements belonging to nodes
     /// shared between them)
+    #[must_use]
     pub fn diff<'a>(&'a self, other: &'a Self) -> DiffIter<'a, (K, V)> {
         DiffIter::new(&self.root, &other.root)
     }
@@ -281,6 +291,7 @@ where
     /// );
     /// # }
     /// ```
+    #[must_use]
     pub fn get<BK>(&self, key: &BK) -> Option<&V>
     where
         BK: Ord + ?Sized,
@@ -289,6 +300,7 @@ where
         self.root.lookup(key).map(|(_, v)| v)
     }
 
+    #[must_use]
     fn get_mut<BK>(&mut self, key: &BK) -> Option<&mut V>
     where
         BK: Ord + ?Sized,
@@ -317,6 +329,7 @@ where
     /// );
     /// # }
     /// ```
+    #[must_use]
     pub fn contains_key<BK>(&self, k: &BK) -> bool
     where
         BK: Ord + ?Sized,
@@ -439,6 +452,7 @@ where
     /// );
     /// # }
     /// ```
+    #[must_use]
     pub fn update(&self, key: K, value: V) -> Self {
         let mut out = self.clone();
         out.insert(key, value);
@@ -453,6 +467,7 @@ where
     /// and insert the result as the new value.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn update_with<F>(self, k: K, v: V, f: F) -> Self
     where
         F: FnOnce(V, V) -> V,
@@ -468,6 +483,7 @@ where
     /// value, and insert the result as the new value.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn update_with_key<F>(self, k: K, v: V, f: F) -> Self
     where
         F: FnOnce(&K, V, V) -> V,
@@ -490,6 +506,7 @@ where
     /// value, and insert the result as the new value.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn update_lookup_with_key<F>(self, k: K, v: V, f: F) -> (Option<V>, Self)
     where
         F: FnOnce(&K, &V, V) -> V,
@@ -515,6 +532,7 @@ where
     /// Time: O(log n)
     ///
     /// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
+    #[must_use]
     pub fn alter<F>(&self, f: F, k: K) -> Self
     where
         F: FnOnce(Option<V>) -> Option<V>,
@@ -531,6 +549,7 @@ where
     /// Remove a key/value pair from a map, if it exists.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn without<BK>(&self, k: &BK) -> Self
     where
         BK: Ord + ?Sized,
@@ -545,6 +564,7 @@ where
     /// the removed value as well as the updated list.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn extract<BK>(&self, k: &BK) -> Option<(V, Self)>
     where
         BK: Ord + ?Sized,
@@ -557,6 +577,7 @@ where
     /// the removed key and value as well as the updated list.
     ///
     /// Time: O(log n)
+    #[must_use]
     pub fn extract_with_key<BK>(&self, k: &BK) -> Option<(K, V, Self)>
     where
         BK: Ord + ?Sized,
@@ -585,6 +606,7 @@ where
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn union(mut self, other: Self) -> Self {
         for (k, v) in other {
             self.entry(k).or_insert(v);
@@ -602,6 +624,7 @@ where
     ///
     /// Time: O(n log n)
     #[inline]
+    #[must_use]
     pub fn union_with<F>(self, other: Self, mut f: F) -> Self
     where
         F: FnMut(V, V) -> V,
@@ -635,6 +658,7 @@ where
     /// ));
     /// # }
     /// ```
+    #[must_use]
     pub fn union_with_key<F>(mut self, other: Self, mut f: F) -> Self
     where
         F: FnMut(&K, V, V) -> V,
@@ -670,6 +694,7 @@ where
     /// assert_eq!(expected, OrdMap::unions(vec![map1, map2]));
     /// # }
     /// ```
+    #[must_use]
     pub fn unions<I>(i: I) -> Self
     where
         I: IntoIterator<Item = Self>,
@@ -687,6 +712,7 @@ where
     /// should return the value to be inserted in the resulting map.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn unions_with<I, F>(i: I, f: F) -> Self
     where
         I: IntoIterator<Item = Self>,
@@ -707,6 +733,7 @@ where
     /// return the value to be inserted in the resulting map.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn unions_with_key<I, F>(i: I, f: F) -> Self
     where
         I: IntoIterator<Item = Self>,
@@ -734,6 +761,7 @@ where
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn difference(self, other: Self) -> Self {
         self.difference_with_key(other, |_, _, _| None)
     }
@@ -743,6 +771,7 @@ where
     ///
     /// Time: O(n log n)
     #[inline]
+    #[must_use]
     pub fn difference_with<F>(self, other: Self, mut f: F) -> Self
     where
         F: FnMut(V, V) -> Option<V>,
@@ -771,6 +800,7 @@ where
     /// ));
     /// # }
     /// ```
+    #[must_use]
     pub fn difference_with_key<F>(mut self, other: Self, mut f: F) -> Self
     where
         F: FnMut(&K, V, V) -> Option<V>,
@@ -807,6 +837,7 @@ where
     /// # }
     /// ```
     #[inline]
+    #[must_use]
     pub fn intersection(self, other: Self) -> Self {
         self.intersection_with_key(other, |_, v, _| v)
     }
@@ -817,6 +848,7 @@ where
     ///
     /// Time: O(n log n)
     #[inline]
+    #[must_use]
     pub fn intersection_with<B, C, F>(self, other: OrdMap<K, B>, mut f: F) -> OrdMap<K, C>
     where
         B: Clone,
@@ -847,6 +879,7 @@ where
     /// ));
     /// # }
     /// ```
+    #[must_use]
     pub fn intersection_with_key<B, C, F>(mut self, other: OrdMap<K, B>, mut f: F) -> OrdMap<K, C>
     where
         B: Clone,
@@ -873,6 +906,7 @@ where
     /// Use the provided function to decide whether values are equal.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn is_submap_by<B, RM, F>(&self, other: RM, mut cmp: F) -> bool
     where
         B: Clone,
@@ -891,6 +925,7 @@ where
     /// Use the provided function to decide whether values are equal.
     ///
     /// Time: O(n log n)
+    #[must_use]
     pub fn is_proper_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
     where
         B: Clone,
@@ -917,6 +952,7 @@ where
     /// assert!(map1.is_submap(map2));
     /// # }
     /// ```
+    #[must_use]
     pub fn is_submap<RM>(&self, other: RM) -> bool
     where
         V: PartialEq,
@@ -947,6 +983,7 @@ where
     /// assert!(!map3.is_proper_submap(map4));
     /// # }
     /// ```
+    #[must_use]
     pub fn is_proper_submap<RM>(&self, other: RM) -> bool
     where
         V: PartialEq,
@@ -960,6 +997,7 @@ where
     /// containing keys which are larger than `split`.
     ///
     /// The `split` mapping is discarded.
+    #[must_use]
     pub fn split<BK>(&self, split: &BK) -> (Self, Self)
     where
         BK: Ord + ?Sized,
@@ -974,6 +1012,7 @@ where
     /// containing keys which are larger than `split`.
     ///
     /// Returns both the two maps and the value of `split`.
+    #[must_use]
     pub fn split_lookup<BK>(&self, split: &BK) -> (Self, Option<V>, Self)
     where
         BK: Ord + ?Sized,
@@ -992,18 +1031,21 @@ where
 
     /// Construct a map with only the `n` smallest keys from a given
     /// map.
+    #[must_use]
     pub fn take(&self, n: usize) -> Self {
         self.iter().take(n).cloned().collect()
     }
 
     /// Construct a map with the `n` smallest keys removed from a
     /// given map.
+    #[must_use]
     pub fn skip(&self, n: usize) -> Self {
         self.iter().skip(n).cloned().collect()
     }
 
     /// Remove the smallest key from a map, and return its value as
     /// well as the updated map.
+    #[must_use]
     pub fn without_min(&self) -> (Option<V>, Self) {
         let (pop, next) = self.without_min_with_key();
         (pop.map(|(_, v)| v), next)
@@ -1011,6 +1053,7 @@ where
 
     /// Remove the smallest key from a map, and return that key, its
     /// value as well as the updated map.
+    #[must_use]
     pub fn without_min_with_key(&self) -> (Option<(K, V)>, Self) {
         match self.get_min() {
             None => (None, self.clone()),
@@ -1023,6 +1066,7 @@ where
 
     /// Remove the largest key from a map, and return its value as
     /// well as the updated map.
+    #[must_use]
     pub fn without_max(&self) -> (Option<V>, Self) {
         let (pop, next) = self.without_max_with_key();
         (pop.map(|(_, v)| v), next)
@@ -1030,6 +1074,7 @@ where
 
     /// Remove the largest key from a map, and return that key, its
     /// value as well as the updated map.
+    #[must_use]
     pub fn without_max_with_key(&self) -> (Option<(K, V)>, Self) {
         match self.get_max() {
             None => (None, self.clone()),
@@ -1040,6 +1085,7 @@ where
         }
     }
 
+    #[must_use]
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
         if self.contains_key(&key) {
             Entry::Occupied(OccupiedEntry { map: self, key })
@@ -1086,6 +1132,7 @@ where
         self.or_insert_with(Default::default)
     }
 
+    #[must_use]
     pub fn key(&self) -> &K {
         match self {
             Entry::Occupied(entry) => entry.key(),
@@ -1119,6 +1166,7 @@ where
     K: 'a + Ord + Clone,
     V: 'a + Clone,
 {
+    #[must_use]
     pub fn key(&self) -> &K {
         &self.key
     }
@@ -1129,14 +1177,17 @@ where
             .expect("ordmap::OccupiedEntry::remove_entry: key has vanished!")
     }
 
+    #[must_use]
     pub fn get(&self) -> &V {
         self.map.get(&self.key).unwrap()
     }
 
+    #[must_use]
     pub fn get_mut(&mut self) -> &mut V {
         self.map.get_mut(&self.key).unwrap()
     }
 
+    #[must_use]
     pub fn into_mut(self) -> &'a mut V {
         self.map.get_mut(&self.key).unwrap()
     }
@@ -1164,10 +1215,12 @@ where
     K: 'a + Ord + Clone,
     V: 'a + Clone,
 {
+    #[must_use]
     pub fn key(&self) -> &K {
         &self.key
     }
 
+    #[must_use]
     pub fn into_key(self) -> K {
         self.key
     }
@@ -1672,8 +1725,7 @@ pub mod proptest {
             .prop_map(OrdMap::from)
             .prop_filter("OrdMap minimum size".to_owned(), move |m| {
                 m.len() >= size.start
-            })
-            .boxed()
+            }).boxed()
     }
 }
 
