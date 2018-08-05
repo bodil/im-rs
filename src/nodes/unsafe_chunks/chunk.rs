@@ -179,6 +179,8 @@ impl<A> Chunk<A> {
                 panic!("Chunk::drop_left: index out of bounds");
             }
             let start = self.left;
+            #[allow(unknown_lints)]
+            #[allow(redundant_field_names)] // FIXME clippy is currently broken
             for i in start..(start + index) {
                 unsafe { Chunk::force_drop(i, self) }
             }
@@ -195,6 +197,8 @@ impl<A> Chunk<A> {
             return;
         }
         let start = self.left + index;
+        #[allow(unknown_lints)]
+        #[allow(redundant_field_names)] // FIXME clippy is currently broken
         for i in start..self.right {
             unsafe { Chunk::force_drop(i, self) }
         }
