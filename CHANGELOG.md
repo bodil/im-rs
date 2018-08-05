@@ -8,16 +8,23 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `Vector::set` now returns the replaced value.
+
 ### Changed
 - As `std::ops::RangeBounds` is now stabilised in Rust 1.28, the `Vector::slice`
   method is now unconditionally available on the stable channel.
 - Union/difference/intersection/is_submap methods on `HashMap` and `OrdMap` that
   take functions now take `FnMut` instead of `Fn`. This should not affect any
   existing code. (#34)
+- `Vector::split_off` can now take an index equal to the length of the vector,
+  yielding an empty vector as the split result. (#33)
 
 ### Fixed
-- `Vector::split_off` can now take an index equal to the length of the vector,
-   yielding an empty vector as the split result. (#33)
+- `Vector` is now represented as a single inline chunk until it grows larger
+  than the chunk size, making it even faster than `Vec` at small sizes, though
+  `clone` could now be slower if the clone is expensive (it's still absurdly
+  fast for `A: Copy`).
 
 ## [11.0.1] - 2018-07-23
 
