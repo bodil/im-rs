@@ -219,8 +219,8 @@
 //! [hashset::HashSet]: ./hashset/struct.HashSet.html
 //! [ordmap::OrdMap]: ./ordmap/struct.OrdMap.html
 //! [ordset::OrdSet]: ./ordset/struct.OrdSet.html
-//! [vector::Vector]: ./vector/struct.Vector.html
-//! [vector::Vector::push_back]: ./vector/struct.Vector.html#method.push_back
+//! [vector::Vector]: ./vector/enum.Vector.html
+//! [vector::Vector::push_back]: ./vector/enum.Vector.html#method.push_back
 //! [rrb-tree]: https://infoscience.epfl.ch/record/213452/files/rrbvector.pdf
 //! [hamt]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
 //! [b-tree]: https://en.wikipedia.org/wiki/B-tree
@@ -304,7 +304,7 @@ mod test;
 /// # }
 /// ```
 ///
-/// [Vector]: ../vector/struct.Vector.html
+/// [Vector]: ../vector/enum.Vector.html
 /// [HashMap]: ../hashmap/struct.HashMap.html
 /// [OrdMap]: ../ordmap/struct.OrdMap.html
 #[macro_export]
@@ -338,7 +338,7 @@ macro_rules! update_in {
 /// # }
 /// ```
 ///
-/// [Vector]: ../vector/struct.Vector.html
+/// [Vector]: ../vector/enum.Vector.html
 /// [HashMap]: ../hashmap/struct.HashMap.html
 /// [OrdMap]: ../ordmap/struct.OrdMap.html
 #[macro_export]

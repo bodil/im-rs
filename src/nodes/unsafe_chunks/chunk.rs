@@ -266,12 +266,12 @@ impl<A> Chunk<A> {
         }
     }
 
-    pub fn remove(&mut self, index: usize) {
+    pub fn remove(&mut self, index: usize) -> A {
         let real_index = index + self.left;
         if real_index < self.left || real_index >= self.right {
             panic!("Chunk::remove: index out of bounds");
         }
-        unsafe { Chunk::force_drop(real_index, self) };
+        let value = unsafe { Chunk::force_read(real_index, self) };
         let left_size = index;
         let right_size = self.right - real_index - 1;
         if left_size < right_size {
@@ -281,6 +281,7 @@ impl<A> Chunk<A> {
             unsafe { Chunk::force_copy(real_index + 1, real_index, right_size, self) };
             self.right -= 1;
         }
+        value
     }
 
     #[inline]

@@ -34,6 +34,11 @@
 //! [`Vec`][Vec] with an initial capacity of 256. Beyond that, it will
 //! allocate tree nodes of capacity *k* as needed.
 //!
+//! In addition, vectors start out as single inlined chunks, and only expand
+//! into the full data structure once you go past the chunk size. This makes
+//! them extremely fast at small sizes - actually slightly faster than
+//! [`Vec`][Vec].
+//!
 //! [rrbpaper]: https://infoscience.epfl.ch/record/213452/files/rrbvector.pdf
 //! [chunkedseq]: http://deepsea.inria.fr/pasl/chunkedseq.pdf
 //! [Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
@@ -60,6 +65,8 @@ use nodes::rrb::{
 };
 use sort;
 use util::{clone_ref, swap_indices, Ref, Side};
+
+use self::Vector::{Full, Single};
 
 /// Construct a vector from a sequence of elements.
 ///
@@ -98,41 +105,50 @@ macro_rules! vector {
 
 /// A persistent vector.
 ///
-/// This is a sequence of elements in insertion order - if you need a
-/// list of things, any kind of list of things, this is what you're
-/// looking for.
+/// This is a sequence of elements in insertion order - if you need a list of
+/// things, any kind of list of things, this is what you're looking for.
 ///
-/// It's implemented as an [RRB vector][rrbpaper] with [smart
-/// head/tail chunking][chunkedseq]. In performance terms, this means
-/// that practically every operation is O(log n), except push/pop on
-/// both sides, which will be O(1) amortised, and O(log n) in the
-/// worst case. In practice, the push/pop operations will be
-/// blindingly fast, nearly on par with the native
-/// [`VecDeque`][VecDeque], and other operations will have decent, if
-/// not high, performance, but they all have more or less the same
-/// O(log n) complexity, so you don't need to keep their performance
-/// characteristics in mind - everything, even splitting and merging,
-/// is safe to use and never too slow.
+/// It's implemented as an [RRB vector][rrbpaper] with [smart head/tail
+/// chunking][chunkedseq]. In performance terms, this means that practically
+/// every operation is O(log n), except push/pop on both sides, which will be
+/// O(1) amortised, and O(log n) in the worst case. In practice, the push/pop
+/// operations will be blindingly fast, nearly on par with the native
+/// [`VecDeque`][VecDeque], and other operations will have decent, if not high,
+/// performance, but they all have more or less the same O(log n) complexity, so
+/// you don't need to keep their performance characteristics in mind -
+/// everything, even splitting and merging, is safe to use and never too slow.
 ///
 /// ## Performance Notes
 ///
-/// Because of the head/tail chunking technique, until you push a
-/// number of items above double the tree's branching factor (that's
-/// `self.len()` = 2 × *k* (where *k* = 64) = 128) on either side, the
-/// data structure is still just a handful of arrays, not yet an RRB
-/// tree, so you'll see performance and memory characteristics similar
-/// to [`Vec`][Vec] or [`VecDeque`][VecDeque].
+/// Because of the head/tail chunking technique, until you push a number of
+/// items above double the tree's branching factor (that's `self.len()` = 2 ×
+/// *k* (where *k* = 64) = 128) on either side, the data structure is still just
+/// a handful of arrays, not yet an RRB tree, so you'll see performance and
+/// memory characteristics similar to [`Vec`][Vec] or [`VecDeque`][VecDeque].
 ///
-/// This means that the structure always preallocates four chunks of
-/// size *k* (*k* being the tree's branching factor), equivalent to a
-/// [`Vec`][Vec] with an initial capacity of 256. Beyond that, it will
-/// allocate tree nodes of capacity *k* as needed.
+/// This means that the structure always preallocates four chunks of size *k*
+/// (*k* being the tree's branching factor), equivalent to a [`Vec`][Vec] with
+/// an initial capacity of 256. Beyond that, it will allocate tree nodes of
+/// capacity *k* as needed.
+///
+/// In addition, vectors start out as single inlined chunks, and only expand
+/// into the full data structure once you go past the chunk size. This makes
+/// them extremely fast at small sizes - actually slightly faster than
+/// [`Vec`][Vec].
 ///
 /// [rrbpaper]: https://infoscience.epfl.ch/record/213452/files/rrbvector.pdf
-/// [chunkedseq]: http://deepsea.inria.fr/pasl/chunkedseq.pdf
-/// [Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
-/// [VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
-pub struct Vector<A> {
+/// [chunkedseq]: http://deepsea.inria.fr/pasl/chunkedseq.pdf Vec]:
+/// [https://doc.rust-lang.org/std/vec/struct.Vec.html VecDeque]:
+/// [https://doc.rust-lang.org/std/collections/struct.VecDeque.html
+pub enum Vector<A> {
+    #[doc(hidden)]
+    Single(Chunk<A>),
+    #[doc(hidden)]
+    Full(RRB<A>),
+}
+
+#[doc(hidden)]
+pub struct RRB<A> {
     length: usize,
     middle_level: usize,
     outer_f: Ref<Chunk<A>>,
@@ -143,26 +159,61 @@ pub struct Vector<A> {
 }
 
 impl<A: Clone> Vector<A> {
-    /// Construct an empty vector.
-    #[must_use]
-    pub fn new() -> Self {
-        Vector {
-            length: 0,
+    /// True if a vector is a full single chunk, ie. must be promoted to grow
+    /// further.
+    fn needs_promotion(&self) -> bool {
+        match self {
+            Single(chunk) if chunk.is_full() => true,
+            _ => false,
+        }
+    }
+
+    /// Promote a single to a full, with the single chunk becomming inner_f.
+    fn promote_front(&mut self) {
+        let chunk = Ref::new(match self {
+            // TODO can we do this safely without initialising a dummy chunk?
+            Single(chunk) => replace(chunk, Chunk::new()),
+            _ => return,
+        });
+        *self = Full(RRB {
+            length: chunk.len(),
+            middle_level: 0,
+            outer_f: Ref::new(Chunk::new()),
+            inner_f: chunk,
+            middle: Ref::new(Node::new()),
+            inner_b: Ref::new(Chunk::new()),
+            outer_b: Ref::new(Chunk::new()),
+        })
+    }
+
+    /// Promote a single to a full, with the single chunk becomming inner_b.
+    fn promote_back(&mut self) {
+        let chunk = Ref::new(match self {
+            // TODO can we do this safely without initialising a dummy chunk?
+            Single(chunk) => replace(chunk, Chunk::new()),
+            _ => return,
+        });
+        *self = Full(RRB {
+            length: chunk.len(),
             middle_level: 0,
             outer_f: Ref::new(Chunk::new()),
             inner_f: Ref::new(Chunk::new()),
             middle: Ref::new(Node::new()),
-            inner_b: Ref::new(Chunk::new()),
+            inner_b: chunk,
             outer_b: Ref::new(Chunk::new()),
-        }
+        })
+    }
+
+    /// Construct an empty vector.
+    #[must_use]
+    pub fn new() -> Self {
+        Single(Chunk::new())
     }
 
     /// Construct a vector with a single value.
     #[must_use]
     pub fn singleton(a: A) -> Self {
-        let mut out = Self::new();
-        out.push_back(a);
-        out
+        Single(Chunk::unit(a))
     }
 
     /// Get the length of a vector.
@@ -180,7 +231,10 @@ impl<A: Clone> Vector<A> {
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
-        self.length
+        match self {
+            Single(chunk) => chunk.len(),
+            Full(tree) => tree.length,
+        }
     }
 
     /// Test whether a vector is empty.
@@ -245,29 +299,34 @@ impl<A: Clone> Vector<A> {
             return None;
         }
 
-        let mut local_index = index;
+        match self {
+            Single(chunk) => chunk.get(index),
+            Full(tree) => {
+                let mut local_index = index;
 
-        if local_index < self.outer_f.len() {
-            return Some(&self.outer_f[local_index]);
+                if local_index < tree.outer_f.len() {
+                    return Some(&tree.outer_f[local_index]);
+                }
+                local_index -= tree.outer_f.len();
+
+                if local_index < tree.inner_f.len() {
+                    return Some(&tree.inner_f[local_index]);
+                }
+                local_index -= tree.inner_f.len();
+
+                if local_index < tree.middle.len() {
+                    return Some(tree.middle.index(tree.middle_level, local_index));
+                }
+                local_index -= tree.middle.len();
+
+                if local_index < tree.inner_b.len() {
+                    return Some(&tree.inner_b[local_index]);
+                }
+                local_index -= tree.inner_b.len();
+
+                Some(&tree.outer_b[local_index])
+            }
         }
-        local_index -= self.outer_f.len();
-
-        if local_index < self.inner_f.len() {
-            return Some(&self.inner_f[local_index]);
-        }
-        local_index -= self.inner_f.len();
-
-        if local_index < self.middle.len() {
-            return Some(self.middle.index(self.middle_level, local_index));
-        }
-        local_index -= self.middle.len();
-
-        if local_index < self.inner_b.len() {
-            return Some(&self.inner_b[local_index]);
-        }
-        local_index -= self.inner_b.len();
-
-        Some(&self.outer_b[local_index])
     }
 
     /// Get a mutable reference to the value at index `index` in a
@@ -298,34 +357,39 @@ impl<A: Clone> Vector<A> {
             return None;
         }
 
-        let mut local_index = index;
+        match self {
+            Single(chunk) => chunk.get_mut(index),
+            Full(tree) => {
+                let mut local_index = index;
 
-        if local_index < self.outer_f.len() {
-            let outer_f = Ref::make_mut(&mut self.outer_f);
-            return Some(&mut outer_f[local_index]);
+                if local_index < tree.outer_f.len() {
+                    let outer_f = Ref::make_mut(&mut tree.outer_f);
+                    return Some(&mut outer_f[local_index]);
+                }
+                local_index -= tree.outer_f.len();
+
+                if local_index < tree.inner_f.len() {
+                    let inner_f = Ref::make_mut(&mut tree.inner_f);
+                    return Some(&mut inner_f[local_index]);
+                }
+                local_index -= tree.inner_f.len();
+
+                if local_index < tree.middle.len() {
+                    let middle = Ref::make_mut(&mut tree.middle);
+                    return Some(middle.index_mut(tree.middle_level, local_index));
+                }
+                local_index -= tree.middle.len();
+
+                if local_index < tree.inner_b.len() {
+                    let inner_b = Ref::make_mut(&mut tree.inner_b);
+                    return Some(&mut inner_b[local_index]);
+                }
+                local_index -= tree.inner_b.len();
+
+                let outer_b = Ref::make_mut(&mut tree.outer_b);
+                Some(&mut outer_b[local_index])
+            }
         }
-        local_index -= self.outer_f.len();
-
-        if local_index < self.inner_f.len() {
-            let inner_f = Ref::make_mut(&mut self.inner_f);
-            return Some(&mut inner_f[local_index]);
-        }
-        local_index -= self.inner_f.len();
-
-        if local_index < self.middle.len() {
-            let middle = Ref::make_mut(&mut self.middle);
-            return Some(middle.index_mut(self.middle_level, local_index));
-        }
-        local_index -= self.middle.len();
-
-        if local_index < self.inner_b.len() {
-            let inner_b = Ref::make_mut(&mut self.inner_b);
-            return Some(&mut inner_b[local_index]);
-        }
-        local_index -= self.inner_b.len();
-
-        let outer_b = Ref::make_mut(&mut self.outer_b);
-        Some(&mut outer_b[local_index])
     }
 
     /// Get the first element of a vector.
@@ -525,17 +589,13 @@ impl<A: Clone> Vector<A> {
     /// # }
     /// ```
     pub fn push_front(&mut self, value: A) {
-        if self.outer_f.is_full() {
-            swap(&mut self.outer_f, &mut self.inner_f);
-            if !self.outer_f.is_empty() {
-                let mut chunk = Ref::new(Chunk::new());
-                swap(&mut chunk, &mut self.outer_f);
-                self.push_middle(Side::Left, chunk);
-            }
+        if self.needs_promotion() {
+            self.promote_back();
         }
-        self.length += 1;
-        let outer_f = Ref::make_mut(&mut self.outer_f);
-        outer_f.push_front(value)
+        match self {
+            Single(chunk) => chunk.push_front(value),
+            Full(tree) => tree.push_front(value),
+        }
     }
 
     /// Push a value to the back of a vector.
@@ -554,17 +614,13 @@ impl<A: Clone> Vector<A> {
     /// # }
     /// ```
     pub fn push_back(&mut self, value: A) {
-        if self.outer_b.is_full() {
-            swap(&mut self.outer_b, &mut self.inner_b);
-            if !self.outer_b.is_empty() {
-                let mut chunk = Ref::new(Chunk::new());
-                swap(&mut chunk, &mut self.outer_b);
-                self.push_middle(Side::Right, chunk);
-            }
+        if self.needs_promotion() {
+            self.promote_front();
         }
-        self.length += 1;
-        let outer_b = Ref::make_mut(&mut self.outer_b);
-        outer_b.push_back(value)
+        match self {
+            Single(chunk) => chunk.push_back(value),
+            Full(tree) => tree.push_back(value),
+        }
     }
 
     /// Remove the first element from a vector and return it.
@@ -584,26 +640,13 @@ impl<A: Clone> Vector<A> {
     /// ```
     pub fn pop_front(&mut self) -> Option<A> {
         if self.is_empty() {
-            return None;
-        }
-        if self.outer_f.is_empty() {
-            if self.inner_f.is_empty() {
-                if self.middle.is_empty() {
-                    if self.inner_b.is_empty() {
-                        swap(&mut self.outer_f, &mut self.outer_b);
-                    } else {
-                        swap(&mut self.outer_f, &mut self.inner_b);
-                    }
-                } else {
-                    self.outer_f = self.pop_middle(Side::Left).unwrap();
-                }
-            } else {
-                swap(&mut self.outer_f, &mut self.inner_f);
+            None
+        } else {
+            match self {
+                Single(chunk) => Some(chunk.pop_front()),
+                Full(tree) => tree.pop_front(),
             }
         }
-        self.length -= 1;
-        let outer_f = Ref::make_mut(&mut self.outer_f);
-        Some(outer_f.pop_front())
     }
 
     /// Remove the last element from a vector and return it.
@@ -623,26 +666,13 @@ impl<A: Clone> Vector<A> {
     /// ```
     pub fn pop_back(&mut self) -> Option<A> {
         if self.is_empty() {
-            return None;
-        }
-        if self.outer_b.is_empty() {
-            if self.inner_b.is_empty() {
-                if self.middle.is_empty() {
-                    if self.inner_f.is_empty() {
-                        swap(&mut self.outer_b, &mut self.outer_f);
-                    } else {
-                        swap(&mut self.outer_b, &mut self.inner_f);
-                    }
-                } else {
-                    self.outer_b = self.pop_middle(Side::Right).unwrap();
-                }
-            } else {
-                swap(&mut self.outer_b, &mut self.inner_b);
+            None
+        } else {
+            match self {
+                Single(chunk) => Some(chunk.pop_back()),
+                Full(tree) => tree.pop_back(),
             }
         }
-        self.length -= 1;
-        let outer_b = Ref::make_mut(&mut self.outer_b);
-        Some(outer_b.pop_back())
     }
 
     /// Append the vector `other` to the end of the current vector.
@@ -670,55 +700,94 @@ impl<A: Clone> Vector<A> {
             return;
         }
 
-        if self.middle.is_empty() && other.middle.is_empty() {
-            if self.inner_b.is_empty()
-                && self.outer_b.is_empty()
-                && other.inner_f.is_empty()
-                && other.outer_f.is_empty()
-            {
-                self.inner_b = other.inner_b;
-                self.outer_b = other.outer_b;
-                self.length += other.length;
-                return;
-            }
-            if self.len() + other.len() <= CHUNK_SIZE * 4 {
-                while let Some(value) = other.pop_front() {
-                    self.push_back(value);
+        match self {
+            Single(left) => {
+                match other {
+                    // If both are single chunks and left has room for right: directly
+                    // memcpy right into left
+                    Single(ref mut right) if left.len() + right.len() <= CHUNK_SIZE => {
+                        left.extend(right);
+                        return;
+                    }
+                    // If only left is a single chunk and has room for right: push
+                    // right's elements into left
+                    ref mut right if left.len() + right.len() <= CHUNK_SIZE => {
+                        while let Some(value) = right.pop_front() {
+                            left.push_back(value);
+                        }
+                        return;
+                    }
+                    _ => {}
                 }
-                return;
+            }
+            Full(left) => {
+                if let Full(mut right) = other {
+                    // If left and right are trees with empty middles, left has no back
+                    // buffers, and right has no front buffers: copy right's back
+                    // buffers over to left
+                    if left.middle.is_empty()
+                        && right.middle.is_empty()
+                        && left.outer_b.is_empty()
+                        && left.inner_b.is_empty()
+                        && right.outer_f.is_empty()
+                        && right.inner_f.is_empty()
+                    {
+                        left.inner_b = right.inner_b;
+                        left.outer_b = right.outer_b;
+                        left.length += right.length;
+                        return;
+                    }
+                    // If left and right are trees with empty middles and left's buffers
+                    // can fit right's buffers: push right's elements onto left
+                    if left.middle.is_empty()
+                        && right.middle.is_empty()
+                        && left.length + right.length <= CHUNK_SIZE * 4
+                    {
+                        while let Some(value) = right.pop_front() {
+                            left.push_back(value);
+                        }
+                        return;
+                    }
+                    // Both are full and big: do the full RRB join
+                    let inner_b1 = left.inner_b.clone();
+                    left.push_middle(Side::Right, inner_b1);
+                    let outer_b1 = left.outer_b.clone();
+                    left.push_middle(Side::Right, outer_b1);
+                    let inner_f2 = right.inner_f.clone();
+                    right.push_middle(Side::Left, inner_f2);
+                    let outer_f2 = right.outer_f.clone();
+                    right.push_middle(Side::Left, outer_f2);
+
+                    let mut middle1 = clone_ref(replace(&mut left.middle, Ref::from(Node::new())));
+                    let mut middle2 = clone_ref(right.middle);
+                    left.middle_level = if left.middle_level > right.middle_level {
+                        middle2 = middle2.elevate(left.middle_level - right.middle_level);
+                        left.middle_level
+                    } else if left.middle_level < right.middle_level {
+                        middle1 = middle1.elevate(right.middle_level - left.middle_level);
+                        right.middle_level
+                    } else {
+                        left.middle_level
+                    } + 1;
+                    left.middle = Ref::new(Node::merge(
+                        Ref::from(middle1),
+                        Ref::from(middle2),
+                        left.middle_level - 1,
+                    ));
+
+                    left.inner_b = right.inner_b;
+                    left.outer_b = right.outer_b;
+                    left.length += right.length;
+                    left.prune();
+                    return;
+                }
             }
         }
-
-        let inner_b1 = self.inner_b.clone();
-        self.push_middle(Side::Right, inner_b1);
-        let outer_b1 = self.outer_b.clone();
-        self.push_middle(Side::Right, outer_b1);
-        let inner_f2 = other.inner_f.clone();
-        other.push_middle(Side::Left, inner_f2);
-        let outer_f2 = other.outer_f.clone();
-        other.push_middle(Side::Left, outer_f2);
-
-        let mut middle1 = clone_ref(replace(&mut self.middle, Ref::from(Node::new())));
-        let mut middle2 = clone_ref(other.middle);
-        self.middle_level = if self.middle_level > other.middle_level {
-            middle2 = middle2.elevate(self.middle_level - other.middle_level);
-            self.middle_level
-        } else if self.middle_level < other.middle_level {
-            middle1 = middle1.elevate(other.middle_level - self.middle_level);
-            other.middle_level
-        } else {
-            self.middle_level
-        } + 1;
-        self.middle = Ref::new(Node::merge(
-            Ref::from(middle1),
-            Ref::from(middle2),
-            self.middle_level - 1,
-        ));
-
-        self.inner_b = other.inner_b;
-        self.outer_b = other.outer_b;
-        self.length += other.length;
-        self.prune();
+        // No optimisations available, and either left, right or both are
+        // single: promote both to full and retry
+        self.promote_front();
+        other.promote_back();
+        self.append(other)
     }
 
     /// Retain only the elements specified by the predicate.
@@ -794,116 +863,116 @@ impl<A: Clone> Vector<A> {
     pub fn split_off(&mut self, index: usize) -> Self {
         assert!(index <= self.len());
 
-        let mut local_index = index;
+        match self {
+            Single(chunk) => Single(chunk.split(index)),
+            Full(tree) => {
+                let mut local_index = index;
 
-        if local_index < self.outer_f.len() {
-            let of2 = Ref::make_mut(&mut self.outer_f).split(local_index);
-            let right = Vector {
-                length: self.length - index,
-                middle_level: self.middle_level,
-                outer_f: Ref::new(of2),
-                inner_f: replace_def(&mut self.inner_f),
-                middle: replace_def(&mut self.middle),
-                inner_b: replace_def(&mut self.inner_b),
-                outer_b: replace_def(&mut self.outer_b),
-            };
-            self.length = index;
-            self.middle_level = 0;
-            return right;
+                if local_index < tree.outer_f.len() {
+                    let of2 = Ref::make_mut(&mut tree.outer_f).split(local_index);
+                    let right = RRB {
+                        length: tree.length - index,
+                        middle_level: tree.middle_level,
+                        outer_f: Ref::new(of2),
+                        inner_f: replace_def(&mut tree.inner_f),
+                        middle: replace_def(&mut tree.middle),
+                        inner_b: replace_def(&mut tree.inner_b),
+                        outer_b: replace_def(&mut tree.outer_b),
+                    };
+                    tree.length = index;
+                    tree.middle_level = 0;
+                    return Full(right);
+                }
+
+                local_index -= tree.outer_f.len();
+
+                if local_index < tree.inner_f.len() {
+                    let if2 = Ref::make_mut(&mut tree.inner_f).split(local_index);
+                    let right = RRB {
+                        length: tree.length - index,
+                        middle_level: tree.middle_level,
+                        outer_f: Ref::new(if2),
+                        inner_f: Ref::<Chunk<A>>::default(),
+                        middle: replace_def(&mut tree.middle),
+                        inner_b: replace_def(&mut tree.inner_b),
+                        outer_b: replace_def(&mut tree.outer_b),
+                    };
+                    tree.length = index;
+                    tree.middle_level = 0;
+                    swap(&mut tree.outer_b, &mut tree.inner_f);
+                    return Full(right);
+                }
+
+                local_index -= tree.inner_f.len();
+
+                if local_index < tree.middle.len() {
+                    let mut right_middle = tree.middle.clone();
+                    let (c1, c2) = {
+                        let m1 = Ref::make_mut(&mut tree.middle);
+                        let m2 = Ref::make_mut(&mut right_middle);
+                        match m1.split(tree.middle_level, Side::Right, local_index) {
+                            SplitResult::Dropped(_) => (),
+                            SplitResult::OutOfBounds => unreachable!(),
+                        };
+                        match m2.split(tree.middle_level, Side::Left, local_index) {
+                            SplitResult::Dropped(_) => (),
+                            SplitResult::OutOfBounds => unreachable!(),
+                        };
+                        let c1 = match m1.pop_chunk(tree.middle_level, Side::Right) {
+                            PopResult::Empty => Ref::<Chunk<A>>::default(),
+                            PopResult::Done(chunk) => chunk,
+                            PopResult::Drained(chunk) => {
+                                m1.clear_node();
+                                chunk
+                            }
+                        };
+                        let c2 = match m2.pop_chunk(tree.middle_level, Side::Left) {
+                            PopResult::Empty => Ref::<Chunk<A>>::default(),
+                            PopResult::Done(chunk) => chunk,
+                            PopResult::Drained(chunk) => {
+                                m2.clear_node();
+                                chunk
+                            }
+                        };
+                        (c1, c2)
+                    };
+                    let mut right = RRB {
+                        length: tree.length - index,
+                        middle_level: tree.middle_level,
+                        outer_f: c2,
+                        inner_f: Ref::<Chunk<A>>::default(),
+                        middle: right_middle,
+                        inner_b: replace_def(&mut tree.inner_b),
+                        outer_b: replace(&mut tree.outer_b, c1),
+                    };
+                    tree.length = index;
+                    tree.prune();
+                    right.prune();
+                    return Full(right);
+                }
+
+                local_index -= tree.middle.len();
+
+                if local_index < tree.inner_b.len() {
+                    let ib2 = Ref::make_mut(&mut tree.inner_b).split(local_index);
+                    let right = RRB {
+                        length: tree.length - index,
+                        outer_b: replace_def(&mut tree.outer_b),
+                        outer_f: Ref::new(ib2),
+                        ..RRB::new()
+                    };
+                    tree.length = index;
+                    swap(&mut tree.outer_b, &mut tree.inner_b);
+                    return Full(right);
+                }
+
+                local_index -= tree.inner_b.len();
+
+                let ob2 = Ref::make_mut(&mut tree.outer_b).split(local_index);
+                tree.length = index;
+                Single(ob2)
+            }
         }
-
-        local_index -= self.outer_f.len();
-
-        if local_index < self.inner_f.len() {
-            let if2 = Ref::make_mut(&mut self.inner_f).split(local_index);
-            let right = Vector {
-                length: self.length - index,
-                middle_level: self.middle_level,
-                outer_f: Ref::new(if2),
-                inner_f: Ref::<Chunk<A>>::default(),
-                middle: replace_def(&mut self.middle),
-                inner_b: replace_def(&mut self.inner_b),
-                outer_b: replace_def(&mut self.outer_b),
-            };
-            self.length = index;
-            self.middle_level = 0;
-            swap(&mut self.outer_b, &mut self.inner_f);
-            return right;
-        }
-
-        local_index -= self.inner_f.len();
-
-        if local_index < self.middle.len() {
-            let mut right_middle = self.middle.clone();
-            let (c1, c2) = {
-                let m1 = Ref::make_mut(&mut self.middle);
-                let m2 = Ref::make_mut(&mut right_middle);
-                match m1.split(self.middle_level, Side::Right, local_index) {
-                    SplitResult::Dropped(_) => (),
-                    SplitResult::OutOfBounds => unreachable!(),
-                };
-                match m2.split(self.middle_level, Side::Left, local_index) {
-                    SplitResult::Dropped(_) => (),
-                    SplitResult::OutOfBounds => unreachable!(),
-                };
-                let c1 = match m1.pop_chunk(self.middle_level, Side::Right) {
-                    PopResult::Empty => Ref::<Chunk<A>>::default(),
-                    PopResult::Done(chunk) => chunk,
-                    PopResult::Drained(chunk) => {
-                        m1.clear_node();
-                        chunk
-                    }
-                };
-                let c2 = match m2.pop_chunk(self.middle_level, Side::Left) {
-                    PopResult::Empty => Ref::<Chunk<A>>::default(),
-                    PopResult::Done(chunk) => chunk,
-                    PopResult::Drained(chunk) => {
-                        m2.clear_node();
-                        chunk
-                    }
-                };
-                (c1, c2)
-            };
-            let mut right = Vector {
-                length: self.length - index,
-                middle_level: self.middle_level,
-                outer_f: c2,
-                inner_f: Ref::<Chunk<A>>::default(),
-                middle: right_middle,
-                inner_b: replace_def(&mut self.inner_b),
-                outer_b: replace(&mut self.outer_b, c1),
-            };
-            self.length = index;
-            self.prune();
-            right.prune();
-            return right;
-        }
-
-        local_index -= self.middle.len();
-
-        if local_index < self.inner_b.len() {
-            let ib2 = Ref::make_mut(&mut self.inner_b).split(local_index);
-            let right = Vector {
-                length: self.length - index,
-                outer_b: replace_def(&mut self.outer_b),
-                outer_f: Ref::new(ib2),
-                ..Vector::new()
-            };
-            self.length = index;
-            swap(&mut self.outer_b, &mut self.inner_b);
-            return right;
-        }
-
-        local_index -= self.inner_b.len();
-
-        let ob2 = Ref::make_mut(&mut self.outer_b).split(local_index);
-        let right = Vector {
-            length: self.length - index,
-            outer_b: Ref::new(ob2),
-            ..Vector::new()
-        };
-        self.length = index;
-        right
     }
 
     /// Construct a vector with `count` elements removed from the
@@ -994,11 +1063,16 @@ impl<A: Clone> Vector<A> {
         if index == self.len() {
             return self.push_back(value);
         }
-        // TODO a lot of optimisations still possible here
         assert!(index < self.len());
-        let right = self.split_off(index);
-        self.push_back(value);
-        self.append(right);
+        match self {
+            Single(chunk) if chunk.len() < CHUNK_SIZE => chunk.insert(index, value),
+            // TODO a lot of optimisations still possible here
+            _ => {
+                let right = self.split_off(index);
+                self.push_back(value);
+                self.append(right);
+            }
+        }
     }
 
     /// Remove an element from a vector.
@@ -1019,17 +1093,22 @@ impl<A: Clone> Vector<A> {
     /// [slice]: #method.slice
     pub fn remove(&mut self, index: usize) -> A {
         assert!(index < self.len());
-        if index == 0 {
-            return self.pop_front().unwrap();
+        match self {
+            Single(chunk) => chunk.remove(index),
+            _ => {
+                if index == 0 {
+                    return self.pop_front().unwrap();
+                }
+                if index == self.len() - 1 {
+                    return self.pop_back().unwrap();
+                }
+                // TODO a lot of optimisations still possible here
+                let mut right = self.split_off(index);
+                let value = right.pop_front().unwrap();
+                self.append(right);
+                value
+            }
         }
-        if index == self.len() - 1 {
-            return self.pop_back().unwrap();
-        }
-        // TODO a lot of optimisations still possible here
-        let mut right = self.split_off(index);
-        let value = right.pop_front().unwrap();
-        self.append(right);
-        value
     }
 
     /// Discard all elements from the vector.
@@ -1040,23 +1119,7 @@ impl<A: Clone> Vector<A> {
     /// Time: O(n)
     pub fn clear(&mut self) {
         if !self.is_empty() {
-            self.length = 0;
-            self.middle_level = 0;
-            if !self.outer_f.is_empty() {
-                self.outer_f = Ref::<Chunk<A>>::default();
-            }
-            if !self.inner_f.is_empty() {
-                self.inner_f = Ref::<Chunk<A>>::default();
-            }
-            if !self.middle.is_empty() {
-                self.middle = Ref::<Node<A>>::default();
-            }
-            if !self.inner_b.is_empty() {
-                self.inner_b = Ref::<Chunk<A>>::default();
-            }
-            if !self.outer_b.is_empty() {
-                self.outer_b = Ref::<Chunk<A>>::default();
-            }
+            *self = Single(Chunk::new());
         }
     }
 
@@ -1213,14 +1276,164 @@ impl<A: Clone> Vector<A> {
             sort::quicksort(self, 0, len - 1, &cmp);
         }
     }
+}
 
-    // Implementation details
+// Implementation details
+
+impl<A: Clone> RRB<A> {
+    fn iter<'a>(
+        &'a self,
+    ) -> Chain<
+        Chain<Chain<Chain<ChunkIter<'a, A>, ChunkIter<'a, A>>, NodeIter<'a, A>>, ChunkIter<'a, A>>,
+        ChunkIter<'a, A>,
+    > {
+        let outer_f = self.outer_f.iter();
+        let inner_f = self.inner_f.iter();
+        let middle = NodeIter::new(&self.middle);
+        let inner_b = self.inner_b.iter();
+        let outer_b = self.outer_b.iter();
+        outer_f
+            .chain(inner_f)
+            .chain(middle)
+            .chain(inner_b)
+            .chain(outer_b)
+    }
+
+    fn iter_mut<'a>(
+        &'a mut self,
+    ) -> Chain<
+        Chain<
+            Chain<Chain<ChunkIterMut<'a, A>, ChunkIterMut<'a, A>>, NodeIterMut<'a, A>>,
+            ChunkIterMut<'a, A>,
+        >,
+        ChunkIterMut<'a, A>,
+    > {
+        let outer_f = Ref::make_mut(&mut self.outer_f).iter_mut();
+        let inner_f = Ref::make_mut(&mut self.inner_f).iter_mut();
+        let middle = NodeIterMut::new(Ref::make_mut(&mut self.middle), self.middle_level);
+        let inner_b = Ref::make_mut(&mut self.inner_b).iter_mut();
+        let outer_b = Ref::make_mut(&mut self.outer_b).iter_mut();
+        outer_f
+            .chain(inner_f)
+            .chain(middle)
+            .chain(inner_b)
+            .chain(outer_b)
+    }
+
+    fn into_iter(
+        self,
+    ) -> Chain<
+        Chain<
+            Chain<Chain<ConsumingChunkIter<A>, ConsumingChunkIter<A>>, ConsumingNodeIter<A>>,
+            ConsumingChunkIter<A>,
+        >,
+        ConsumingChunkIter<A>,
+    > {
+        let outer_f = clone_ref(self.outer_f).into_iter();
+        let inner_f = clone_ref(self.inner_f).into_iter();
+        let middle = ConsumingNodeIter::new(clone_ref(self.middle), self.middle_level);
+        let inner_b = clone_ref(self.inner_b).into_iter();
+        let outer_b = clone_ref(self.outer_b).into_iter();
+        outer_f
+            .chain(inner_f)
+            .chain(middle)
+            .chain(inner_b)
+            .chain(outer_b)
+    }
+
+    fn new() -> Self {
+        RRB {
+            length: 0,
+            middle_level: 0,
+            outer_f: Ref::new(Chunk::new()),
+            inner_f: Ref::new(Chunk::new()),
+            middle: Ref::new(Node::new()),
+            inner_b: Ref::new(Chunk::new()),
+            outer_b: Ref::new(Chunk::new()),
+        }
+    }
 
     fn prune(&mut self) {
         while self.middle_level > 0 && self.middle.is_single() {
             self.middle = self.middle.first_child().clone();
             self.middle_level -= 1;
         }
+    }
+
+    fn pop_front(&mut self) -> Option<A> {
+        if self.length == 0 {
+            return None;
+        }
+        if self.outer_f.is_empty() {
+            if self.inner_f.is_empty() {
+                if self.middle.is_empty() {
+                    if self.inner_b.is_empty() {
+                        swap(&mut self.outer_f, &mut self.outer_b);
+                    } else {
+                        swap(&mut self.outer_f, &mut self.inner_b);
+                    }
+                } else {
+                    self.outer_f = self.pop_middle(Side::Left).unwrap();
+                }
+            } else {
+                swap(&mut self.outer_f, &mut self.inner_f);
+            }
+        }
+        self.length -= 1;
+        let outer_f = Ref::make_mut(&mut self.outer_f);
+        Some(outer_f.pop_front())
+    }
+
+    fn pop_back(&mut self) -> Option<A> {
+        if self.length == 0 {
+            return None;
+        }
+        if self.outer_b.is_empty() {
+            if self.inner_b.is_empty() {
+                if self.middle.is_empty() {
+                    if self.inner_f.is_empty() {
+                        swap(&mut self.outer_b, &mut self.outer_f);
+                    } else {
+                        swap(&mut self.outer_b, &mut self.inner_f);
+                    }
+                } else {
+                    self.outer_b = self.pop_middle(Side::Right).unwrap();
+                }
+            } else {
+                swap(&mut self.outer_b, &mut self.inner_b);
+            }
+        }
+        self.length -= 1;
+        let outer_b = Ref::make_mut(&mut self.outer_b);
+        Some(outer_b.pop_back())
+    }
+
+    fn push_front(&mut self, value: A) {
+        if self.outer_f.is_full() {
+            swap(&mut self.outer_f, &mut self.inner_f);
+            if !self.outer_f.is_empty() {
+                let mut chunk = Ref::new(Chunk::new());
+                swap(&mut chunk, &mut self.outer_f);
+                self.push_middle(Side::Left, chunk);
+            }
+        }
+        self.length += 1;
+        let outer_f = Ref::make_mut(&mut self.outer_f);
+        outer_f.push_front(value)
+    }
+
+    fn push_back(&mut self, value: A) {
+        if self.outer_b.is_full() {
+            swap(&mut self.outer_b, &mut self.inner_b);
+            if !self.outer_b.is_empty() {
+                let mut chunk = Ref::new(Chunk::new());
+                swap(&mut chunk, &mut self.outer_b);
+                self.push_middle(Side::Right, chunk);
+            }
+        }
+        self.length += 1;
+        let outer_b = Ref::make_mut(&mut self.outer_b);
+        outer_b.push_back(value)
     }
 
     fn push_middle(&mut self, side: Side, chunk: Ref<Chunk<A>>) {
@@ -1274,16 +1487,19 @@ impl<A: Clone> Default for Vector<A> {
     }
 }
 
-impl<A> Clone for Vector<A> {
+impl<A: Clone> Clone for Vector<A> {
     fn clone(&self) -> Self {
-        Vector {
-            length: self.length,
-            middle_level: self.middle_level,
-            outer_f: self.outer_f.clone(),
-            inner_f: self.inner_f.clone(),
-            middle: self.middle.clone(),
-            inner_b: self.inner_b.clone(),
-            outer_b: self.outer_b.clone(),
+        match self {
+            Single(chunk) => Single(chunk.clone()),
+            Full(tree) => Full(RRB {
+                length: tree.length,
+                middle_level: tree.middle_level,
+                outer_f: tree.outer_f.clone(),
+                inner_f: tree.inner_f.clone(),
+                middle: tree.middle.clone(),
+                inner_b: tree.inner_b.clone(),
+                outer_b: tree.outer_b.clone(),
+            }),
         }
     }
 }
@@ -1297,44 +1513,47 @@ impl<A: Clone + Debug> Debug for Vector<A> {
 #[cfg(not(has_specialisation))]
 impl<A: Clone + PartialEq> PartialEq for Vector<A> {
     fn eq(&self, other: &Self) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
-        self.iter().eq(other.iter())
+        self.len() == other.len() && self.iter().eq(other.iter())
     }
 }
 
 #[cfg(has_specialisation)]
 impl<A: Clone + PartialEq> PartialEq for Vector<A> {
     default fn eq(&self, other: &Self) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
-        self.iter().eq(other.iter())
+        self.len() == other.len() && self.iter().eq(other.iter())
     }
 }
 
 #[cfg(has_specialisation)]
 impl<A: Clone + Eq> PartialEq for Vector<A> {
     fn eq(&self, other: &Self) -> bool {
-        if self.len() != other.len() || self.middle_level != other.middle_level {
-            return false;
-        }
+        match (self, other) {
+            (Full(left), Full(right)) => {
+                if left.length != right.length {
+                    return false;
+                }
 
-        fn cmp_chunk<A>(left: &Ref<Chunk<A>>, right: &Ref<Chunk<A>>) -> bool {
-            (left.is_empty() && right.is_empty()) || Ref::ptr_eq(left, right)
-        }
+                fn cmp_chunk<A>(left: &Ref<Chunk<A>>, right: &Ref<Chunk<A>>) -> bool {
+                    (left.is_empty() && right.is_empty()) || Ref::ptr_eq(left, right)
+                }
 
-        if cmp_chunk(&self.outer_f, &other.outer_f)
-            && cmp_chunk(&self.inner_f, &other.inner_f)
-            && ((self.middle.is_empty() && other.middle.is_empty())
-                || Ref::ptr_eq(&self.middle, &other.middle))
-            && cmp_chunk(&self.inner_b, &other.inner_b)
-            && cmp_chunk(&self.outer_b, &other.outer_b)
-        {
-            return true;
+                if cmp_chunk(&left.outer_f, &right.outer_f)
+                    && cmp_chunk(&left.inner_f, &right.inner_f)
+                    && cmp_chunk(&left.inner_b, &right.inner_b)
+                    && cmp_chunk(&left.outer_b, &right.outer_b)
+                {
+                    if (left.middle.is_empty() && right.middle.is_empty())
+                        || Ref::ptr_eq(&left.middle, &right.middle)
+                    {
+                        return true;
+                    } else {
+                        return NodeIter::new(&left.middle).eq(NodeIter::new(&right.middle));
+                    }
+                }
+                left.iter().eq(right.iter())
+            }
+            (left, right) => left.len() == right.len() && left.iter().eq(right.iter()),
         }
-        self.iter().eq(other.iter())
     }
 }
 
@@ -1516,27 +1735,25 @@ impl<'a, A: Clone> From<&'a Vec<A>> for Vector<A> {
 ///
 /// To obtain one, use [`Vector::iter()`][iter].
 ///
-/// [iter]: struct.Vector.html#method.iter
-pub struct Iter<'a, A: 'a> {
-    iter: Chain<
-        Chain<Chain<Chain<ChunkIter<'a, A>, ChunkIter<'a, A>>, NodeIter<'a, A>>, ChunkIter<'a, A>>,
-        ChunkIter<'a, A>,
-    >,
+/// [iter]: enum.Vector.html#method.iter
+pub enum Iter<'a, A: 'a> {
+    Single(ChunkIter<'a, A>),
+    Full(
+        Chain<
+            Chain<
+                Chain<Chain<ChunkIter<'a, A>, ChunkIter<'a, A>>, NodeIter<'a, A>>,
+                ChunkIter<'a, A>,
+            >,
+            ChunkIter<'a, A>,
+        >,
+    ),
 }
 
 impl<'a, A: Clone> Iter<'a, A> {
     fn new(seq: &'a Vector<A>) -> Self {
-        let outer_f = seq.outer_f.iter();
-        let inner_f = seq.inner_f.iter();
-        let middle = NodeIter::new(&seq.middle);
-        let inner_b = seq.inner_b.iter();
-        let outer_b = seq.outer_b.iter();
-        Iter {
-            iter: outer_f
-                .chain(inner_f)
-                .chain(middle)
-                .chain(inner_b)
-                .chain(outer_b),
+        match seq {
+            Single(chunk) => Iter::Single(chunk.iter()),
+            Full(tree) => Iter::Full(tree.iter()),
         }
     }
 }
@@ -1548,11 +1765,17 @@ impl<'a, A: Clone> Iterator for Iter<'a, A> {
     ///
     /// Time: O(1)*
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
+        match self {
+            Iter::Single(iter) => iter.next(),
+            Iter::Full(iter) => iter.next(),
+        }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
+        match self {
+            Iter::Single(iter) => iter.size_hint(),
+            Iter::Full(iter) => iter.size_hint(),
+        }
     }
 }
 
@@ -1561,7 +1784,10 @@ impl<'a, A: Clone> DoubleEndedIterator for Iter<'a, A> {
     ///
     /// Time: O(1)*
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.iter.next_back()
+        match self {
+            Iter::Single(iter) => iter.next_back(),
+            Iter::Full(iter) => iter.next_back(),
+        }
     }
 }
 
@@ -1573,30 +1799,25 @@ impl<'a, A: Clone> FusedIterator for Iter<'a, A> {}
 ///
 /// To obtain one, use [`Vector::iter_mut()`][iter_mut].
 ///
-/// [iter_mut]: struct.Vector.html#method.iter_mut
-pub struct IterMut<'a, A: 'a> {
-    iter: Chain<
+/// [iter_mut]: enum.Vector.html#method.iter_mut
+pub enum IterMut<'a, A: 'a> {
+    Single(ChunkIterMut<'a, A>),
+    Full(
         Chain<
-            Chain<Chain<ChunkIterMut<'a, A>, ChunkIterMut<'a, A>>, NodeIterMut<'a, A>>,
+            Chain<
+                Chain<Chain<ChunkIterMut<'a, A>, ChunkIterMut<'a, A>>, NodeIterMut<'a, A>>,
+                ChunkIterMut<'a, A>,
+            >,
             ChunkIterMut<'a, A>,
         >,
-        ChunkIterMut<'a, A>,
-    >,
+    ),
 }
 
 impl<'a, A: Clone> IterMut<'a, A> {
     fn new(seq: &'a mut Vector<A>) -> Self {
-        let outer_f = Ref::make_mut(&mut seq.outer_f).iter_mut();
-        let inner_f = Ref::make_mut(&mut seq.inner_f).iter_mut();
-        let middle = NodeIterMut::new(Ref::make_mut(&mut seq.middle), seq.middle_level);
-        let inner_b = Ref::make_mut(&mut seq.inner_b).iter_mut();
-        let outer_b = Ref::make_mut(&mut seq.outer_b).iter_mut();
-        IterMut {
-            iter: outer_f
-                .chain(inner_f)
-                .chain(middle)
-                .chain(inner_b)
-                .chain(outer_b),
+        match seq {
+            Single(chunk) => IterMut::Single(chunk.iter_mut()),
+            Full(tree) => IterMut::Full(tree.iter_mut()),
         }
     }
 }
@@ -1608,11 +1829,17 @@ impl<'a, A: Clone> Iterator for IterMut<'a, A> {
     ///
     /// Time: O(log n)
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
+        match self {
+            IterMut::Single(iter) => iter.next(),
+            IterMut::Full(iter) => iter.next(),
+        }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
+        match self {
+            IterMut::Single(iter) => iter.size_hint(),
+            IterMut::Full(iter) => iter.size_hint(),
+        }
     }
 }
 
@@ -1621,7 +1848,10 @@ impl<'a, A: Clone> DoubleEndedIterator for IterMut<'a, A> {
     ///
     /// Time: O(log n)
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.iter.next_back()
+        match self {
+            IterMut::Single(iter) => iter.next_back(),
+            IterMut::Full(iter) => iter.next_back(),
+        }
     }
 }
 
@@ -1630,29 +1860,24 @@ impl<'a, A: Clone> ExactSizeIterator for IterMut<'a, A> {}
 impl<'a, A: Clone> FusedIterator for IterMut<'a, A> {}
 
 /// A consuming iterator over vectors with values of type `A`.
-pub struct ConsumingIter<A> {
-    iter: Chain<
+pub enum ConsumingIter<A> {
+    Single(ConsumingChunkIter<A>),
+    Full(
         Chain<
-            Chain<Chain<ConsumingChunkIter<A>, ConsumingChunkIter<A>>, ConsumingNodeIter<A>>,
+            Chain<
+                Chain<Chain<ConsumingChunkIter<A>, ConsumingChunkIter<A>>, ConsumingNodeIter<A>>,
+                ConsumingChunkIter<A>,
+            >,
             ConsumingChunkIter<A>,
         >,
-        ConsumingChunkIter<A>,
-    >,
+    ),
 }
 
 impl<A: Clone> ConsumingIter<A> {
     fn new(seq: Vector<A>) -> Self {
-        let outer_f = clone_ref(seq.outer_f).into_iter();
-        let inner_f = clone_ref(seq.inner_f).into_iter();
-        let middle = ConsumingNodeIter::new(clone_ref(seq.middle), seq.middle_level);
-        let inner_b = clone_ref(seq.inner_b).into_iter();
-        let outer_b = clone_ref(seq.outer_b).into_iter();
-        ConsumingIter {
-            iter: outer_f
-                .chain(inner_f)
-                .chain(middle)
-                .chain(inner_b)
-                .chain(outer_b),
+        match seq {
+            Single(chunk) => ConsumingIter::Single(chunk.into_iter()),
+            Full(tree) => ConsumingIter::Full(tree.into_iter()),
         }
     }
 }
@@ -1664,13 +1889,26 @@ impl<A: Clone> Iterator for ConsumingIter<A> {
     ///
     /// Time: O(1)*
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
+        match self {
+            ConsumingIter::Single(iter) => iter.next(),
+            ConsumingIter::Full(iter) => iter.next(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            ConsumingIter::Single(iter) => iter.size_hint(),
+            ConsumingIter::Full(iter) => iter.size_hint(),
+        }
     }
 }
 
 impl<A: Clone> DoubleEndedIterator for ConsumingIter<A> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.iter.next_back()
+        match self {
+            ConsumingIter::Single(iter) => iter.next_back(),
+            ConsumingIter::Full(iter) => iter.next_back(),
+        }
     }
 }
 
