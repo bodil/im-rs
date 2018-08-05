@@ -558,15 +558,17 @@ impl<A: Clone> Vector<A> {
 
     /// Update the value at index `index` in a vector.
     ///
+    /// Returns the previous value at the index.
+    ///
     /// Panics if the index is out of bounds.
     ///
     /// Time: O(log n)
     #[inline]
-    pub fn set(&mut self, index: usize, value: A) {
-        self[index] = value;
+    pub fn set(&mut self, index: usize, value: A) -> A {
+        replace(&mut self[index], value)
     }
 
-    /// Swaps the elements at indices `i` and `j`.
+    /// Swap the elements at indices `i` and `j`.
     ///
     /// Time: O(log n)
     pub fn swap(&mut self, i: usize, j: usize) {
