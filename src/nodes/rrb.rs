@@ -4,6 +4,7 @@
 
 use std::iter::FusedIterator;
 use std::mem::replace;
+use std::ops::Range;
 
 use nodes::chunk::{Chunk, CHUNK_SIZE};
 use util::{
@@ -453,6 +454,48 @@ impl<A: Clone> Node<A> {
         }
     }
 
+    pub fn lookup_chunk(
+        &self,
+        level: usize,
+        base: usize,
+        index: usize,
+    ) -> (Range<usize>, *const Chunk<A>) {
+        if level == 0 {
+            (
+                base..(base + self.children.len()),
+                self.children.unwrap_values() as *const Chunk<A>,
+            )
+        } else {
+            let target_idx = self.index_in(level, index).unwrap();
+            let offset = self.size_up_to(level, target_idx);
+            let child_base = base + offset;
+            let children = self.children.unwrap_nodes();
+            let child = &*children[target_idx];
+            child.lookup_chunk(level - 1, child_base, index - offset)
+        }
+    }
+
+    pub fn lookup_chunk_mut(
+        &mut self,
+        level: usize,
+        base: usize,
+        index: usize,
+    ) -> (Range<usize>, *mut Chunk<A>) {
+        if level == 0 {
+            (
+                base..(base + self.children.len()),
+                self.children.unwrap_values_mut() as *mut Chunk<A>,
+            )
+        } else {
+            let target_idx = self.index_in(level, index).unwrap();
+            let offset = self.size_up_to(level, target_idx);
+            let child_base = base + offset;
+            let children = self.children.unwrap_nodes_mut();
+            let child = Ref::make_mut(&mut children[target_idx]);
+            child.lookup_chunk_mut(level - 1, child_base, index - offset)
+        }
+    }
+
     fn push_child_node(&mut self, side: Side, child: Ref<Node<A>>) {
         let children = self.children.unwrap_nodes_mut();
         match side {
@@ -867,172 +910,6 @@ impl<A: Clone> Node<A> {
 //     }
 //     Ok(())
 // }
-//
-// Iterator
-
-pub struct Iter<'a, A>
-where
-    A: 'a,
-{
-    front_stack: Vec<(&'a Node<A>, usize)>,
-    front_node: &'a Node<A>,
-    front_index: usize,
-    back_stack: Vec<(&'a Node<A>, isize)>,
-    back_node: &'a Node<A>,
-    back_index: isize,
-    remaining: usize,
-}
-
-impl<'a, A: Clone> Iter<'a, A> {
-    pub fn new(root: &'a Node<A>) -> Self {
-        Iter {
-            front_stack: Vec::default(),
-            front_node: root,
-            front_index: 0,
-            back_stack: Vec::default(),
-            back_node: root,
-            back_index: root.children.len() as isize - 1,
-            remaining: root.len(),
-        }
-    }
-}
-
-impl<'a, A: Clone> Iterator for Iter<'a, A> {
-    type Item = &'a A;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.remaining == 0 {
-            return None;
-        }
-        match self.front_node.children {
-            Values(ref values) => {
-                if let Some(ref value) = values.get(self.front_index) {
-                    self.front_index += 1;
-                    self.remaining -= 1;
-                    return Some(value);
-                }
-            }
-            Nodes(_, ref children) => {
-                if let Some(ref node) = children.get(self.front_index) {
-                    self.front_stack.push((self.front_node, self.front_index));
-                    self.front_node = node;
-                    self.front_index = 0;
-                    return self.next();
-                }
-            }
-            Empty => return None,
-        }
-        if let Some((node, index)) = self.front_stack.pop() {
-            self.front_node = node;
-            self.front_index = index + 1;
-            self.next()
-        } else {
-            None
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.remaining, Some(self.remaining))
-    }
-}
-
-impl<'a, A: Clone> DoubleEndedIterator for Iter<'a, A> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.remaining == 0 {
-            return None;
-        }
-        if self.back_index < 0 {
-            if let Some((node, index)) = self.back_stack.pop() {
-                self.back_node = node;
-                self.back_index = index - 1;
-                self.next()
-            } else {
-                None
-            }
-        } else {
-            match self.back_node.children {
-                Values(ref values) => {
-                    let result = &values[self.back_index as usize];
-                    self.back_index -= 1;
-                    self.remaining -= 1;
-                    Some(result)
-                }
-                Nodes(_, ref children) => {
-                    self.back_stack.push((self.back_node, self.back_index));
-                    self.back_node = &children[self.back_index as usize];
-                    self.back_index = (self.back_node.children.len() - 1) as isize;
-                    self.next()
-                }
-                Empty => None,
-            }
-        }
-    }
-}
-
-impl<'a, A: Clone> ExactSizeIterator for Iter<'a, A> {}
-
-impl<'a, A: Clone> FusedIterator for Iter<'a, A> {}
-
-// Mutable iterator
-
-pub struct IterMut<'a, A>
-where
-    A: 'a,
-{
-    root: &'a mut Node<A>,
-    level: usize,
-    front_index: usize,
-    back_index: usize,
-}
-
-impl<'a, A: Clone> IterMut<'a, A> {
-    pub fn new(root: &'a mut Node<A>, level: usize) -> Self {
-        IterMut {
-            front_index: 0,
-            back_index: root.children.len(),
-            root,
-            level,
-        }
-    }
-}
-
-impl<'a, A: Clone> Iterator for IterMut<'a, A> {
-    type Item = &'a mut A;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.front_index == self.back_index {
-            return None;
-        }
-        let r = self.root.index_mut(self.level, self.front_index);
-        self.front_index += 1;
-        // I blame the Iterator trait in its entirety for this unsafe
-        // block, it wouldn't be necessary if `fn next(&'a mut self)`
-        // were permissible.
-        #[allow(unsafe_code)]
-        Some(unsafe { &mut *(r as *mut _) })
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.back_index - self.front_index;
-        (remaining, Some(remaining))
-    }
-}
-
-impl<'a, A: Clone> DoubleEndedIterator for IterMut<'a, A> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.front_index == self.back_index {
-            return None;
-        }
-        self.back_index -= 1;
-        let r = self.root.index_mut(self.level, self.back_index);
-        #[allow(unsafe_code)]
-        Some(unsafe { &mut *(r as *mut _) })
-    }
-}
-
-impl<'a, A: Clone> ExactSizeIterator for IterMut<'a, A> {}
-
-impl<'a, A: Clone> FusedIterator for IterMut<'a, A> {}
 
 // Consuming iterator
 

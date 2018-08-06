@@ -51,22 +51,18 @@ use std::hash::{Hash, Hasher};
 use std::iter::Sum;
 use std::iter::{Chain, FromIterator, FusedIterator};
 use std::mem::{replace, swap};
-use std::ops::{Add, Index, IndexMut};
+use std::ops::{Add, Bound, Index, IndexMut, RangeBounds};
 
-use std::ops::{Bound, RangeBounds};
-
-use nodes::chunk::{
-    Chunk, ConsumingIter as ConsumingChunkIter, Iter as ChunkIter, IterMut as ChunkIterMut,
-    CHUNK_SIZE,
-};
-use nodes::rrb::{
-    ConsumingIter as ConsumingNodeIter, Iter as NodeIter, IterMut as NodeIterMut, Node, PopResult,
-    PushResult, SplitResult,
-};
+use nodes::chunk::{Chunk, ConsumingIter as ConsumingChunkIter, CHUNK_SIZE};
+use nodes::rrb::{ConsumingIter as ConsumingNodeIter, Node, PopResult, PushResult, SplitResult};
 use sort;
 use util::{clone_ref, swap_indices, Ref, Side};
 
 use self::Vector::{Full, Single};
+
+mod focus;
+
+pub use self::focus::{Focus, FocusMut};
 
 /// Construct a vector from a sequence of elements.
 ///
@@ -137,9 +133,9 @@ macro_rules! vector {
 /// [`Vec`][Vec].
 ///
 /// [rrbpaper]: https://infoscience.epfl.ch/record/213452/files/rrbvector.pdf
-/// [chunkedseq]: http://deepsea.inria.fr/pasl/chunkedseq.pdf Vec]:
-/// [https://doc.rust-lang.org/std/vec/struct.Vec.html VecDeque]:
-/// [https://doc.rust-lang.org/std/collections/struct.VecDeque.html
+/// [chunkedseq]: http://deepsea.inria.fr/pasl/chunkedseq.pdf
+/// [Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
+/// [VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
 pub enum Vector<A> {
     #[doc(hidden)]
     Single(Chunk<A>),
@@ -156,6 +152,20 @@ pub struct RRB<A> {
     middle: Ref<Node<A>>,
     inner_b: Ref<Chunk<A>>,
     outer_b: Ref<Chunk<A>>,
+}
+
+impl<A> Clone for RRB<A> {
+    fn clone(&self) -> Self {
+        RRB {
+            length: self.length,
+            middle_level: self.middle_level,
+            outer_f: self.outer_f.clone(),
+            inner_f: self.inner_f.clone(),
+            middle: self.middle.clone(),
+            inner_b: self.inner_b.clone(),
+            outer_b: self.outer_b.clone(),
+        }
+    }
 }
 
 impl<A: Clone> Vector<A> {
@@ -274,6 +284,28 @@ impl<A: Clone> Vector<A> {
     #[must_use]
     pub fn iter_mut(&mut self) -> IterMut<A> {
         IterMut::new(self)
+    }
+
+    /// Construct a [`Focus`][Focus] for a vector.
+    ///
+    /// Time: O(1)
+    ///
+    /// [Focus]: enum.Focus.html
+    #[inline]
+    #[must_use]
+    pub fn focus(&self) -> Focus<'_, A> {
+        Focus::new(self)
+    }
+
+    /// Construct a [`FocusMut`][FocusMut] for a vector.
+    ///
+    /// Time: O(1)
+    ///
+    /// [FocusMut]: enum.FocusMut.html
+    #[inline]
+    #[must_use]
+    pub fn focus_mut(&mut self) -> FocusMut<'_, A> {
+        FocusMut::new(self)
     }
 
     /// Get a reference to the value at index `index` in a vector.
@@ -798,18 +830,20 @@ impl<A: Clone> Vector<A> {
     /// returns false from the vector.
     ///
     /// Time: O(n)
-    // FIXME will actually be O(n log n) without the focus optimisation
     pub fn retain<F>(&mut self, mut f: F)
     where
         F: FnMut(&A) -> bool,
     {
         let len = self.len();
         let mut del = 0;
-        for i in 0..len {
-            if !f(&self[i]) {
-                del += 1;
-            } else if del > 0 {
-                self.swap(i - del, i);
+        {
+            let mut focus = self.focus_mut();
+            for i in 0..len {
+                if !f(focus.index(i)) {
+                    del += 1;
+                } else if del > 0 {
+                    focus.swap(i - del, i);
+                }
             }
         }
         if del > 0 {
@@ -1275,7 +1309,7 @@ impl<A: Clone> Vector<A> {
     {
         let len = self.len();
         if len > 1 {
-            sort::quicksort(self, 0, len - 1, &cmp);
+            sort::quicksort(&mut self.focus_mut(), 0, len - 1, &cmp);
         }
     }
 }
@@ -1283,45 +1317,6 @@ impl<A: Clone> Vector<A> {
 // Implementation details
 
 impl<A: Clone> RRB<A> {
-    fn iter<'a>(
-        &'a self,
-    ) -> Chain<
-        Chain<Chain<Chain<ChunkIter<'a, A>, ChunkIter<'a, A>>, NodeIter<'a, A>>, ChunkIter<'a, A>>,
-        ChunkIter<'a, A>,
-    > {
-        let outer_f = self.outer_f.iter();
-        let inner_f = self.inner_f.iter();
-        let middle = NodeIter::new(&self.middle);
-        let inner_b = self.inner_b.iter();
-        let outer_b = self.outer_b.iter();
-        outer_f
-            .chain(inner_f)
-            .chain(middle)
-            .chain(inner_b)
-            .chain(outer_b)
-    }
-
-    fn iter_mut<'a>(
-        &'a mut self,
-    ) -> Chain<
-        Chain<
-            Chain<Chain<ChunkIterMut<'a, A>, ChunkIterMut<'a, A>>, NodeIterMut<'a, A>>,
-            ChunkIterMut<'a, A>,
-        >,
-        ChunkIterMut<'a, A>,
-    > {
-        let outer_f = Ref::make_mut(&mut self.outer_f).iter_mut();
-        let inner_f = Ref::make_mut(&mut self.inner_f).iter_mut();
-        let middle = NodeIterMut::new(Ref::make_mut(&mut self.middle), self.middle_level);
-        let inner_b = Ref::make_mut(&mut self.inner_b).iter_mut();
-        let outer_b = Ref::make_mut(&mut self.outer_b).iter_mut();
-        outer_f
-            .chain(inner_f)
-            .chain(middle)
-            .chain(inner_b)
-            .chain(outer_b)
-    }
-
     fn into_iter(
         self,
     ) -> Chain<
@@ -1493,15 +1488,7 @@ impl<A: Clone> Clone for Vector<A> {
     fn clone(&self) -> Self {
         match self {
             Single(chunk) => Single(chunk.clone()),
-            Full(tree) => Full(RRB {
-                length: tree.length,
-                middle_level: tree.middle_level,
-                outer_f: tree.outer_f.clone(),
-                inner_f: tree.inner_f.clone(),
-                middle: tree.middle.clone(),
-                inner_b: tree.inner_b.clone(),
-                outer_b: tree.outer_b.clone(),
-            }),
+            Full(tree) => Full(tree.clone()),
         }
     }
 }
@@ -1543,16 +1530,12 @@ impl<A: Clone + Eq> PartialEq for Vector<A> {
                     && cmp_chunk(&left.inner_f, &right.inner_f)
                     && cmp_chunk(&left.inner_b, &right.inner_b)
                     && cmp_chunk(&left.outer_b, &right.outer_b)
+                    && (left.middle.is_empty() && right.middle.is_empty())
+                    || Ref::ptr_eq(&left.middle, &right.middle)
                 {
-                    if (left.middle.is_empty() && right.middle.is_empty())
-                        || Ref::ptr_eq(&left.middle, &right.middle)
-                    {
-                        return true;
-                    } else {
-                        return NodeIter::new(&left.middle).eq(NodeIter::new(&right.middle));
-                    }
+                    return true;
                 }
-                left.iter().eq(right.iter())
+                self.iter().eq(other.iter())
             }
             (left, right) => left.len() == right.len() && left.iter().eq(right.iter()),
         }
@@ -1738,24 +1721,18 @@ impl<'a, A: Clone> From<&'a Vec<A>> for Vector<A> {
 /// To obtain one, use [`Vector::iter()`][iter].
 ///
 /// [iter]: enum.Vector.html#method.iter
-pub enum Iter<'a, A: 'a> {
-    Single(ChunkIter<'a, A>),
-    Full(
-        Chain<
-            Chain<
-                Chain<Chain<ChunkIter<'a, A>, ChunkIter<'a, A>>, NodeIter<'a, A>>,
-                ChunkIter<'a, A>,
-            >,
-            ChunkIter<'a, A>,
-        >,
-    ),
+pub struct Iter<'a, A: 'a> {
+    focus: Focus<'a, A>,
+    front_index: usize,
+    back_index: usize,
 }
 
 impl<'a, A: Clone> Iter<'a, A> {
     fn new(seq: &'a Vector<A>) -> Self {
-        match seq {
-            Single(chunk) => Iter::Single(chunk.iter()),
-            Full(tree) => Iter::Full(tree.iter()),
+        Iter {
+            focus: seq.focus(),
+            front_index: 0,
+            back_index: seq.len(),
         }
     }
 }
@@ -1767,17 +1744,19 @@ impl<'a, A: Clone> Iterator for Iter<'a, A> {
     ///
     /// Time: O(1)*
     fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            Iter::Single(iter) => iter.next(),
-            Iter::Full(iter) => iter.next(),
+        if self.front_index >= self.back_index {
+            return None;
         }
+        #[allow(unsafe_code)]
+        let focus: &'a mut Focus<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
+        let value = focus.get(self.front_index);
+        self.front_index += 1;
+        value
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            Iter::Single(iter) => iter.size_hint(),
-            Iter::Full(iter) => iter.size_hint(),
-        }
+        let remaining = self.back_index - self.front_index;
+        (remaining, Some(remaining))
     }
 }
 
@@ -1786,10 +1765,13 @@ impl<'a, A: Clone> DoubleEndedIterator for Iter<'a, A> {
     ///
     /// Time: O(1)*
     fn next_back(&mut self) -> Option<Self::Item> {
-        match self {
-            Iter::Single(iter) => iter.next_back(),
-            Iter::Full(iter) => iter.next_back(),
+        if self.front_index >= self.back_index {
+            return None;
         }
+        self.back_index -= 1;
+        #[allow(unsafe_code)]
+        let focus: &'a mut Focus<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
+        focus.get(self.back_index)
     }
 }
 
@@ -1802,58 +1784,71 @@ impl<'a, A: Clone> FusedIterator for Iter<'a, A> {}
 /// To obtain one, use [`Vector::iter_mut()`][iter_mut].
 ///
 /// [iter_mut]: enum.Vector.html#method.iter_mut
-pub enum IterMut<'a, A: 'a> {
-    Single(ChunkIterMut<'a, A>),
-    Full(
-        Chain<
-            Chain<
-                Chain<Chain<ChunkIterMut<'a, A>, ChunkIterMut<'a, A>>, NodeIterMut<'a, A>>,
-                ChunkIterMut<'a, A>,
-            >,
-            ChunkIterMut<'a, A>,
-        >,
-    ),
+pub struct IterMut<'a, A>
+where
+    A: 'a,
+{
+    focus: FocusMut<'a, A>,
+    front_index: usize,
+    back_index: usize,
 }
 
-impl<'a, A: Clone> IterMut<'a, A> {
+impl<'a, A> IterMut<'a, A>
+where
+    A: 'a + Clone,
+{
     fn new(seq: &'a mut Vector<A>) -> Self {
-        match seq {
-            Single(chunk) => IterMut::Single(chunk.iter_mut()),
-            Full(tree) => IterMut::Full(tree.iter_mut()),
+        let focus = seq.focus_mut();
+        let len = focus.len();
+        IterMut {
+            focus,
+            front_index: 0,
+            back_index: len,
         }
     }
 }
 
-impl<'a, A: Clone> Iterator for IterMut<'a, A> {
+impl<'a, A> Iterator for IterMut<'a, A>
+where
+    A: 'a + Clone,
+{
     type Item = &'a mut A;
 
     /// Advance the iterator and return the next value.
     ///
     /// Time: O(log n)
     fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            IterMut::Single(iter) => iter.next(),
-            IterMut::Full(iter) => iter.next(),
+        if self.front_index >= self.back_index {
+            return None;
         }
+        #[allow(unsafe_code)]
+        let focus: &'a mut FocusMut<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
+        let value = focus.get_mut(self.front_index);
+        self.front_index += 1;
+        value
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            IterMut::Single(iter) => iter.size_hint(),
-            IterMut::Full(iter) => iter.size_hint(),
-        }
+        let remaining = self.back_index - self.front_index;
+        (remaining, Some(remaining))
     }
 }
 
-impl<'a, A: Clone> DoubleEndedIterator for IterMut<'a, A> {
+impl<'a, A> DoubleEndedIterator for IterMut<'a, A>
+where
+    A: 'a + Clone,
+{
     /// Remove and return an element from the back of the iterator.
     ///
     /// Time: O(log n)
     fn next_back(&mut self) -> Option<Self::Item> {
-        match self {
-            IterMut::Single(iter) => iter.next_back(),
-            IterMut::Full(iter) => iter.next_back(),
+        if self.front_index >= self.back_index {
+            return None;
         }
+        self.back_index -= 1;
+        #[allow(unsafe_code)]
+        let focus: &'a mut FocusMut<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
+        focus.get_mut(self.back_index)
     }
 }
 
@@ -1967,6 +1962,7 @@ pub mod proptest {
 
 #[cfg(test)]
 mod test {
+    use super::proptest::vector;
     use super::*;
     use proptest::collection::vec;
     use proptest::num::{i32, usize};
@@ -2119,6 +2115,32 @@ mod test {
             for (index, item) in seq1.into_iter().enumerate() {
                 assert_eq!(vec[index], item);
             }
+        }
+
+        #[test]
+        fn iter_mut(ref input in vector(i32::ANY, 0..10000)) {
+            let mut vec = input.clone();
+            {
+                for p in vec.iter_mut() {
+                    *p += 1;
+                }
+            }
+            let expected: Vector<i32> = input.clone().into_iter().map(|i| i+1).collect();
+            assert_eq!(expected, vec);
+        }
+
+        #[test]
+        fn focus(ref input in vector(i32::ANY, 0..10000)) {
+            let mut vec = input.clone();
+            {
+                let mut focus = vec.focus_mut();
+                for i in 0..input.len() {
+                    let p = focus.index_mut(i);
+                    *p += 1;
+                }
+            }
+            let expected: Vector<i32> = input.clone().into_iter().map(|i| i+1).collect();
+            assert_eq!(expected, vec);
         }
     }
 }

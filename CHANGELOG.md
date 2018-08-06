@@ -9,6 +9,13 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- `Vector` now has `Focus` and `FocusMut` APIs for caching index lookups,
+  yielding huge performance gains when performing multiple adjacent index
+  lookups.  `Vector::iter` has been reimplemented using this API, and is now
+  much simpler and about twice as fast as a result, and `Vector::iter_mut` now
+  runs nearly an order of magnitude faster. Likewise, `Vector::sort` and
+  `Vector::retain` are now using `FocusMut` and run considerably faster as a
+  result.
 - `Vector::set` now returns the replaced value.
 
 ### Changed
