@@ -112,6 +112,24 @@ where
     pub fn index(&mut self, index: usize) -> &A {
         self.get(index).expect("index out of bounds")
     }
+
+    /// Get the chunk for the given index.
+    ///
+    /// This gives you a reference to the leaf node that contains the index,
+    /// along with its start and end indices.
+    pub fn chunk_at(&mut self, index: usize) -> (Range<usize>, &[A]) {
+        let len = self.len();
+        if index >= len {
+            panic!("vector::Focus::chunk_at: index out of bounds");
+        }
+        match self {
+            Focus::Single(chunk) => (0..len, chunk.as_slice()),
+            Focus::Full(tree) => {
+                let (range, chunk) = tree.get_chunk(index);
+                (range, chunk.as_slice())
+            }
+        }
+    }
 }
 
 pub struct TreeFocus<A> {
@@ -188,6 +206,13 @@ where
         }
         let target_index = index - self.target_range.start;
         Some(&self.get_focus()[target_index])
+    }
+
+    pub fn get_chunk(&mut self, index: usize) -> (Range<usize>, &Chunk<A>) {
+        if !contains(&self.target_range, &index) {
+            self.set_focus(index);
+        }
+        (self.target_range.clone(), self.get_focus())
     }
 }
 
@@ -349,6 +374,24 @@ where
             f(&mut *pa, &mut *pb, &mut *pc)
         }
     }
+
+    /// Get the chunk for the given index.
+    ///
+    /// This gives you a reference to the leaf node that contains the index,
+    /// along with its start and end indices.
+    pub fn chunk_at(&mut self, index: usize) -> (Range<usize>, &mut [A]) {
+        let len = self.len();
+        if index >= len {
+            panic!("vector::FocusMut::chunk_at: index out of bounds");
+        }
+        match self {
+            FocusMut::Single(chunk) => (0..len, chunk.as_mut_slice()),
+            FocusMut::Full(tree) => {
+                let (range, chunk) = tree.get_chunk(index);
+                (range, chunk.as_mut_slice())
+            }
+        }
+    }
 }
 
 pub struct TreeFocusMut<'a, A>
@@ -424,5 +467,12 @@ where
         }
         let target_index = index - self.target_range.start;
         Some(&mut self.get_focus()[target_index])
+    }
+
+    pub fn get_chunk(&mut self, index: usize) -> (Range<usize>, &mut Chunk<A>) {
+        if !contains(&self.target_range, &index) {
+            self.set_focus(index);
+        }
+        (self.target_range.clone(), self.get_focus())
     }
 }

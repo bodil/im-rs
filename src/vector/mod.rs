@@ -286,6 +286,24 @@ impl<A: Clone> Vector<A> {
         IterMut::new(self)
     }
 
+    /// Get an iterator over the leaf nodes of a vector.
+    ///
+    /// Time: O(1)
+    #[inline]
+    #[must_use]
+    pub fn chunks(&self) -> Chunks<'_, A> {
+        Chunks::new(self)
+    }
+
+    /// Get a mutable iterator over the leaf nodes of a vector.
+    ///
+    /// Time: O(1)
+    #[inline]
+    #[must_use]
+    pub fn chunks_mut(&mut self) -> ChunksMut<'_, A> {
+        ChunksMut::new(self)
+    }
+
     /// Construct a [`Focus`][Focus] for a vector.
     ///
     /// Time: O(1)
@@ -1913,6 +1931,123 @@ impl<A: Clone> ExactSizeIterator for ConsumingIter<A> {}
 
 impl<A: Clone> FusedIterator for ConsumingIter<A> {}
 
+/// An iterator over the leaf nodes of a vector.
+///
+/// To obtain one, use [`Vector::chunks()`][chunks].
+///
+/// [chunks]: enum.Vector.html#method.chunks
+pub struct Chunks<'a, A: 'a> {
+    focus: Focus<'a, A>,
+    front_index: usize,
+    back_index: usize,
+}
+
+impl<'a, A: Clone> Chunks<'a, A> {
+    fn new(seq: &'a Vector<A>) -> Self {
+        Chunks {
+            focus: seq.focus(),
+            front_index: 0,
+            back_index: seq.len(),
+        }
+    }
+}
+
+impl<'a, A: Clone> Iterator for Chunks<'a, A> {
+    type Item = &'a [A];
+
+    /// Advance the iterator and return the next value.
+    ///
+    /// Time: O(1)*
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.front_index >= self.back_index {
+            return None;
+        }
+        #[allow(unsafe_code)]
+        let focus: &'a mut Focus<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
+        let (range, value) = focus.chunk_at(self.front_index);
+        self.front_index = range.end;
+        Some(value)
+    }
+}
+
+impl<'a, A: Clone> DoubleEndedIterator for Chunks<'a, A> {
+    /// Advance the iterator and return the next value.
+    ///
+    /// Time: O(1)*
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.front_index >= self.back_index {
+            return None;
+        }
+        self.back_index -= 1;
+        #[allow(unsafe_code)]
+        let focus: &'a mut Focus<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
+        let (range, value) = focus.chunk_at(self.back_index);
+        self.back_index = range.start;
+        Some(value)
+    }
+}
+
+impl<'a, A: Clone> FusedIterator for Chunks<'a, A> {}
+
+/// A mutable iterator over the leaf nodes of a vector.
+///
+/// To obtain one, use [`Vector::chunks_mut()`][chunks_mut].
+///
+/// [chunks_mut]: enum.Vector.html#method.chunks_mut
+pub struct ChunksMut<'a, A: 'a> {
+    focus: FocusMut<'a, A>,
+    front_index: usize,
+    back_index: usize,
+}
+
+impl<'a, A: Clone> ChunksMut<'a, A> {
+    fn new(seq: &'a mut Vector<A>) -> Self {
+        let len = seq.len();
+        ChunksMut {
+            focus: seq.focus_mut(),
+            front_index: 0,
+            back_index: len,
+        }
+    }
+}
+
+impl<'a, A: Clone> Iterator for ChunksMut<'a, A> {
+    type Item = &'a mut [A];
+
+    /// Advance the iterator and return the next value.
+    ///
+    /// Time: O(1)*
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.front_index >= self.back_index {
+            return None;
+        }
+        #[allow(unsafe_code)]
+        let focus: &'a mut FocusMut<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
+        let (range, value) = focus.chunk_at(self.front_index);
+        self.front_index = range.end;
+        Some(value)
+    }
+}
+
+impl<'a, A: Clone> DoubleEndedIterator for ChunksMut<'a, A> {
+    /// Advance the iterator and return the next value.
+    ///
+    /// Time: O(1)*
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.front_index >= self.back_index {
+            return None;
+        }
+        self.back_index -= 1;
+        #[allow(unsafe_code)]
+        let focus: &'a mut FocusMut<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
+        let (range, value) = focus.chunk_at(self.back_index);
+        self.back_index = range.start;
+        Some(value)
+    }
+}
+
+impl<'a, A: Clone> FusedIterator for ChunksMut<'a, A> {}
+
 // QuickCheck
 
 #[cfg(all(feature = "arc", any(test, feature = "quickcheck")))]
@@ -2000,6 +2135,34 @@ mod test {
         vec2.push_front(0);
         assert_eq!(0, *vec2.get(0).unwrap());
         assert_eq!(0, vec2[0]);
+    }
+
+    #[test]
+    fn large_vector_focus() {
+        let input = Vector::from_iter(0..100000);
+        let vec = input.clone();
+        let mut sum: i64 = 0;
+        let mut focus = vec.focus();
+        for i in 0..input.len() {
+            sum += *focus.index(i);
+        }
+        let expected: i64 = (0..100000).into_iter().sum();
+        assert_eq!(expected, sum);
+    }
+
+    #[test]
+    fn large_vector_focus_mut() {
+        let input = Vector::from_iter(0..100000);
+        let mut vec = input.clone();
+        {
+            let mut focus = vec.focus_mut();
+            for i in 0..input.len() {
+                let p = focus.index_mut(i);
+                *p += 1;
+            }
+        }
+        let expected: Vector<i32> = input.clone().into_iter().map(|i| i + 1).collect();
+        assert_eq!(expected, vec);
     }
 
     proptest! {
@@ -2141,6 +2304,25 @@ mod test {
             }
             let expected: Vector<i32> = input.clone().into_iter().map(|i| i+1).collect();
             assert_eq!(expected, vec);
+        }
+
+        #[test]
+        fn chunks(ref input in vector(i32::ANY,0..10000)) {
+            let output: Vector<_> = input.chunks().flat_map(|a|a).cloned().collect();
+            assert_eq!(input, &output);
+            let rev_in: Vector<_> = input.iter().rev().cloned().collect();
+            let rev_out: Vector<_> = input.chunks().rev().map(|c| c.iter().rev()).flat_map(|a|a).cloned().collect();
+            assert_eq!(rev_in, rev_out);
+        }
+
+        #[test]
+        fn chunks_mut(ref mut input_src in vector(i32::ANY,0..10000)) {
+            let mut input = input_src.clone();
+            let output: Vector<_> = input.chunks_mut().flat_map(|a|a).map(|v| *v).collect();
+            assert_eq!(input, output);
+            let rev_in: Vector<_> = input.iter().rev().cloned().collect();
+            let rev_out: Vector<_> = input.chunks_mut().rev().map(|c| c.iter().rev()).flat_map(|a|a).cloned().collect();
+            assert_eq!(rev_in, rev_out);
         }
     }
 }

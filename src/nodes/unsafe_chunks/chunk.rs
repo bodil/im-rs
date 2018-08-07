@@ -7,6 +7,7 @@ use std::iter::FusedIterator;
 use std::mem::{self, ManuallyDrop};
 use std::ops::{Index, IndexMut};
 use std::ptr;
+use std::slice::{from_raw_parts, from_raw_parts_mut};
 
 pub const CHUNK_SIZE: usize = 64;
 
@@ -332,6 +333,14 @@ impl<A> Chunk<A> {
             right_index: self.len(),
             chunk: self,
         }
+    }
+
+    pub fn as_slice(&self) -> &[A] {
+        unsafe { from_raw_parts(&self.values[self.left], self.len()) }
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [A] {
+        unsafe { from_raw_parts_mut(&mut self.values[self.left], self.len()) }
     }
 }
 
