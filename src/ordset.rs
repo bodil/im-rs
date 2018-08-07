@@ -30,6 +30,8 @@ use nodes::btree::{
     BTreeValue, ConsumingIter as ConsumingNodeIter, DiffItem as NodeDiffItem,
     DiffIter as NodeDiffIter, Insert, Iter as NodeIter, Node, Remove,
 };
+#[cfg(has_specialisation)]
+use util::linear_search_by;
 use util::Ref;
 
 pub type DiffItem<'a, A> = NodeDiffItem<'a, A>;
@@ -73,6 +75,7 @@ impl<A> Deref for Value<A> {
 
 // FIXME lacking specialisation, we can't simply implement `BTreeValue`
 // for `A`, we have to use the `Value<A>` indirection.
+#[cfg(not(has_specialisation))]
 impl<A: Ord + Clone> BTreeValue for Value<A> {
     type Key = A;
 
@@ -85,7 +88,6 @@ impl<A: Ord + Clone> BTreeValue for Value<A> {
         BK: Ord + ?Sized,
         Self::Key: Borrow<BK>,
     {
-        // TODO see if a linear search is actually faster
         slice.binary_search_by(|value| Self::Key::borrow(value).cmp(key))
     }
 
@@ -103,6 +105,54 @@ impl<A: Ord + Clone> BTreeValue for Value<A> {
 
     fn cmp_values(&self, other: &Self) -> Ordering {
         self.cmp(other)
+    }
+}
+
+#[cfg(has_specialisation)]
+impl<A: Ord + Clone> BTreeValue for Value<A> {
+    type Key = A;
+
+    fn ptr_eq(&self, _other: &Self) -> bool {
+        false
+    }
+
+    default fn search_key<BK>(slice: &[Self], key: &BK) -> Result<usize, usize>
+    where
+        BK: Ord + ?Sized,
+        Self::Key: Borrow<BK>,
+    {
+        slice.binary_search_by(|value| Self::Key::borrow(value).cmp(key))
+    }
+
+    default fn search_value(slice: &[Self], key: &Self) -> Result<usize, usize> {
+        slice.binary_search_by(|value| value.cmp(key))
+    }
+
+    fn cmp_keys<BK>(&self, other: &BK) -> Ordering
+    where
+        BK: Ord + ?Sized,
+        Self::Key: Borrow<BK>,
+    {
+        Self::Key::borrow(self).cmp(other)
+    }
+
+    fn cmp_values(&self, other: &Self) -> Ordering {
+        self.cmp(other)
+    }
+}
+
+#[cfg(has_specialisation)]
+impl<A: Ord + Clone + Copy> BTreeValue for Value<A> {
+    fn search_key<BK>(slice: &[Self], key: &BK) -> Result<usize, usize>
+    where
+        BK: Ord + ?Sized,
+        Self::Key: Borrow<BK>,
+    {
+        linear_search_by(slice, |value| Self::Key::borrow(value).cmp(key))
+    }
+
+    fn search_value(slice: &[Self], key: &Self) -> Result<usize, usize> {
+        linear_search_by(slice, |value| value.cmp(key))
     }
 }
 

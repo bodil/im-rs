@@ -4,6 +4,7 @@
 
 // Every codebase needs a `util` module.
 
+use std::cmp::Ordering;
 use std::ops::IndexMut;
 use std::ptr;
 
@@ -22,6 +23,12 @@ where
     A: Clone,
 {
     Ref::try_unwrap(r).unwrap_or_else(|r| (*r).clone())
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    Left,
+    Right,
 }
 
 /// Swap two values of anything implementing `IndexMut`.
@@ -45,8 +52,21 @@ where
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Side {
-    Left,
-    Right,
+#[allow(dead_code)]
+pub fn linear_search_by<'a, A, I, F>(iterable: I, mut cmp: F) -> Result<usize, usize>
+where
+    A: 'a,
+    I: IntoIterator<Item = &'a A>,
+    F: FnMut(&A) -> Ordering,
+{
+    let mut pos = 0;
+    for value in iterable {
+        match cmp(value) {
+            Ordering::Equal => return Ok(pos),
+            Ordering::Greater => return Err(pos),
+            Ordering::Less => {}
+        }
+        pos += 1;
+    }
+    Err(pos)
 }

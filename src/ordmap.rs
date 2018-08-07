@@ -25,10 +25,12 @@ use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::{FromIterator, Iterator, Sum};
 use std::mem;
 use std::ops::{Add, Index, IndexMut};
-use util::Ref;
 
 use hashmap::HashMap;
 use nodes::btree::{BTreeValue, Insert, Node, Remove};
+#[cfg(has_specialisation)]
+use util::linear_search_by;
+use util::Ref;
 
 pub use nodes::btree::{ConsumingIter, DiffItem, DiffIter, Iter};
 
@@ -63,6 +65,7 @@ macro_rules! ordmap {
     }};
 }
 
+#[cfg(not(has_specialisation))]
 impl<K: Ord + Clone, V: Clone> BTreeValue for (K, V) {
     type Key = K;
 
@@ -92,6 +95,54 @@ impl<K: Ord + Clone, V: Clone> BTreeValue for (K, V) {
 
     fn cmp_values(&self, other: &Self) -> Ordering {
         self.0.cmp(&other.0)
+    }
+}
+
+#[cfg(has_specialisation)]
+impl<K: Ord + Clone, V: Clone> BTreeValue for (K, V) {
+    type Key = K;
+
+    fn ptr_eq(&self, _other: &Self) -> bool {
+        false
+    }
+
+    default fn search_key<BK>(slice: &[Self], key: &BK) -> Result<usize, usize>
+    where
+        BK: Ord + ?Sized,
+        Self::Key: Borrow<BK>,
+    {
+        slice.binary_search_by(|value| Self::Key::borrow(&value.0).cmp(key))
+    }
+
+    default fn search_value(slice: &[Self], key: &Self) -> Result<usize, usize> {
+        slice.binary_search_by(|value| value.0.cmp(&key.0))
+    }
+
+    fn cmp_keys<BK>(&self, other: &BK) -> Ordering
+    where
+        BK: Ord + ?Sized,
+        Self::Key: Borrow<BK>,
+    {
+        Self::Key::borrow(&self.0).cmp(other)
+    }
+
+    fn cmp_values(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+#[cfg(has_specialisation)]
+impl<K: Ord + Clone + Copy, V: Clone> BTreeValue for (K, V) {
+    fn search_key<BK>(slice: &[Self], key: &BK) -> Result<usize, usize>
+    where
+        BK: Ord + ?Sized,
+        Self::Key: Borrow<BK>,
+    {
+        linear_search_by(slice, |value| Self::Key::borrow(&value.0).cmp(key))
+    }
+
+    fn search_value(slice: &[Self], key: &Self) -> Result<usize, usize> {
+        linear_search_by(slice, |value| value.0.cmp(&key.0))
     }
 }
 
