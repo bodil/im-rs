@@ -2055,10 +2055,10 @@ impl<'a, A: Clone> FusedIterator for ChunksMut<'a, A> {}
 
 // QuickCheck
 
-#[cfg(all(feature = "arc", any(test, feature = "quickcheck")))]
+#[cfg(all(ref_arc, any(test, feature = "quickcheck")))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(feature = "arc", any(test, feature = "quickcheck")))]
+#[cfg(all(ref_arc, any(test, feature = "quickcheck")))]
 impl<A: Arbitrary + Sync + Clone> Arbitrary for Vector<A> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         Vector::from_iter(Vec::<A>::arbitrary(g))

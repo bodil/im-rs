@@ -205,6 +205,17 @@
 //! collector (which, in our case, is just a simple
 //! [`Rc`][std::rc::Rc]).
 //!
+//! ## Thread Safety
+//!
+//! The data structures in the `im` crate are thread safe, through
+//! [`Arc`][std::sync::Arc]. This comes with a slight performance impact, so
+//! that if you prioritise speed over thread safety, you may want to use the
+//! `im-rc` crate instead, which is identical to `im` except that it uses
+//! [`Rc`][std::rc::Rc] instead of [`Arc`][std::sync::Arc], implying that the
+//! data structures in `im-rc` do not implement [`Send`][std::marker::Send] and
+//! [`Sync`][std::marker::Sync]. This yields approximately a 20-25% increase in
+//! general performance.
+//!
 //! [std::collections]: https://doc.rust-lang.org/std/collections/index.html
 //! [std::collections::VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
 //! [std::vec::Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
@@ -215,6 +226,8 @@
 //! [std::clone::Clone]: https://doc.rust-lang.org/std/clone/trait.Clone.html
 //! [std::clone::Clone::clone]: https://doc.rust-lang.org/std/clone/trait.Clone.html#tymethod.clone
 //! [std::hash::Hash]: https://doc.rust-lang.org/std/hash/trait.Hash.html
+//! [std::marker::Send]: https://doc.rust-lang.org/std/marker/trait.Send.html
+//! [std::marker::Sync]: https://doc.rust-lang.org/std/marker/trait.Sync.html
 //! [hashmap::HashMap]: ./hashmap/struct.HashMap.html
 //! [hashset::HashSet]: ./hashset/struct.HashSet.html
 //! [ordmap::OrdMap]: ./ordmap/struct.OrdMap.html

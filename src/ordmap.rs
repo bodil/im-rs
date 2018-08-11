@@ -1732,10 +1732,10 @@ impl<'a, K: Ord + Hash + Eq + Clone, V: Clone, S: BuildHasher> From<&'a HashMap<
 
 // QuickCheck
 
-#[cfg(all(feature = "arc", any(test, feature = "quickcheck")))]
+#[cfg(all(ref_arc, any(test, feature = "quickcheck")))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(feature = "arc", any(test, feature = "quickcheck")))]
+#[cfg(all(ref_arc, any(test, feature = "quickcheck")))]
 impl<K: Ord + Clone + Arbitrary + Sync, V: Clone + Arbitrary + Sync> Arbitrary for OrdMap<K, V> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         OrdMap::from_iter(Vec::<(K, V)>::arbitrary(g))
@@ -1920,7 +1920,7 @@ mod test {
 
     #[test]
     fn safe_mutation() {
-        let v1 = OrdMap::from_iter((0..131072).into_iter().map(|i| (i, i)));
+        let v1 = OrdMap::from_iter((0..131072).map(|i| (i, i)));
         let mut v2 = v1.clone();
         v2.insert(131000, 23);
         assert_eq!(Some(&23), v2.get(&131000));
