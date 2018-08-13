@@ -752,18 +752,20 @@ impl<A: Clone> Vector<A> {
             return;
         }
 
+        let total_length = self.len().checked_add(other.len()).expect("Vector length overflow");
+
         match self {
             Single(left) => {
                 match other {
                     // If both are single chunks and left has room for right: directly
                     // memcpy right into left
-                    Single(ref mut right) if left.len() + right.len() <= CHUNK_SIZE => {
+                    Single(ref mut right) if total_length <= CHUNK_SIZE => {
                         left.extend(right);
                         return;
                     }
                     // If only left is a single chunk and has room for right: push
                     // right's elements into left
-                    ref mut right if left.len() + right.len() <= CHUNK_SIZE => {
+                    ref mut right if total_length <= CHUNK_SIZE => {
                         while let Some(value) = right.pop_front() {
                             left.push_back(value);
                         }
@@ -786,14 +788,14 @@ impl<A: Clone> Vector<A> {
                     {
                         left.inner_b = right.inner_b;
                         left.outer_b = right.outer_b;
-                        left.length += right.length;
+                        left.length = total_length;
                         return;
                     }
                     // If left and right are trees with empty middles and left's buffers
                     // can fit right's buffers: push right's elements onto left
                     if left.middle.is_empty()
                         && right.middle.is_empty()
-                        && left.length + right.length <= CHUNK_SIZE * 4
+                        && total_length <= CHUNK_SIZE * 4
                     {
                         while let Some(value) = right.pop_front() {
                             left.push_back(value);
@@ -829,7 +831,7 @@ impl<A: Clone> Vector<A> {
 
                     left.inner_b = right.inner_b;
                     left.outer_b = right.outer_b;
-                    left.length += right.length;
+                    left.length = total_length;
                     left.prune();
                     return;
                 }
@@ -1432,7 +1434,7 @@ impl<A: Clone> RRB<A> {
                 self.push_middle(Side::Left, chunk);
             }
         }
-        self.length += 1;
+        self.length = self.length.checked_add(1).expect("Vector length overflow");
         let outer_f = Ref::make_mut(&mut self.outer_f);
         outer_f.push_front(value)
     }
@@ -1446,7 +1448,7 @@ impl<A: Clone> RRB<A> {
                 self.push_middle(Side::Right, chunk);
             }
         }
-        self.length += 1;
+        self.length = self.length.checked_add(1).expect("Vector length overflow");
         let outer_b = Ref::make_mut(&mut self.outer_b);
         outer_b.push_back(value)
     }
