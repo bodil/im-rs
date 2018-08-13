@@ -176,7 +176,7 @@ impl<A> Chunk<A> {
     /// Remove all elements up to but not including `index`.
     pub fn drop_left(&mut self, index: usize) {
         if index > 0 {
-            if index >= self.len() {
+            if index > self.len() {
                 panic!("Chunk::drop_left: index out of bounds");
             }
             let start = self.left;
