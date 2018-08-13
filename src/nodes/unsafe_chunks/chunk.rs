@@ -90,7 +90,7 @@ impl<A> Chunk<A> {
 
     /// Copy the value at an index, discarding ownership of the copied value
     #[inline]
-    unsafe fn force_read(index: usize, chunk: &Self) -> A {
+    unsafe fn force_read(index: usize, chunk: &mut Self) -> A {
         ptr::read(&chunk.values[index])
     }
 
@@ -116,7 +116,7 @@ impl<A> Chunk<A> {
 
     /// Copy a range between chunks
     #[inline]
-    unsafe fn force_copy_to(from: usize, to: usize, count: usize, chunk: &Self, other: &mut Self) {
+    unsafe fn force_copy_to(from: usize, to: usize, count: usize, chunk: &mut Self, other: &mut Self) {
         if count > 0 {
             ptr::copy_nonoverlapping(&chunk.values[from], &mut other.values[to], count)
         }
