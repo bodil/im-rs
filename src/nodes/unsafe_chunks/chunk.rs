@@ -246,10 +246,10 @@ impl<A> Chunk<A> {
         if self.is_full() {
             panic!("Chunk::insert: chunk is full");
         }
-        let real_index = index + self.left;
-        if real_index < self.left || real_index > self.right {
+        if index > self.len() {
             panic!("Chunk::insert: index out of bounds");
         }
+        let real_index = index + self.left;
         let left_size = index;
         let right_size = self.right - real_index;
         if self.right == CHUNK_SIZE || (self.left > 0 && left_size < right_size) {
@@ -268,10 +268,10 @@ impl<A> Chunk<A> {
     }
 
     pub fn remove(&mut self, index: usize) -> A {
-        let real_index = index + self.left;
-        if real_index < self.left || real_index >= self.right {
+        if index >= self.len() {
             panic!("Chunk::remove: index out of bounds");
         }
+        let real_index = index + self.left;
         let value = unsafe { Chunk::force_read(real_index, self) };
         let left_size = index;
         let right_size = self.right - real_index - 1;
@@ -287,21 +287,19 @@ impl<A> Chunk<A> {
 
     #[inline]
     pub fn get(&self, index: usize) -> Option<&A> {
-        let real_index = self.left + index;
-        if real_index >= self.right {
-            None
+        if index < self.len() {
+            Some(&self.values[self.left + index])
         } else {
-            Some(&self.values[real_index])
+            None
         }
     }
 
     #[inline]
     pub fn get_mut(&mut self, index: usize) -> Option<&mut A> {
-        let real_index = self.left + index;
-        if real_index >= self.right {
-            None
+        if index < self.len() {
+            Some(&mut self.values[self.left + index])
         } else {
-            Some(&mut self.values[real_index])
+            None
         }
     }
 
