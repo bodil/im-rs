@@ -62,6 +62,7 @@ impl<A> Chunk<A> {
     }
 
     pub fn pair(left: A, right: A) -> Self {
+        debug_assert!(CHUNK_SIZE >= 2);
         let mut chunk: Self;
         unsafe {
             chunk = mem::uninitialized();
