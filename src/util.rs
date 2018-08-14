@@ -45,9 +45,9 @@ where
     }
     // so sorry, but there's no implementation for this in std that's
     // sufficiently generic
+    let pa: *mut V::Output = &mut vector[a];
+    let pb: *mut V::Output = &mut vector[b];
     unsafe {
-        let pa: *mut V::Output = &mut vector[a];
-        let pb: *mut V::Output = &mut vector[b];
         ptr::swap(pa, pb);
     }
 }

@@ -333,11 +333,9 @@ where
         if a == b {
             panic!("vector::FocusMut::pair: indices cannot be equal!");
         }
-        unsafe {
-            let pa: *mut A = self.index_mut(a);
-            let pb: *mut A = self.index_mut(b);
-            f(&mut *pa, &mut *pb)
-        }
+        let pa: *mut A = self.index_mut(a);
+        let pb: *mut A = self.index_mut(b);
+        unsafe { f(&mut *pa, &mut *pb) }
     }
 
     /// Lookup three indices simultaneously and run a function over them.
@@ -367,12 +365,10 @@ where
         if a == b || b == c || a == c {
             panic!("vector::FocusMut::triplet: indices cannot be equal!");
         }
-        unsafe {
-            let pa: *mut A = self.index_mut(a);
-            let pb: *mut A = self.index_mut(b);
-            let pc: *mut A = self.index_mut(c);
-            f(&mut *pa, &mut *pb, &mut *pc)
-        }
+        let pa: *mut A = self.index_mut(a);
+        let pb: *mut A = self.index_mut(b);
+        let pc: *mut A = self.index_mut(c);
+        unsafe { f(&mut *pa, &mut *pb, &mut *pc) }
     }
 
     /// Get the chunk for the given index.
