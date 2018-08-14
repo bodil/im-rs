@@ -171,7 +171,7 @@ fn ordmap_remove_mut_1000(b: &mut Bencher) {
 
 #[bench]
 fn ordmap_remove_min_1000(b: &mut Bencher) {
-    let map: OrdMap<i64, i64> = OrdMap::from_iter((0..1000).into_iter().map(|i| (i, i)));
+    let map: OrdMap<i64, i64> = OrdMap::from_iter((0..1000).map(|i| (i, i)));
     b.iter(|| {
         let mut m = map.clone();
         assert!(!m.is_empty());
@@ -184,7 +184,7 @@ fn ordmap_remove_min_1000(b: &mut Bencher) {
 
 #[bench]
 fn ordmap_remove_max_1000(b: &mut Bencher) {
-    let map: OrdMap<i64, i64> = OrdMap::from_iter((0..1000).into_iter().map(|i| (i, i)));
+    let map: OrdMap<i64, i64> = OrdMap::from_iter((0..1000).map(|i| (i, i)));
     b.iter(|| {
         let mut m = map.clone();
         assert!(!m.is_empty());

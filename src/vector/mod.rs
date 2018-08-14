@@ -752,7 +752,10 @@ impl<A: Clone> Vector<A> {
             return;
         }
 
-        let total_length = self.len().checked_add(other.len()).expect("Vector length overflow");
+        let total_length = self
+            .len()
+            .checked_add(other.len())
+            .expect("Vector length overflow");
 
         match self {
             Single(left) => {
@@ -2148,7 +2151,7 @@ mod test {
         for i in 0..input.len() {
             sum += *focus.index(i);
         }
-        let expected: i64 = (0..100000).into_iter().sum();
+        let expected: i64 = (0..100000).sum();
         assert_eq!(expected, sum);
     }
 

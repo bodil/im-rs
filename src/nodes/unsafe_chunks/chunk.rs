@@ -117,7 +117,13 @@ impl<A> Chunk<A> {
 
     /// Copy a range between chunks
     #[inline]
-    unsafe fn force_copy_to(from: usize, to: usize, count: usize, chunk: &mut Self, other: &mut Self) {
+    unsafe fn force_copy_to(
+        from: usize,
+        to: usize,
+        count: usize,
+        chunk: &mut Self,
+        other: &mut Self,
+    ) {
         if count > 0 {
             ptr::copy_nonoverlapping(&chunk.values[from], &mut other.values[to], count)
         }
@@ -592,12 +598,12 @@ mod test {
             left.push_back(i);
         }
         let mut right = Chunk::new();
-        for i in (32..64).into_iter().rev() {
+        for i in (32..64).rev() {
             right.push_front(i);
         }
         left.extend(&mut right);
         let out_vec: Vec<i32> = left.into_iter().collect();
-        let should_vec: Vec<i32> = (0..64).into_iter().collect();
+        let should_vec: Vec<i32> = (0..64).collect();
         assert_eq!(should_vec, out_vec);
     }
 
@@ -608,7 +614,7 @@ mod test {
             chunk.push_back(i);
         }
         let out_vec: Vec<&i32> = chunk.iter().collect();
-        let should_vec_p: Vec<i32> = (0..64).into_iter().collect();
+        let should_vec_p: Vec<i32> = (0..64).collect();
         let should_vec: Vec<&i32> = should_vec_p.iter().collect();
         assert_eq!(should_vec, out_vec);
     }
@@ -620,7 +626,7 @@ mod test {
             chunk.push_back(i);
         }
         let out_vec: Vec<&mut i32> = chunk.iter_mut().collect();
-        let mut should_vec_p: Vec<i32> = (0..64).into_iter().collect();
+        let mut should_vec_p: Vec<i32> = (0..64).collect();
         let should_vec: Vec<&mut i32> = should_vec_p.iter_mut().collect();
         assert_eq!(should_vec, out_vec);
     }
@@ -632,7 +638,7 @@ mod test {
             chunk.push_back(i);
         }
         let out_vec: Vec<i32> = chunk.into_iter().collect();
-        let should_vec: Vec<i32> = (0..64).into_iter().collect();
+        let should_vec: Vec<i32> = (0..64).collect();
         assert_eq!(should_vec, out_vec);
     }
 
@@ -647,7 +653,7 @@ mod test {
         }
         chunk.insert(32, 32);
         let out_vec: Vec<i32> = chunk.into_iter().collect();
-        let should_vec: Vec<i32> = (0..64).into_iter().collect();
+        let should_vec: Vec<i32> = (0..64).collect();
         assert_eq!(should_vec, out_vec);
     }
 
@@ -659,7 +665,7 @@ mod test {
         }
         chunk.insert(63, 63);
         let out_vec: Vec<i32> = chunk.into_iter().collect();
-        let should_vec: Vec<i32> = (0..64).into_iter().collect();
+        let should_vec: Vec<i32> = (0..64).collect();
         assert_eq!(should_vec, out_vec);
     }
 
@@ -671,7 +677,7 @@ mod test {
         }
         chunk.insert(0, 0);
         let out_vec: Vec<i32> = chunk.into_iter().collect();
-        let should_vec: Vec<i32> = (0..64).into_iter().collect();
+        let should_vec: Vec<i32> = (0..64).collect();
         assert_eq!(should_vec, out_vec);
     }
 
@@ -683,7 +689,7 @@ mod test {
         }
         chunk.remove(32);
         let out_vec: Vec<i32> = chunk.into_iter().collect();
-        let should_vec: Vec<i32> = ((0..32).into_iter()).chain((33..64).into_iter()).collect();
+        let should_vec: Vec<i32> = (0..32).chain(33..64).collect();
         assert_eq!(should_vec, out_vec);
     }
 
