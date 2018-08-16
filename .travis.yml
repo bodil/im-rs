@@ -12,5 +12,7 @@ install:
 script:
   - cargo +nightly clippy -- -D warnings
   - cargo test
+  - cargo clean
+  - IM_TEST_RC=1 cargo test
   - ./build-releases.sh
   - cd im-rc; cargo test --tests

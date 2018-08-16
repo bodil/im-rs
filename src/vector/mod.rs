@@ -51,12 +51,12 @@ use std::hash::{Hash, Hasher};
 use std::iter::Sum;
 use std::iter::{Chain, FromIterator, FusedIterator};
 use std::mem::{replace, swap};
-use std::ops::{Add, Bound, Index, IndexMut, RangeBounds};
+use std::ops::{Add, Index, IndexMut, RangeBounds};
 
 use nodes::chunk::{Chunk, ConsumingIter as ConsumingChunkIter, CHUNK_SIZE};
 use nodes::rrb::{ConsumingIter as ConsumingNodeIter, Node, PopResult, PushResult, SplitResult};
 use sort;
-use util::{clone_ref, swap_indices, Ref, Side};
+use util::{clone_ref, swap_indices, to_range, Ref, Side};
 
 use self::Vector::{Full, Single};
 
@@ -284,6 +284,20 @@ impl<A: Clone> Vector<A> {
     #[must_use]
     pub fn iter_mut(&mut self) -> IterMut<A> {
         IterMut::new(self)
+    }
+
+    /// Get an iterator over a vector.
+    ///
+    /// Time: O(1)
+    #[cfg(all(ref_arc, any(test, feature = "rayon")))]
+    #[inline]
+    #[must_use]
+    pub fn par_iter(&self) -> rayon::ParIter<'_, A>
+    where
+        A: Send + Sync,
+    {
+        use rayon::iter::IntoParallelIterator;
+        self.into_par_iter()
     }
 
     /// Get an iterator over the leaf nodes of a vector.
@@ -1079,21 +1093,12 @@ impl<A: Clone> Vector<A> {
     where
         R: RangeBounds<usize>,
     {
-        let start_index = match range.start_bound() {
-            Bound::Included(i) => *i,
-            Bound::Excluded(i) => *i + 1,
-            Bound::Unbounded => 0,
-        };
-        let end_index = match range.end_bound() {
-            Bound::Included(i) => *i + 1,
-            Bound::Excluded(i) => *i,
-            Bound::Unbounded => self.len(),
-        };
-        if start_index >= end_index || start_index >= self.len() {
+        let r = to_range(&range, self.len());
+        if r.start >= r.end || r.start >= self.len() {
             return Vector::new();
         }
-        let mut middle = self.split_off(start_index);
-        let right = middle.split_off(end_index - start_index);
+        let mut middle = self.split_off(r.start);
+        let right = middle.split_off(r.end - r.start);
         self.append(right);
         middle
     }
@@ -1758,6 +1763,14 @@ impl<'a, A: Clone> Iter<'a, A> {
             back_index: seq.len(),
         }
     }
+
+    fn from_focus(focus: Focus<'a, A>) -> Self {
+        Iter {
+            front_index: 0,
+            back_index: focus.len(),
+            focus,
+        }
+    }
 }
 
 impl<'a, A: Clone> Iterator for Iter<'a, A> {
@@ -2053,8 +2066,120 @@ impl<'a, A: Clone> DoubleEndedIterator for ChunksMut<'a, A> {
 
 impl<'a, A: Clone> FusedIterator for ChunksMut<'a, A> {}
 
-// QuickCheck
+// Rayon
 
+#[cfg(all(ref_arc, any(test, feature = "rayon")))]
+pub mod rayon {
+    use super::*;
+
+    use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, UnindexedConsumer};
+    use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
+
+    impl<'a, A> IntoParallelIterator for &'a Vector<A>
+    where
+        A: Clone + Send + Sync + 'a,
+    {
+        type Item = &'a A;
+        type Iter = ParIter<'a, A>;
+
+        fn into_par_iter(self) -> Self::Iter {
+            ParIter {
+                focus: self.focus(),
+            }
+        }
+    }
+
+    pub struct ParIter<'a, A>
+    where
+        A: Clone + Send + Sync + 'a,
+    {
+        focus: Focus<'a, A>,
+    }
+
+    impl<'a, A> ParallelIterator for ParIter<'a, A>
+    where
+        A: Clone + Send + Sync + 'a,
+    {
+        type Item = &'a A;
+
+        fn drive_unindexed<C>(self, consumer: C) -> C::Result
+        where
+            C: UnindexedConsumer<Self::Item>,
+        {
+            bridge(self, consumer)
+        }
+    }
+
+    impl<'a, A> IndexedParallelIterator for ParIter<'a, A>
+    where
+        A: Clone + Send + Sync + 'a,
+    {
+        fn drive<C>(self, consumer: C) -> C::Result
+        where
+            C: Consumer<Self::Item>,
+        {
+            bridge(self, consumer)
+        }
+
+        fn len(&self) -> usize {
+            self.focus.len()
+        }
+
+        fn with_producer<CB>(self, callback: CB) -> CB::Output
+        where
+            CB: ProducerCallback<Self::Item>,
+        {
+            callback.callback(VectorProducer { focus: self.focus })
+        }
+    }
+
+    struct VectorProducer<'a, A>
+    where
+        A: Clone + Send + Sync + 'a,
+    {
+        focus: Focus<'a, A>,
+    }
+
+    impl<'a, A> Producer for VectorProducer<'a, A>
+    where
+        A: Clone + Send + Sync + 'a,
+    {
+        type Item = &'a A;
+        type IntoIter = Iter<'a, A>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            self.focus.into_iter()
+        }
+
+        fn split_at(self, index: usize) -> (Self, Self) {
+            let (left, right) = self.focus.split_at(index);
+            (
+                VectorProducer { focus: left },
+                VectorProducer { focus: right },
+            )
+        }
+
+        fn min_len(&self) -> usize {
+            CHUNK_SIZE
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::proptest::vector;
+        use proptest::num::i32;
+        use rayon::iter::ParallelIterator;
+
+        proptest!{
+            #[test]
+            fn par_iter(ref mut input in vector(i32::ANY, 0..10000)) {
+                assert_eq!(input.iter().max(), input.par_iter().max())
+            }
+        }
+    }
+}
+
+// QuickCheck
 #[cfg(all(ref_arc, any(test, feature = "quickcheck")))]
 use quickcheck::{Arbitrary, Gen};
 
@@ -2312,7 +2437,7 @@ mod test {
         }
 
         #[test]
-        fn chunks(ref input in vector(i32::ANY,0..10000)) {
+        fn chunks(ref input in vector(i32::ANY, 0..10000)) {
             let output: Vector<_> = input.chunks().flat_map(|a|a).cloned().collect();
             assert_eq!(input, &output);
             let rev_in: Vector<_> = input.iter().rev().cloned().collect();
@@ -2321,7 +2446,7 @@ mod test {
         }
 
         #[test]
-        fn chunks_mut(ref mut input_src in vector(i32::ANY,0..10000)) {
+        fn chunks_mut(ref mut input_src in vector(i32::ANY, 0..10000)) {
             let mut input = input_src.clone();
             let output: Vector<_> = input.chunks_mut().flat_map(|a|a).map(|v| *v).collect();
             assert_eq!(input, output);

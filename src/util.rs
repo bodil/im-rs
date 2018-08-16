@@ -5,7 +5,7 @@
 // Every codebase needs a `util` module.
 
 use std::cmp::Ordering;
-use std::ops::IndexMut;
+use std::ops::{Bound, IndexMut, Range, RangeBounds};
 use std::ptr;
 
 // The `Ref` type is an alias for either `Rc` or `Arc`, user's choice.
@@ -69,4 +69,21 @@ where
         pos += 1;
     }
     Err(pos)
+}
+
+pub fn to_range<R>(range: &R, right_unbounded: usize) -> Range<usize>
+where
+    R: RangeBounds<usize>,
+{
+    let start_index = match range.start_bound() {
+        Bound::Included(i) => *i,
+        Bound::Excluded(i) => *i + 1,
+        Bound::Unbounded => 0,
+    };
+    let end_index = match range.end_bound() {
+        Bound::Included(i) => *i + 1,
+        Bound::Excluded(i) => *i,
+        Bound::Unbounded => right_unbounded,
+    };
+    start_index..end_index
 }
