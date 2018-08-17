@@ -335,7 +335,7 @@ fn vector_iter_max_10000000(b: &mut Bencher) {
 }
 
 // fn vector_par_iter_max(b: &mut Bencher, count: usize) {
-//     use rayon::iter::ParallelIterator;
+//     use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 //     let vec: Vector<i32> = rando().take(count).collect();
 //     b.iter(|| vec.par_iter().max())
 // }

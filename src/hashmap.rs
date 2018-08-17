@@ -1937,7 +1937,7 @@ mod test {
 
     #[test]
     fn safe_mutation() {
-        let v1: HashMap<usize, usize> = HashMap::from_iter((0..131072).into_iter().map(|i| (i, i)));
+        let v1: HashMap<usize, usize> = HashMap::from_iter((0..131072).map(|i| (i, i)));
         let mut v2 = v1.clone();
         v2.insert(131000, 23);
         assert_eq!(Some(&23), v2.get(&131000));

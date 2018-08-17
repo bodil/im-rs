@@ -286,20 +286,6 @@ impl<A: Clone> Vector<A> {
         IterMut::new(self)
     }
 
-    /// Get an iterator over a vector.
-    ///
-    /// Time: O(1)
-    #[cfg(all(ref_arc, any(test, feature = "rayon")))]
-    #[inline]
-    #[must_use]
-    pub fn par_iter(&self) -> rayon::ParIter<'_, A>
-    where
-        A: Send + Sync,
-    {
-        use rayon::iter::IntoParallelIterator;
-        self.into_par_iter()
-    }
-
     /// Get an iterator over the leaf nodes of a vector.
     ///
     /// Time: O(1)
@@ -1842,6 +1828,14 @@ where
             back_index: len,
         }
     }
+
+    fn from_focus(focus: FocusMut<'a, A>) -> Self {
+        IterMut {
+            front_index: 0,
+            back_index: focus.len(),
+            focus,
+        }
+    }
 }
 
 impl<'a, A> Iterator for IterMut<'a, A>
@@ -1852,7 +1846,7 @@ where
 
     /// Advance the iterator and return the next value.
     ///
-    /// Time: O(log n)
+    /// Time: O(1)*
     fn next(&mut self) -> Option<Self::Item> {
         if self.front_index >= self.back_index {
             return None;
@@ -1876,7 +1870,7 @@ where
 {
     /// Remove and return an element from the back of the iterator.
     ///
-    /// Time: O(log n)
+    /// Time: O(1)*
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.front_index >= self.back_index {
             return None;
@@ -1937,6 +1931,9 @@ impl<A: Clone> Iterator for ConsumingIter<A> {
 }
 
 impl<A: Clone> DoubleEndedIterator for ConsumingIter<A> {
+    /// Remove and return an element from the back of the iterator.
+    ///
+    /// Time: O(1)*
     fn next_back(&mut self) -> Option<Self::Item> {
         match self {
             ConsumingIter::Single(iter) => iter.next_back(),
@@ -1989,7 +1986,7 @@ impl<'a, A: Clone> Iterator for Chunks<'a, A> {
 }
 
 impl<'a, A: Clone> DoubleEndedIterator for Chunks<'a, A> {
-    /// Advance the iterator and return the next value.
+    /// Remove and return an element from the back of the iterator.
     ///
     /// Time: O(1)*
     fn next_back(&mut self) -> Option<Self::Item> {
@@ -2048,7 +2045,7 @@ impl<'a, A: Clone> Iterator for ChunksMut<'a, A> {
 }
 
 impl<'a, A: Clone> DoubleEndedIterator for ChunksMut<'a, A> {
-    /// Advance the iterator and return the next value.
+    /// Remove and return an element from the back of the iterator.
     ///
     /// Time: O(1)*
     fn next_back(&mut self) -> Option<Self::Item> {
@@ -2068,23 +2065,40 @@ impl<'a, A: Clone> FusedIterator for ChunksMut<'a, A> {}
 
 // Rayon
 
-#[cfg(all(ref_arc, any(test, feature = "rayon")))]
+#[cfg(all(threadsafe, any(test, feature = "rayon")))]
 pub mod rayon {
     use super::*;
 
     use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, UnindexedConsumer};
-    use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
+    use rayon::iter::{
+        IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator,
+        ParallelIterator,
+    };
 
-    impl<'a, A> IntoParallelIterator for &'a Vector<A>
+    impl<'a, A> IntoParallelRefIterator<'a> for Vector<A>
     where
         A: Clone + Send + Sync + 'a,
     {
         type Item = &'a A;
         type Iter = ParIter<'a, A>;
 
-        fn into_par_iter(self) -> Self::Iter {
+        fn par_iter(&'a self) -> Self::Iter {
             ParIter {
                 focus: self.focus(),
+            }
+        }
+    }
+
+    impl<'a, A> IntoParallelRefMutIterator<'a> for Vector<A>
+    where
+        A: Clone + Send + Sync + 'a,
+    {
+        type Item = &'a mut A;
+        type Iter = ParIterMut<'a, A>;
+
+        fn par_iter_mut(&'a mut self) -> Self::Iter {
+            ParIterMut {
+                focus: self.focus_mut(),
             }
         }
     }
@@ -2133,6 +2147,50 @@ pub mod rayon {
         }
     }
 
+    pub struct ParIterMut<'a, A>
+    where
+        A: Clone + Send + Sync + 'a,
+    {
+        focus: FocusMut<'a, A>,
+    }
+
+    impl<'a, A> ParallelIterator for ParIterMut<'a, A>
+    where
+        A: Clone + Send + Sync + 'a,
+    {
+        type Item = &'a mut A;
+
+        fn drive_unindexed<C>(self, consumer: C) -> C::Result
+        where
+            C: UnindexedConsumer<Self::Item>,
+        {
+            bridge(self, consumer)
+        }
+    }
+
+    impl<'a, A> IndexedParallelIterator for ParIterMut<'a, A>
+    where
+        A: Clone + Send + Sync + 'a,
+    {
+        fn drive<C>(self, consumer: C) -> C::Result
+        where
+            C: Consumer<Self::Item>,
+        {
+            bridge(self, consumer)
+        }
+
+        fn len(&self) -> usize {
+            self.focus.len()
+        }
+
+        fn with_producer<CB>(self, callback: CB) -> CB::Output
+        where
+            CB: ProducerCallback<Self::Item>,
+        {
+            callback.callback(VectorMutProducer { focus: self.focus })
+        }
+    }
+
     struct VectorProducer<'a, A>
     where
         A: Clone + Send + Sync + 'a,
@@ -2158,32 +2216,64 @@ pub mod rayon {
                 VectorProducer { focus: right },
             )
         }
+    }
 
-        fn min_len(&self) -> usize {
-            CHUNK_SIZE
+    struct VectorMutProducer<'a, A>
+    where
+        A: Clone + Send + Sync + 'a,
+    {
+        focus: FocusMut<'a, A>,
+    }
+
+    impl<'a, A> Producer for VectorMutProducer<'a, A>
+    where
+        A: Clone + Send + Sync + 'a,
+    {
+        type Item = &'a mut A;
+        type IntoIter = IterMut<'a, A>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            self.focus.into_iter()
+        }
+
+        fn split_at(self, index: usize) -> (Self, Self) {
+            let (left, right) = self.focus.split_at(index);
+            (
+                VectorMutProducer { focus: left },
+                VectorMutProducer { focus: right },
+            )
         }
     }
 
     #[cfg(test)]
     mod test {
+        use super::super::*;
         use super::proptest::vector;
         use proptest::num::i32;
-        use rayon::iter::ParallelIterator;
+        use rayon::iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
 
         proptest!{
             #[test]
             fn par_iter(ref mut input in vector(i32::ANY, 0..10000)) {
                 assert_eq!(input.iter().max(), input.par_iter().max())
             }
+
+            #[test]
+            fn par_mut_iter(ref mut input in vector(i32::ANY, 0..10000)) {
+                let mut vec = input.clone();
+                vec.par_iter_mut().for_each(|i| *i += 1);
+                let expected: Vector<i32> = input.clone().into_iter().map(|i| i + 1).collect();
+                assert_eq!(expected, vec);
+            }
         }
     }
 }
 
 // QuickCheck
-#[cfg(all(ref_arc, any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(ref_arc, any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
 impl<A: Arbitrary + Sync + Clone> Arbitrary for Vector<A> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         Vector::from_iter(Vec::<A>::arbitrary(g))
@@ -2432,6 +2522,29 @@ mod test {
                     *p += 1;
                 }
             }
+            let expected: Vector<i32> = input.clone().into_iter().map(|i| i+1).collect();
+            assert_eq!(expected, vec);
+        }
+
+        #[test]
+        fn focus_mut_split(ref input in vector(i32::ANY, 0..10000)) {
+            let mut vec = input.clone();
+
+            fn split_down(focus: FocusMut<'_, i32>) {
+                let len = focus.len();
+                if len < 8 {
+                    for p in focus {
+                        *p += 1;
+                    }
+                } else {
+                    let (left, right) = focus.split_at(len / 2);
+                    split_down(left);
+                    split_down(right);
+                }
+            }
+
+            split_down(vec.focus_mut());
+
             let expected: Vector<i32> = input.clone().into_iter().map(|i| i+1).collect();
             assert_eq!(expected, vec);
         }

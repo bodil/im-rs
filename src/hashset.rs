@@ -936,11 +936,15 @@ where
 
 // QuickCheck
 
-#[cfg(all(ref_arc, any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(ref_arc, any(test, feature = "quickcheck")))]
-impl<A: Hash + Eq + Arbitrary + Sync> Arbitrary for HashSet<A> {
+#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
+impl<A, S> Arbitrary for HashSet<A, S>
+where
+    A: Hash + Eq + Arbitrary + Sync,
+    S: BuildHasher + Default + Send + Sync + 'static,
+{
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         HashSet::from_iter(Vec::<A>::arbitrary(g))
     }

@@ -9,13 +9,13 @@ use std::ops::{Bound, IndexMut, Range, RangeBounds};
 use std::ptr;
 
 // The `Ref` type is an alias for either `Rc` or `Arc`, user's choice.
-#[cfg(ref_arc)]
+#[cfg(threadsafe)]
 use std::sync::Arc;
-#[cfg(ref_arc)]
+#[cfg(threadsafe)]
 pub type Ref<A> = Arc<A>;
-#[cfg(not(ref_arc))]
+#[cfg(not(threadsafe))]
 use std::rc::Rc;
-#[cfg(not(ref_arc))]
+#[cfg(not(threadsafe))]
 pub type Ref<A> = Rc<A>;
 
 pub fn clone_ref<A>(r: Ref<A>) -> A

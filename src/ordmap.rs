@@ -1732,10 +1732,10 @@ impl<'a, K: Ord + Hash + Eq + Clone, V: Clone, S: BuildHasher> From<&'a HashMap<
 
 // QuickCheck
 
-#[cfg(all(ref_arc, any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(ref_arc, any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
 impl<K: Ord + Clone + Arbitrary + Sync, V: Clone + Arbitrary + Sync> Arbitrary for OrdMap<K, V> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         OrdMap::from_iter(Vec::<(K, V)>::arbitrary(g))

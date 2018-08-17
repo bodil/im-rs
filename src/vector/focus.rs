@@ -1,13 +1,18 @@
+use std::marker::PhantomData;
 use std::mem::{replace, swap};
 use std::ops::{Range, RangeBounds};
-use std::ptr::{null, null_mut};
+use std::ptr::null;
+use std::sync::atomic::{AtomicPtr, Ordering};
 
 use nodes::chunk::Chunk;
 use nodes::rrb::Node;
 use util::{to_range, Ref};
-use vector::{Iter, Vector, RRB};
+use vector::{Iter, IterMut, Vector, RRB};
 
-/// Focused indexing over a `Vector`.
+#[cfg(threadsafe)]
+use sync::TinyLock;
+
+/// Focused indexing over a [`Vector`][Vector].
 ///
 /// By remembering the last tree node accessed through an index lookup and the
 /// path we took to get there, we can speed up lookups for adjacent indices
@@ -15,7 +20,7 @@ use vector::{Iter, Vector, RRB};
 /// lookups on sibling nodes are also very fast.
 ///
 /// A `Focus` can also be used as a restricted view into a vector, using the
-/// `narrow` and `split_at` methods.
+/// [`narrow`][narrow] and [`split_at`][split_at] methods.
 ///
 /// # When should I use a `Focus` for better performance?
 ///
@@ -25,14 +30,15 @@ use vector::{Iter, Vector, RRB};
 /// lookups together, even if they're not obviously adjacent - there's likely
 /// to be some performance gain for even completely random access.
 ///
-/// If you're just iterating forwards or backwards over the `Vector` in order,
-/// you're better off with a regular `Iterator`.
+/// If you're just iterating forwards or backwards over the [`Vector`][Vector]
+/// in order, you're better off with a regular iterator, which, in fact, is
+/// implemented using a `Focus`, but provides a simpler interface.
 ///
 /// If you're just doing a very small number of index lookups, the setup cost
 /// for the `Focus` is probably not worth it.
 ///
-/// A `Focus` is never faster than an index lookup on a small `Vector` with a
-/// length below the internal RRB tree's branching factor of 64.
+/// A `Focus` is never faster than an index lookup on a small [`Vector`][Vector]
+/// with a length below the internal RRB tree's branching factor of 64.
 ///
 /// # Examples
 ///
@@ -40,15 +46,15 @@ use vector::{Iter, Vector, RRB};
 /// backwards over a vector is with an actual iterator. Even so, the version
 /// using a `Focus` should run nearly an order of magnitude faster than the
 /// version using index lookups at a length of 1000. It should also be noted
-/// that `vector::Iter` is actually implemented using a `Focus` behind the
-/// scenes, so the performance of the two should be identical.
+/// that [`vector::Iter`][Iter] is actually implemented using a `Focus` behind
+/// the scenes, so the performance of the two should be identical.
 ///
 /// ```rust
 /// # #[macro_use] extern crate im;
 /// # use im::vector::Vector;
 /// # use std::iter::FromIterator;
 /// # fn main() {
-/// let mut vec = Vector::from_iter(0..1000);
+/// let mut vec: Vector<i64> = Vector::from_iter(0..1000);
 ///
 /// // Summing a vector, the slow way:
 /// let mut sum = 0;
@@ -64,8 +70,17 @@ use vector::{Iter, Vector, RRB};
 ///     sum += *focus.get(i).unwrap();
 /// }
 /// assert_eq!(499500, sum);
+///
+/// // And the easy way, for completeness:
+/// let sum: i64 = vec.iter().sum();
+/// assert_eq!(499500, sum);
 /// # }
 /// ```
+///
+/// [Vector]: enum.Vector.html
+/// [Iter]: struct.Iter.html
+/// [narrow]: #method.narrow
+/// [split_at]: #method.split_at
 pub enum Focus<'a, A>
 where
     A: 'a,
@@ -80,7 +95,9 @@ impl<'a, A> Focus<'a, A>
 where
     A: Clone + 'a,
 {
-    /// Construct a `Focus` for a `Vector`.
+    /// Construct a `Focus` for a [`Vector`][Vector].
+    ///
+    /// [Vector]: enum.Vector.html
     pub fn new(vector: &'a Vector<A>) -> Self {
         match vector {
             Vector::Single(chunk) => Focus::Single(chunk.as_slice()),
@@ -88,7 +105,9 @@ where
         }
     }
 
-    /// Get the length of the focused `Vector`.
+    /// Get the length of the focused [`Vector`][Vector].
+    ///
+    /// [Vector]: enum.Vector.html
     pub fn len(&self) -> usize {
         match self {
             Focus::Single(chunk) => chunk.len(),
@@ -96,7 +115,9 @@ where
         }
     }
 
-    /// Test if the focused `Vector` is empty.
+    /// Test if the focused [`Vector`][Vector] is empty.
+    ///
+    /// [Vector]: enum.Vector.html
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -167,6 +188,7 @@ where
             Focus::Full(tree) => Focus::Full(tree.narrow(r)),
         }
     }
+
     /// Split the focus into two.
     ///
     /// Given an index `index`, consume the focus and produce two new foci, the
@@ -230,7 +252,6 @@ pub struct TreeFocus<A> {
     tree: RRB<A>,
     view: Range<usize>,
     middle_range: Range<usize>,
-    root: *const Node<A>,
     target_range: Range<usize>,
     target_ptr: *const Chunk<A>,
 }
@@ -241,7 +262,6 @@ impl<A> Clone for TreeFocus<A> {
         TreeFocus {
             view: self.view.clone(),
             middle_range: self.middle_range.clone(),
-            root: &*tree.middle,
             target_range: 0..0,
             target_ptr: null(),
             tree,
@@ -250,10 +270,10 @@ impl<A> Clone for TreeFocus<A> {
 }
 
 #[allow(unsafe_code)]
-#[cfg(ref_arc)]
+#[cfg(threadsafe)]
 unsafe impl<A> Send for TreeFocus<A> {}
 #[allow(unsafe_code)]
-#[cfg(ref_arc)]
+#[cfg(threadsafe)]
 unsafe impl<A> Sync for TreeFocus<A> {}
 
 #[inline]
@@ -272,7 +292,6 @@ where
             tree: tree.clone(),
             view: 0..tree.length,
             middle_range: middle_start..middle_end,
-            root: &*tree.middle,
             target_range: 0..0,
             target_ptr: null(),
         }
@@ -288,7 +307,6 @@ where
         TreeFocus {
             view,
             middle_range: self.middle_range.clone(),
-            root: &*self.tree.middle,
             target_range: 0..0,
             target_ptr: null(),
             tree: self.tree,
@@ -311,7 +329,6 @@ where
         (range.start - self.view.start)..(range.end - self.view.start)
     }
 
-    #[allow(unsafe_code)]
     fn set_focus(&mut self, index: usize) {
         // FIXME use path to shorten lookup if available
         if index < self.middle_range.start {
@@ -334,8 +351,10 @@ where
             }
         } else {
             let tree_index = index - self.middle_range.start;
-            let (range, ptr) =
-                unsafe { &*self.root }.lookup_chunk(self.tree.middle_level, 0, tree_index);
+            let (range, ptr) = self
+                .tree
+                .middle
+                .lookup_chunk(self.tree.middle_level, 0, tree_index);
             self.target_range =
                 (range.start + self.middle_range.start)..(range.end + self.middle_range.start);
             self.target_ptr = ptr;
@@ -383,13 +402,62 @@ where
 ///
 /// See [`Focus`][Focus] for more details.
 ///
+/// You can only build one `FocusMut` at a time for a vector, effectively
+/// keeping a lock on the vector until you're done with the focus, which relies
+/// on the structure of the vector not changing while it exists.
+///
+/// ```rust,compile_fail
+/// # #[macro_use] extern crate im;
+/// # use im::vector::Vector;
+/// # use std::iter::FromIterator;
+/// # fn main() {
+/// let mut vec = Vector::from_iter(0..1000);
+/// let focus1 = vec.focus_mut();
+/// // Fails here because you already have a focus
+/// let focus2 = vec.focus_mut();
+/// # }
+/// ```
+///
+/// On the other hand, you can split that one focus into multiple sub-foci,
+/// which is safe because they can't overlap:
+///
+/// ```rust
+/// # #[macro_use] extern crate im;
+/// # use im::vector::Vector;
+/// # use std::iter::FromIterator;
+/// # fn main() {
+/// let mut vec = Vector::from_iter(0..1000);
+/// let focus = vec.focus_mut();
+/// let (left, right) = focus.split_at(500);
+/// # }
+/// ```
+///
+/// These sub-foci also work as a lock on the vector, even if the focus they
+/// were created from goes out of scope.
+///
+/// ```rust,compile_fail
+/// # #[macro_use] extern crate im;
+/// # use im::vector::Vector;
+/// # use std::iter::FromIterator;
+/// # fn main() {
+/// let mut vec = Vector::from_iter(0..1000);
+/// let (left, right) = {
+///     let focus = vec.focus_mut();
+///     focus.split_at(500)
+/// };
+/// // `left` and `right` are still in scope even if `focus` isn't, so we can't
+/// // create another focus:
+/// let focus2 = vec.focus_mut();
+/// # }
+/// ```
+///
 /// [Focus]: enum.Focus.html
 pub enum FocusMut<'a, A>
 where
     A: 'a,
 {
     #[doc(hidden)]
-    Single(&'a mut Chunk<A>),
+    Single(&'a mut [A]),
     #[doc(hidden)]
     Full(TreeFocusMut<'a, A>),
 }
@@ -401,7 +469,7 @@ where
     /// Construct a `FocusMut` for a `Vector`.
     pub fn new(vector: &'a mut Vector<A>) -> Self {
         match vector {
-            Vector::Single(chunk) => FocusMut::Single(chunk),
+            Vector::Single(chunk) => FocusMut::Single(chunk.as_mut_slice()),
             Vector::Full(tree) => FocusMut::Full(TreeFocusMut::new(tree)),
         }
     }
@@ -410,7 +478,7 @@ where
     pub fn len(&self) -> usize {
         match self {
             FocusMut::Single(chunk) => chunk.len(),
-            FocusMut::Full(tree) => tree.tree.length,
+            FocusMut::Full(tree) => tree.len(),
         }
     }
 
@@ -445,13 +513,13 @@ where
     #[allow(unknown_lints)]
     #[allow(should_implement_trait)] // would if I could
     pub fn index_mut(&mut self, index: usize) -> &mut A {
-        match self {
-            FocusMut::Single(chunk) => chunk.get_mut(index).expect("index out of bounds"),
-            FocusMut::Full(tree) => tree.get(index).expect("index out of bounds"),
-        }
+        self.get_mut(index).expect("index out of bounds")
     }
 
-    /// Update the value at a given index, returning the replaced value.
+    /// Update the value at a given index.
+    ///
+    /// Returns `None` if the index is out of bounds, or the replaced value
+    /// otherwise.
     pub fn set(&mut self, index: usize, value: A) -> Option<A> {
         match self.get_mut(index) {
             Some(ref mut pos) => Some(replace(pos, value)),
@@ -462,6 +530,8 @@ where
     /// Swap the values at two given indices.
     ///
     /// Panics if either index is out of bounds.
+    ///
+    /// If the indices are equal, this function returns without doing anything.
     pub fn swap(&mut self, a: usize, b: usize) {
         if a == b {
             return;
@@ -544,12 +614,91 @@ where
             panic!("vector::FocusMut::chunk_at: index out of bounds");
         }
         match self {
-            FocusMut::Single(chunk) => (0..len, chunk.as_mut_slice()),
+            FocusMut::Single(chunk) => (0..len, chunk),
             FocusMut::Full(tree) => {
                 let (range, chunk) = tree.get_chunk(index);
-                (range, chunk.as_mut_slice())
+                (range, chunk)
             }
         }
+    }
+
+    pub fn narrow<R>(self, range: R) -> Self
+    where
+        R: RangeBounds<usize>,
+    {
+        let r = to_range(&range, self.len());
+        if r.start > r.end || r.start > self.len() {
+            panic!("vector::FocusMut::narrow: range out of bounds");
+        }
+        match self {
+            FocusMut::Single(chunk) => FocusMut::Single(&mut chunk[r]),
+            FocusMut::Full(tree) => FocusMut::Full(tree.narrow(r)),
+        }
+    }
+
+    /// Split the focus into two.
+    ///
+    /// Given an index `index`, consume the focus and produce two new foci, the
+    /// left onto indices `0..index`, and the right onto indices `index..N`
+    /// where `N` is the length of the current focus.
+    ///
+    /// Panics if the index is out of bounds.
+    ///
+    /// This is the moral equivalent of [`slice::split_at`][slice::split_at], in
+    /// that it leaves the underlying data structure unchanged, unlike
+    /// [`Vector::split_at`][Vector::split_at].
+    ///
+    /// ## Examples
+    ///
+    /// ```rust
+    /// # #[macro_use] extern crate im;
+    /// # use im::vector::Vector;
+    /// # use std::iter::FromIterator;
+    /// # fn main() {
+    /// let mut vec = Vector::from_iter(0..1000);
+    /// {
+    ///     let (left, right) = vec.focus_mut().split_at(500);
+    ///     for ptr in left {
+    ///         *ptr += 100;
+    ///     }
+    ///     for ptr in right {
+    ///         *ptr -= 100;
+    ///     }
+    /// }
+    /// let expected = Vector::from_iter(100..600)
+    ///              + Vector::from_iter(400..900);
+    /// assert_eq!(expected, vec);
+    /// # }
+    /// ```
+    ///
+    /// [slice::split_at]: https://doc.rust-lang.org/std/primitive.slice.html#method.split_at
+    /// [Vector::split_at]: enum.Vector.html#method.split_at
+    pub fn split_at(self, index: usize) -> (Self, Self) {
+        if index > self.len() {
+            panic!("vector::FocusMut::split_at: index out of bounds");
+        }
+        match self {
+            FocusMut::Single(chunk) => {
+                let (left, right) = chunk.split_at_mut(index);
+                (FocusMut::Single(left), FocusMut::Single(right))
+            }
+            FocusMut::Full(tree) => {
+                let (left, right) = tree.split_at(index);
+                (FocusMut::Full(left), FocusMut::Full(right))
+            }
+        }
+    }
+}
+
+impl<'a, A> IntoIterator for FocusMut<'a, A>
+where
+    A: Clone + 'a,
+{
+    type Item = &'a mut A;
+    type IntoIter = IterMut<'a, A>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IterMut::from_focus(self)
     }
 }
 
@@ -557,19 +706,16 @@ pub struct TreeFocusMut<'a, A>
 where
     A: 'a,
 {
-    tree: &'a mut RRB<A>,
+    lifetime: PhantomData<&'a A>,
+    #[cfg(threadsafe)]
+    lock: TinyLock,
+    tree: AtomicPtr<RRB<A>>,
+    view: Range<usize>,
     middle_range: Range<usize>,
-    root: *mut Node<A>,
+    root: AtomicPtr<Node<A>>,
     target_range: Range<usize>,
-    target_ptr: *mut Chunk<A>,
+    target_ptr: AtomicPtr<Chunk<A>>,
 }
-
-#[allow(unsafe_code)]
-#[cfg(ref_arc)]
-unsafe impl<'a, A> Send for TreeFocusMut<'a, A> {}
-#[allow(unsafe_code)]
-#[cfg(ref_arc)]
-unsafe impl<'a, A> Sync for TreeFocusMut<'a, A> {}
 
 impl<'a, A> TreeFocusMut<'a, A>
 where
@@ -580,65 +726,159 @@ where
         let middle_end = middle_start + tree.middle.len();
         let root: *mut Node<A> = Ref::make_mut(&mut tree.middle);
         TreeFocusMut {
-            tree,
-            root,
+            lifetime: PhantomData,
+            #[cfg(threadsafe)]
+            lock: TinyLock::new(),
+            view: 0..tree.length,
+            tree: AtomicPtr::new(tree),
+            root: AtomicPtr::new(root),
             middle_range: middle_start..middle_end,
             target_range: 0..0,
-            target_ptr: null_mut(),
+            target_ptr: AtomicPtr::default(),
         }
+    }
+
+    fn len(&self) -> usize {
+        self.view.end - self.view.start
+    }
+
+    fn narrow(self, mut view: Range<usize>) -> Self {
+        view.start += self.view.start;
+        view.end += self.view.start;
+        TreeFocusMut {
+            lifetime: PhantomData,
+            #[cfg(threadsafe)]
+            lock: self.lock,
+            view,
+            middle_range: self.middle_range.clone(),
+            root: self.root,
+            target_range: 0..0,
+            target_ptr: AtomicPtr::default(),
+            tree: self.tree,
+        }
+    }
+
+    fn split_at(self, index: usize) -> (Self, Self) {
+        let len = self.len();
+        debug_assert!(index <= len);
+        #[allow(unsafe_code)]
+        let left = TreeFocusMut {
+            lifetime: PhantomData,
+            #[cfg(threadsafe)]
+            lock: self.lock.clone(),
+            view: self.view.start..(self.view.start + index),
+            middle_range: self.middle_range.clone(),
+            root: AtomicPtr::new(unsafe { &mut *self.root.load(Ordering::Relaxed) }),
+            target_range: 0..0,
+            target_ptr: AtomicPtr::default(),
+            tree: AtomicPtr::new(unsafe { &mut *self.tree.load(Ordering::Relaxed) }),
+        };
+        let right = TreeFocusMut {
+            lifetime: PhantomData,
+            #[cfg(threadsafe)]
+            lock: self.lock.clone(),
+            view: (self.view.start + index)..(self.view.start + len),
+            middle_range: self.middle_range.clone(),
+            root: self.root,
+            target_range: 0..0,
+            target_ptr: AtomicPtr::default(),
+            tree: self.tree,
+        };
+        (left, right)
+    }
+
+    fn physical_index(&self, index: usize) -> usize {
+        debug_assert!(index < self.view.end);
+        self.view.start + index
+    }
+
+    fn logical_range(&self, range: &Range<usize>) -> Range<usize> {
+        (range.start - self.view.start)..(range.end - self.view.start)
     }
 
     #[allow(unsafe_code)]
     fn set_focus(&mut self, index: usize) {
-        // FIXME use path to shorten lookup if available
+        // We have to use a lock here to guard against accessing the same Arc
+        // from multiple threads simultaneously, which is going to make
+        // Arc::make_mut break in unpleasant ways.
+        //
+        // In more high level terms, when we deref the pointers in the unsafe
+        // blocks below, we turn them into mutable references, and only one
+        // mutable reference can ever exist for the same thing (and, more to the
+        // point, Arc::make_mut relies on it). It's up to us to preserve this
+        // invariant when we go unsafe.
+        #[cfg(threadsafe)]
+        let _lock = self.lock.lock();
+        let tree = unsafe { &mut *self.tree.load(Ordering::Relaxed) };
         if index < self.middle_range.start {
-            let outer_len = self.tree.outer_f.len();
+            let outer_len = tree.outer_f.len();
             if index < outer_len {
                 self.target_range = 0..outer_len;
-                self.target_ptr = Ref::make_mut(&mut self.tree.outer_f);
+                self.target_ptr
+                    .store(Ref::make_mut(&mut tree.outer_f), Ordering::Relaxed);
             } else {
                 self.target_range = outer_len..self.middle_range.start;
-                self.target_ptr = Ref::make_mut(&mut self.tree.inner_f);
+                self.target_ptr
+                    .store(Ref::make_mut(&mut tree.inner_f), Ordering::Relaxed);
             }
         } else if index >= self.middle_range.end {
-            let outer_start = self.middle_range.end + self.tree.inner_b.len();
+            let outer_start = self.middle_range.end + tree.inner_b.len();
             if index < outer_start {
                 self.target_range = self.middle_range.end..outer_start;
-                self.target_ptr = Ref::make_mut(&mut self.tree.inner_b);
+                self.target_ptr
+                    .store(Ref::make_mut(&mut tree.inner_b), Ordering::Relaxed);
             } else {
-                self.target_range = outer_start..self.tree.length;
-                self.target_ptr = Ref::make_mut(&mut self.tree.outer_b);
+                self.target_range = outer_start..tree.length;
+                self.target_ptr
+                    .store(Ref::make_mut(&mut tree.outer_b), Ordering::Relaxed);
             }
         } else {
             let tree_index = index - self.middle_range.start;
-            let (range, ptr) =
-                unsafe { &mut *self.root }.lookup_chunk_mut(self.tree.middle_level, 0, tree_index);
+            let (range, ptr) = unsafe { &mut *self.root.load(Ordering::Relaxed) }.lookup_chunk_mut(
+                tree.middle_level,
+                0,
+                tree_index,
+            );
             self.target_range =
                 (range.start + self.middle_range.start)..(range.end + self.middle_range.start);
-            self.target_ptr = ptr;
+            self.target_ptr.store(ptr, Ordering::Relaxed);
         }
     }
 
     #[allow(unsafe_code)]
     fn get_focus(&mut self) -> &mut Chunk<A> {
-        unsafe { &mut *self.target_ptr }
+        unsafe { &mut *self.target_ptr.load(Ordering::Relaxed) }
     }
 
     pub fn get(&mut self, index: usize) -> Option<&mut A> {
-        if index >= self.tree.length {
+        if index >= self.len() {
             return None;
         }
-        if !contains(&self.target_range, &index) {
-            self.set_focus(index);
+        let phys_index = self.physical_index(index);
+        if !contains(&self.target_range, &phys_index) {
+            self.set_focus(phys_index);
         }
-        let target_index = index - self.target_range.start;
-        Some(&mut self.get_focus()[target_index])
+        let target_phys_index = phys_index - self.target_range.start;
+        Some(&mut self.get_focus()[target_phys_index])
     }
 
-    pub fn get_chunk(&mut self, index: usize) -> (Range<usize>, &mut Chunk<A>) {
-        if !contains(&self.target_range, &index) {
-            self.set_focus(index);
+    pub fn get_chunk(&mut self, index: usize) -> (Range<usize>, &mut [A]) {
+        let phys_index = self.physical_index(index);
+        if !contains(&self.target_range, &phys_index) {
+            self.set_focus(phys_index);
         }
-        (self.target_range.clone(), self.get_focus())
+        let mut left = 0;
+        let mut right = 0;
+        if self.target_range.start < self.view.start {
+            left = self.view.start - self.target_range.start;
+        }
+        if self.target_range.end > self.view.end {
+            right = self.target_range.end - self.view.end;
+        }
+        let phys_range = (self.target_range.start + left)..(self.target_range.end - right);
+        let log_range = self.logical_range(&phys_range);
+        let slice_len = self.get_focus().len();
+        let slice = &mut (self.get_focus().as_mut_slice())[left..(slice_len - right)];
+        (log_range, slice)
     }
 }

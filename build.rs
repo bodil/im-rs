@@ -19,7 +19,7 @@ fn main() {
     let test_rc = env::var("IM_TEST_RC").is_ok();
     match pkgname.as_str() {
         "im" => if !test_rc {
-            println!("cargo:rustc-cfg=ref_arc")
+            println!("cargo:rustc-cfg=threadsafe")
         },
         "im-rc" => {}
         _ => panic!("unexpected package name!"),
