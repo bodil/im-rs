@@ -16,7 +16,11 @@ Versioning](http://semver.org/spec/v2.0.0.html).
   runs nearly an order of magnitude faster. Likewise, `Vector::sort` and
   `Vector::retain` are now using `FocusMut` and run considerably faster as a
   result.
-- `Vector::set` now returns the replaced value.
+- `Focus` and `FocusMut` can also be used as stand ins for subslices through the
+  `narrow` and `split_at` methods. You can also iterate over foci, making this
+  the most efficient way to iterate over a subset of a `Vector`.
+- `Vector` now implements [Rayon](https://crates.io/crates/rayon)'s parallel
+  iterators behind the `rayon` feature flag.
 
 ### Changed
 - As `std::ops::RangeBounds` is now stabilised in Rust 1.28, the `Vector::slice`
@@ -26,6 +30,7 @@ Versioning](http://semver.org/spec/v2.0.0.html).
   existing code. (#34)
 - `Vector::split_off` can now take an index equal to the length of the vector,
   yielding an empty vector as the split result. (#33)
+- `Vector::set` now returns the replaced value.
 
 ### Fixed
 - `Vector` is now represented as a single inline chunk until it grows larger

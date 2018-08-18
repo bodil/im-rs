@@ -57,17 +57,18 @@
 //! reasonably cheap when using a [`Vector`][vector::Vector].
 //!
 //! It should be noted, however, that because of its simplicity,
-//! [`Vec`][std::vec::Vec] actually beats [Vector][vector::Vector]
-//! even at its strongest operations at small sizes, just because
-//! modern CPUs are hyperoptimised for things like copying small
-//! chunks of contiguous memory - you actually need to go past a
-//! certain size (usually in the vicinity of one or two hundred
-//! elements) before you get to the point where [`Vec`][std::vec::Vec]
-//! isn't always going to be the fastest choice.
-//! [Vector][vector::Vector] attempts to overcome this by basically
-//! just being a couple of `Vec`s at small sizes, until it grows big
-//! enough to warrant a more traditional immutable tree structure, but
-//! even this involves a little bit of overhead.
+//! [`Vec`][std::vec::Vec] actually beats [`Vector`][vector::Vector] even at its
+//! strongest operations at small sizes, just because modern CPUs are
+//! hyperoptimised for things like copying small chunks of contiguous memory -
+//! you actually need to go past a certain size (usually in the vicinity of
+//! several hundred elements) before you get to the point where
+//! [`Vec`][std::vec::Vec] isn't always going to be the fastest choice.
+//! [`Vector`][vector::Vector] attempts to overcome this by actually just being
+//! an inline array at very small sizes, and being able to switch efficiently to
+//! the full data structure when it grows large enough. Thus,
+//! [`Vector`][vector::Vector] will actually be very slightly faster than
+//! [`Vec`][std::vec::Vec], because of the inlining and a couple of layout
+//! tricks, until it grows past the size of a single chunk.
 //!
 //! The maps - [`HashMap`][hashmap::HashMap] and
 //! [`OrdMap`][ordmap::OrdMap] - generally perform similarly to their
@@ -215,6 +216,23 @@
 //! data structures in `im-rc` do not implement [`Send`][std::marker::Send] and
 //! [`Sync`][std::marker::Sync]. This yields approximately a 20-25% increase in
 //! general performance.
+//!
+//! ## Feature Flags
+//!
+//! `im` comes with optional support for the following crates through Cargo
+//! feature flags. You can enable them in your `Cargo.toml` file like this:
+//!
+//! ```no_compile
+//! [dependencies]
+//! im = { version = "*", features = ["proptest", "serde"] }
+//! ```
+//!
+//! | Feature | Description |
+//! | ------- | ----------- |
+//! | [`proptest`](https://crates.io/crates/proptest) | Strategies for all `im` datatypes under a `proptest` namespace, eg. `im::vector::proptest::vector()` |
+//! | [`quickcheck`](https://crates.io/crates/quickcheck) | `Arbitrary` implementations for all `im` datatypes (not available in `im-rc`) |
+//! | [`rayon`](https://crates.io/crates/rayon) | parallel iterator implementations for `Vector` (not available in `im-rc`) |
+//! | [`serde`](https://crates.io/crates/serde) | `Serialize` and `Deserialize` implementations for all `im` datatypes |
 //!
 //! [std::collections]: https://doc.rust-lang.org/std/collections/index.html
 //! [std::collections::VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
