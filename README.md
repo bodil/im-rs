@@ -2,6 +2,9 @@
 
 Blazing fast immutable collection datatypes for Rust.
 
+Comes in two versions: [`im`](https://crates.io/crates/im) (thread safe) and
+[`im-rc`](https://crates.io/crates/im-rc) (fast but not thread safe).
+
 ## Documentation
 
 * [API docs](https://docs.rs/im/)

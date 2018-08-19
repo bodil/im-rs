@@ -6,13 +6,23 @@ rust:
 cache:
   directories:
     - /home/travis/.cargo
+    - /home/travis/target
+
+env:
+  - CRATE=im
+  - CRATE=im-rc
+
 install:
-  - rustup toolchain add nightly
-  - rustup component add --toolchain nightly clippy-preview; true
-script:
-  - cargo +nightly clippy -- -D warnings
-  - cargo test
-  - cargo clean
-  - IM_TEST_RC=1 cargo test
+  - mkdir -p .cargo && echo '[build]' > .cargo/config && echo 'target-dir = "/home/travis/target"' >> .cargo/config
   - ./build-releases.sh
-  - cd im-rc; cargo test --tests
+
+script: cd dist/latest/$CRATE; cargo test
+
+matrix:
+  include:
+    - env: CLIPPY=1
+      rust: nightly
+      install:
+        - rustup toolchain add nightly
+        - rustup component add --toolchain nightly clippy-preview; true
+      script: cargo +nightly clippy -- -D warnings
