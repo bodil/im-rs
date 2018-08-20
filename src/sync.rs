@@ -1,36 +1,65 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread::yield_now;
+pub use self::lock::Lock;
 
-/// The simplest possible write-only spin lock.
-#[derive(Clone)]
-pub struct TinyLock {
-    lock: Arc<AtomicBool>,
-}
+#[cfg(threadsafe)]
+mod lock {
+    use std::sync::{Arc, Mutex, MutexGuard};
 
-impl TinyLock {
-    pub fn new() -> Self {
-        TinyLock {
-            lock: Arc::new(AtomicBool::new(false)),
+    /// Thread safe lock: just wraps a `Mutex`.
+    pub struct Lock<A> {
+        lock: Arc<Mutex<A>>,
+    }
+
+    impl<A> Lock<A> {
+        pub fn new(value: A) -> Self {
+            Lock {
+                lock: Arc::new(Mutex::new(value)),
+            }
+        }
+
+        #[inline]
+        pub fn lock(&mut self) -> Option<MutexGuard<A>> {
+            self.lock.lock().ok()
         }
     }
 
-    pub fn lock(&mut self) -> LockHandle {
-        while self.lock.fetch_or(true, Ordering::SeqCst) != false {
-            yield_now()
-        }
-        LockHandle {
-            lock: self.lock.clone(),
+    impl<A> Clone for Lock<A> {
+        fn clone(&self) -> Self {
+            Lock {
+                lock: self.lock.clone(),
+            }
         }
     }
 }
 
-pub struct LockHandle {
-    lock: Arc<AtomicBool>,
-}
+#[cfg(not(threadsafe))]
+mod lock {
+    use std::cell::{RefCell, RefMut};
+    use std::rc::Rc;
 
-impl Drop for LockHandle {
-    fn drop(&mut self) {
-        self.lock.store(false, Ordering::SeqCst);
+    /// Single threaded lock: a `RefCell` so we should safely panic if somehow
+    /// trying to access the stored data twice from the same thread.
+    pub struct Lock<A> {
+        lock: Rc<RefCell<A>>,
+    }
+
+    impl<A> Lock<A> {
+        pub fn new(value: A) -> Self {
+            Lock {
+                lock: Rc::new(RefCell::new(value)),
+            }
+        }
+
+        #[inline]
+        pub fn lock(&mut self) -> Option<RefMut<A>> {
+            self.lock.try_borrow_mut().ok()
+        }
+    }
+
+    impl<A> Clone for Lock<A> {
+        fn clone(&self) -> Self {
+            Lock {
+                lock: self.lock.clone(),
+            }
+        }
     }
 }

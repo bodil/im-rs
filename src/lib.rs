@@ -289,10 +289,8 @@ extern crate rayon;
 
 mod nodes;
 mod sort;
-mod util;
-
-#[cfg(threadsafe)]
 mod sync;
+mod util;
 
 #[macro_use]
 pub mod ordmap;

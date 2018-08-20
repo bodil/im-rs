@@ -1,16 +1,12 @@
-use std::marker::PhantomData;
 use std::mem::{replace, swap};
 use std::ops::{Range, RangeBounds};
 use std::ptr::null;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use nodes::chunk::Chunk;
-use nodes::rrb::Node;
+use sync::Lock;
 use util::{to_range, Ref};
 use vector::{Iter, IterMut, Vector, RRB};
-
-#[cfg(threadsafe)]
-use sync::TinyLock;
 
 /// Focused indexing over a [`Vector`][Vector].
 ///
@@ -330,7 +326,6 @@ where
     }
 
     fn set_focus(&mut self, index: usize) {
-        // FIXME use path to shorten lookup if available
         if index < self.middle_range.start {
             let outer_len = self.tree.outer_f.len();
             if index < outer_len {
@@ -706,13 +701,9 @@ pub struct TreeFocusMut<'a, A>
 where
     A: 'a,
 {
-    lifetime: PhantomData<&'a A>,
-    #[cfg(threadsafe)]
-    lock: TinyLock,
-    tree: AtomicPtr<RRB<A>>,
+    tree: Lock<&'a mut RRB<A>>,
     view: Range<usize>,
     middle_range: Range<usize>,
-    root: AtomicPtr<Node<A>>,
     target_range: Range<usize>,
     target_ptr: AtomicPtr<Chunk<A>>,
 }
@@ -724,14 +715,9 @@ where
     fn new(tree: &'a mut RRB<A>) -> Self {
         let middle_start = tree.outer_f.len() + tree.inner_f.len();
         let middle_end = middle_start + tree.middle.len();
-        let root: *mut Node<A> = Ref::make_mut(&mut tree.middle);
         TreeFocusMut {
-            lifetime: PhantomData,
-            #[cfg(threadsafe)]
-            lock: TinyLock::new(),
             view: 0..tree.length,
-            tree: AtomicPtr::new(tree),
-            root: AtomicPtr::new(root),
+            tree: Lock::new(tree),
             middle_range: middle_start..middle_end,
             target_range: 0..0,
             target_ptr: AtomicPtr::default(),
@@ -746,12 +732,8 @@ where
         view.start += self.view.start;
         view.end += self.view.start;
         TreeFocusMut {
-            lifetime: PhantomData,
-            #[cfg(threadsafe)]
-            lock: self.lock,
             view,
             middle_range: self.middle_range.clone(),
-            root: self.root,
             target_range: 0..0,
             target_ptr: AtomicPtr::default(),
             tree: self.tree,
@@ -763,23 +745,15 @@ where
         debug_assert!(index <= len);
         #[allow(unsafe_code)]
         let left = TreeFocusMut {
-            lifetime: PhantomData,
-            #[cfg(threadsafe)]
-            lock: self.lock.clone(),
             view: self.view.start..(self.view.start + index),
             middle_range: self.middle_range.clone(),
-            root: AtomicPtr::new(unsafe { &mut *self.root.load(Ordering::Relaxed) }),
             target_range: 0..0,
             target_ptr: AtomicPtr::default(),
-            tree: AtomicPtr::new(unsafe { &mut *self.tree.load(Ordering::Relaxed) }),
+            tree: self.tree.clone(),
         };
         let right = TreeFocusMut {
-            lifetime: PhantomData,
-            #[cfg(threadsafe)]
-            lock: self.lock.clone(),
             view: (self.view.start + index)..(self.view.start + len),
             middle_range: self.middle_range.clone(),
-            root: self.root,
             target_range: 0..0,
             target_ptr: AtomicPtr::default(),
             tree: self.tree,
@@ -796,20 +770,11 @@ where
         (range.start - self.view.start)..(range.end - self.view.start)
     }
 
-    #[allow(unsafe_code)]
     fn set_focus(&mut self, index: usize) {
-        // We have to use a lock here to guard against accessing the same Arc
-        // from multiple threads simultaneously, which is going to make
-        // Arc::make_mut break in unpleasant ways.
-        //
-        // In more high level terms, when we deref the pointers in the unsafe
-        // blocks below, we turn them into mutable references, and only one
-        // mutable reference can ever exist for the same thing (and, more to the
-        // point, Arc::make_mut relies on it). It's up to us to preserve this
-        // invariant when we go unsafe.
-        #[cfg(threadsafe)]
-        let _lock = self.lock.lock();
-        let tree = unsafe { &mut *self.tree.load(Ordering::Relaxed) };
+        let mut tree = self
+            .tree
+            .lock()
+            .expect("im::vector::Focus::set_focus: unable to acquire exclusive lock on Vector");
         if index < self.middle_range.start {
             let outer_len = tree.outer_f.len();
             if index < outer_len {
@@ -834,11 +799,9 @@ where
             }
         } else {
             let tree_index = index - self.middle_range.start;
-            let (range, ptr) = unsafe { &mut *self.root.load(Ordering::Relaxed) }.lookup_chunk_mut(
-                tree.middle_level,
-                0,
-                tree_index,
-            );
+            let level = tree.middle_level;
+            let middle = Ref::make_mut(&mut tree.middle);
+            let (range, ptr) = middle.lookup_chunk_mut(level, 0, tree_index);
             self.target_range =
                 (range.start + self.middle_range.start)..(range.end + self.middle_range.start);
             self.target_ptr.store(ptr, Ordering::Relaxed);
