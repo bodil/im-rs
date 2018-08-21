@@ -19,6 +19,7 @@ travis-ci = { repository = "bodil/im-rs" }
 rustc_version = "0.2"
 
 [dependencies]
+typenum = "1.10"
 quickcheck = { version = "0.6", optional = true }
 proptest = { version = "0.8", optional = true }
 serde = { version = "1.0", optional = true }

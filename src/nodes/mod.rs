@@ -8,4 +8,4 @@ pub mod hamt;
 pub mod rrb;
 
 mod unsafe_chunks;
-pub use self::unsafe_chunks::{chunk, sparse_chunk};
+pub use self::unsafe_chunks::{chunk, sized_chunk, sparse_chunk};

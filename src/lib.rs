@@ -261,6 +261,8 @@
 #![cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
 #![cfg_attr(has_specialisation, feature(specialization))]
 
+extern crate typenum;
+
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;

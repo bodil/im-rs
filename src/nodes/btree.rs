@@ -6,13 +6,17 @@ use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::mem;
 
-use nodes::chunk::{Chunk, CHUNK_SIZE};
+use typenum::{Add1, Unsigned, U64};
+
+use nodes::sized_chunk::SizedChunk;
 use util::{clone_ref, Ref};
 
 use self::Insert::*;
 use self::InsertAction::*;
 
-const NODE_SIZE: usize = CHUNK_SIZE - 2; // Must be an even number!
+type NodeSize = U64; // Must be an even number!
+
+const NODE_SIZE: usize = NodeSize::USIZE;
 const MEDIAN: usize = (NODE_SIZE + 1) >> 1;
 
 pub trait BTreeValue: Clone {
@@ -32,8 +36,8 @@ pub trait BTreeValue: Clone {
 
 pub struct Node<A> {
     count: usize,
-    keys: Chunk<A>,
-    children: Chunk<Option<Ref<Node<A>>>>,
+    keys: SizedChunk<A, NodeSize>,
+    children: SizedChunk<Option<Ref<Node<A>>>, Add1<NodeSize>>,
 }
 
 pub enum Insert<A> {
@@ -83,10 +87,24 @@ impl<A> Default for Node<A> {
     fn default() -> Self {
         Node {
             count: 0,
-            keys: Chunk::new(),
-            children: Chunk::unit(None),
+            keys: SizedChunk::new(),
+            children: SizedChunk::unit(None),
         }
     }
+}
+
+fn sum_up_children<A>(children: &[Option<Ref<Node<A>>>]) -> usize
+where
+    A: Clone,
+{
+    let mut c = 0;
+    for child in children {
+        match child {
+            None => continue,
+            Some(ref node) => c += node.len(),
+        }
+    }
+    c
 }
 
 impl<A> Node<A>
@@ -106,17 +124,6 @@ where
     #[inline]
     fn is_leaf(&self) -> bool {
         self.children[0].is_none()
-    }
-
-    fn sum_up_children(&self) -> usize {
-        let mut c = self.count;
-        for child in &self.children {
-            match child {
-                None => continue,
-                Some(ref node) => c += node.len(),
-            }
-        }
-        c
     }
 
     #[inline]
@@ -141,8 +148,8 @@ where
     pub fn unit(value: A) -> Self {
         Node {
             count: 1,
-            keys: Chunk::unit(value),
-            children: Chunk::pair(None, None),
+            keys: SizedChunk::unit(value),
+            children: SizedChunk::pair(None, None),
         }
     }
 
@@ -150,8 +157,8 @@ where
     pub fn from_split(left: Node<A>, median: A, right: Node<A>) -> Self {
         Node {
             count: left.len() + right.len() + 1,
-            keys: Chunk::unit(median),
-            children: Chunk::pair(Some(Ref::from(left)), Some(Ref::from(right))),
+            keys: SizedChunk::unit(median),
+            children: SizedChunk::pair(Some(Ref::from(left)), Some(Ref::from(right))),
         }
     }
 
@@ -232,28 +239,74 @@ impl<A: BTreeValue> Node<A> {
         ins_left: Option<Node<A>>,
         ins_right: Option<Node<A>>,
     ) -> Insert<A> {
+        let left_child = ins_left.map(Ref::from);
+        let right_child = ins_right.map(Ref::from);
         let index = A::search_value(&self.keys, &value).unwrap_err();
-        self.children[index] = ins_left.map(Ref::from);
-        self.keys.insert(index, value);
-        self.children.insert(index + 1, ins_right.map(Ref::from));
+        let mut left_keys;
+        let mut left_children;
+        let mut right_keys;
+        let mut right_children;
+        let median;
+        if index < MEDIAN {
+            self.children[index] = left_child;
 
-        let mut right_keys = self.keys.split(MEDIAN);
-        let right_children = self.children.split(MEDIAN + 1);
-        let median = right_keys.pop_front();
+            left_keys = SizedChunk::from_front(&mut self.keys, index);
+            left_keys.push_back(value);
+            left_keys.extend_from_front(&mut self.keys, MEDIAN - index - 1);
 
-        let mut left = Node {
-            count: MEDIAN,
-            keys: Chunk::drain_from(&mut self.keys),
-            children: Chunk::drain_from(&mut self.children),
-        };
-        let mut right = Node {
-            count: MEDIAN,
-            keys: right_keys,
-            children: right_children,
-        };
-        left.count = left.sum_up_children();
-        right.count = right.sum_up_children();
-        Split(left, median, right)
+            left_children = SizedChunk::from_front(&mut self.children, index + 1);
+            left_children.push_back(right_child);
+            left_children.extend_from_front(&mut self.children, MEDIAN - index - 1);
+
+            median = self.keys.pop_front();
+
+            right_keys = SizedChunk::drain_from(&mut self.keys);
+            right_children = SizedChunk::drain_from(&mut self.children);
+        } else if index > MEDIAN {
+            self.children[index] = left_child;
+
+            left_keys = SizedChunk::from_front(&mut self.keys, MEDIAN);
+            left_children = SizedChunk::from_front(&mut self.children, MEDIAN + 1);
+
+            median = self.keys.pop_front();
+
+            right_keys = SizedChunk::from_front(&mut self.keys, index - MEDIAN - 1);
+            right_keys.push_back(value);
+            right_keys.extend(&mut self.keys);
+
+            right_children = SizedChunk::from_front(&mut self.children, index - MEDIAN);
+            right_children.push_back(right_child);
+            right_children.extend(&mut self.children);
+        } else {
+            left_keys = SizedChunk::from_front(&mut self.keys, MEDIAN);
+            left_children = SizedChunk::from_front(&mut self.children, MEDIAN);
+            left_children.push_back(left_child);
+
+            median = value;
+
+            right_keys = SizedChunk::drain_from(&mut self.keys);
+            right_children = SizedChunk::drain_from(&mut self.children);
+            right_children[0] = right_child;
+        }
+
+        debug_assert!(left_keys.len() == MEDIAN);
+        debug_assert!(left_children.len() == MEDIAN + 1);
+        debug_assert!(right_keys.len() == MEDIAN);
+        debug_assert!(right_children.len() == MEDIAN + 1);
+
+        Split(
+            Node {
+                count: MEDIAN + sum_up_children(&left_children),
+                keys: left_keys,
+                children: left_children,
+            },
+            median,
+            Node {
+                count: MEDIAN + sum_up_children(&right_children),
+                keys: right_keys,
+                children: right_children,
+            },
+        )
     }
 
     fn merge(middle: A, left: Node<A>, mut right: Node<A>) -> Node<A> {
