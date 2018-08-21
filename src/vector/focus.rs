@@ -96,7 +96,7 @@ where
     /// [Vector]: enum.Vector.html
     pub fn new(vector: &'a Vector<A>) -> Self {
         match vector {
-            Vector::Single(chunk) => Focus::Single(chunk.as_slice()),
+            Vector::Single(chunk) => Focus::Single(chunk),
             Vector::Full(tree) => Focus::Full(TreeFocus::new(tree)),
         }
     }
@@ -378,7 +378,7 @@ where
         if !contains(&self.target_range, &phys_index) {
             self.set_focus(phys_index);
         }
-        let mut slice = self.get_focus().as_slice();
+        let mut slice: &[A] = self.get_focus();
         let mut left = 0;
         let mut right = 0;
         if self.target_range.start < self.view.start {

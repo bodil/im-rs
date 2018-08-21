@@ -2,10 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::borrow::{Borrow, BorrowMut};
 use std::fmt::{Debug, Error, Formatter};
 use std::iter::FusedIterator;
 use std::mem::{self, ManuallyDrop};
-use std::ops::{Index, IndexMut};
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::ptr;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 
@@ -382,6 +383,44 @@ impl<A: Debug> Debug for Chunk<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         f.write_str("Chunk")?;
         f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+impl<A> Borrow<[A]> for Chunk<A> {
+    fn borrow(&self) -> &[A] {
+        self.as_slice()
+    }
+}
+
+impl<A> BorrowMut<[A]> for Chunk<A> {
+    fn borrow_mut(&mut self) -> &mut [A] {
+        self.as_mut_slice()
+    }
+}
+
+impl<A> AsRef<[A]> for Chunk<A> {
+    fn as_ref(&self) -> &[A] {
+        self.as_slice()
+    }
+}
+
+impl<A> AsMut<[A]> for Chunk<A> {
+    fn as_mut(&mut self) -> &mut [A] {
+        self.as_mut_slice()
+    }
+}
+
+impl<A> Deref for Chunk<A> {
+    type Target = [A];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+impl<A> DerefMut for Chunk<A> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.as_mut_slice()
     }
 }
 
