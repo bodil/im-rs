@@ -160,6 +160,7 @@ impl<K: Ord + Clone + Copy, V: Clone> BTreeValue for (K, V) {
 /// [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 /// [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 pub struct OrdMap<K, V> {
+    size: usize,
     root: Ref<Node<(K, V)>>,
 }
 
@@ -172,6 +173,7 @@ where
     #[must_use]
     pub fn new() -> Self {
         OrdMap {
+            size: 0,
             root: Ref::from(Node::new()),
         }
     }
@@ -194,6 +196,7 @@ where
     #[must_use]
     pub fn singleton(key: K, value: V) -> Self {
         OrdMap {
+            size: 1,
             root: Ref::from(Node::unit((key, value))),
         }
     }
@@ -242,7 +245,7 @@ where
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
-        self.root.len()
+        self.size
     }
 
     /// Get the largest key in a map, along with its value. If the map
@@ -294,7 +297,7 @@ where
     /// Get an iterator over the key/value pairs of a map.
     #[must_use]
     pub fn iter(&self) -> Iter<'_, (K, V)> {
-        Iter::new(&self.root)
+        Iter::new(&self.root, self.size)
     }
 
     /// Get an iterator over a map's keys.
@@ -423,13 +426,17 @@ where
             let root = Ref::make_mut(&mut self.root);
             match root.insert((key, value)) {
                 Insert::Replaced((_, old_value)) => return Some(old_value),
-                Insert::Added => return None,
+                Insert::Added => {
+                    self.size += 1;
+                    return None;
+                }
                 Insert::Update(root) => Ref::from(root),
                 Insert::Split(left, median, right) => {
                     Ref::from(Node::from_split(left, median, right))
                 }
             }
         };
+        self.size += 1;
         self.root = new_root;
         None
     }
@@ -474,10 +481,14 @@ where
             let root = Ref::make_mut(&mut self.root);
             match root.remove(k) {
                 Remove::NoChange => return None,
-                Remove::Removed(pair) => return Some(pair),
+                Remove::Removed(pair) => {
+                    self.size -= 1;
+                    return Some(pair);
+                }
                 Remove::Update(pair, root) => (Ref::from(root), Some(pair)),
             }
         };
+        self.size -= 1;
         self.root = new_root;
         removed_value
     }
@@ -1288,6 +1299,7 @@ where
 impl<K, V> Clone for OrdMap<K, V> {
     fn clone(&self) -> Self {
         OrdMap {
+            size: self.size,
             root: self.root.clone(),
         }
     }
@@ -1596,7 +1608,7 @@ where
     type IntoIter = ConsumingIter<(K, V)>;
 
     fn into_iter(self) -> Self::IntoIter {
-        ConsumingIter::new(&self.root)
+        ConsumingIter::new(&self.root, self.size)
     }
 }
 

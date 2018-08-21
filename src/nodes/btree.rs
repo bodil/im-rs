@@ -35,7 +35,6 @@ pub trait BTreeValue: Clone {
 }
 
 pub struct Node<A> {
-    count: usize,
     keys: SizedChunk<A, NodeSize>,
     children: SizedChunk<Option<Ref<Node<A>>>, Add1<NodeSize>>,
 }
@@ -76,7 +75,6 @@ where
 {
     fn clone(&self) -> Self {
         Node {
-            count: self.count,
             keys: self.keys.clone(),
             children: self.children.clone(),
         }
@@ -86,25 +84,10 @@ where
 impl<A> Default for Node<A> {
     fn default() -> Self {
         Node {
-            count: 0,
             keys: SizedChunk::new(),
             children: SizedChunk::unit(None),
         }
     }
-}
-
-fn sum_up_children<A>(children: &[Option<Ref<Node<A>>>]) -> usize
-where
-    A: Clone,
-{
-    let mut c = 0;
-    for child in children {
-        match child {
-            None => continue,
-            Some(ref node) => c += node.len(),
-        }
-    }
-    c
 }
 
 impl<A> Node<A>
@@ -127,19 +110,6 @@ where
     }
 
     #[inline]
-    pub fn len(&self) -> usize {
-        self.count
-    }
-
-    #[inline]
-    fn maybe_len(node_or: &Option<Ref<Node<A>>>) -> usize {
-        match node_or {
-            None => 0,
-            Some(ref node) => node.len(),
-        }
-    }
-
-    #[inline]
     pub fn new() -> Self {
         Self::default()
     }
@@ -147,7 +117,6 @@ where
     #[inline]
     pub fn unit(value: A) -> Self {
         Node {
-            count: 1,
             keys: SizedChunk::unit(value),
             children: SizedChunk::pair(None, None),
         }
@@ -156,7 +125,6 @@ where
     #[inline]
     pub fn from_split(left: Node<A>, median: A, right: Node<A>) -> Self {
         Node {
-            count: left.len() + right.len() + 1,
             keys: SizedChunk::unit(median),
             children: SizedChunk::pair(Some(Ref::from(left)), Some(Ref::from(right))),
         }
@@ -296,13 +264,11 @@ impl<A: BTreeValue> Node<A> {
 
         Split(
             Node {
-                count: MEDIAN + sum_up_children(&left_children),
                 keys: left_keys,
                 children: left_children,
             },
             median,
             Node {
-                count: MEDIAN + sum_up_children(&right_children),
                 keys: right_keys,
                 children: right_children,
             },
@@ -310,41 +276,32 @@ impl<A: BTreeValue> Node<A> {
     }
 
     fn merge(middle: A, left: Node<A>, mut right: Node<A>) -> Node<A> {
-        let count = left.len() + right.len() + 1;
         let mut keys = left.keys;
         keys.push_back(middle);
         keys.extend(&mut right.keys);
         let mut children = left.children;
         children.extend(&mut right.children);
-        Node {
-            count,
-            keys,
-            children,
-        }
+        Node { keys, children }
     }
 
     fn pop_min(&mut self) -> (A, Option<Ref<Node<A>>>) {
         let value = self.keys.pop_front();
         let child = self.children.pop_front();
-        self.count -= 1 + Node::maybe_len(&child);
         (value, child)
     }
 
     fn pop_max(&mut self) -> (A, Option<Ref<Node<A>>>) {
         let value = self.keys.pop_back();
         let child = self.children.pop_back();
-        self.count -= 1 + Node::maybe_len(&child);
         (value, child)
     }
 
     fn push_min(&mut self, child: Option<Ref<Node<A>>>, value: A) {
-        self.count += 1 + Node::maybe_len(&child);
         self.keys.push_front(value);
         self.children.push_front(child);
     }
 
     fn push_max(&mut self, child: Option<Ref<Node<A>>>, value: A) {
-        self.count += 1 + Node::maybe_len(&child);
         self.keys.push_back(value);
         self.children.push_back(child);
     }
@@ -353,7 +310,6 @@ impl<A: BTreeValue> Node<A> {
         if self.keys.is_empty() {
             self.keys.push_back(value);
             self.children.push_back(None);
-            self.count += 1;
             return Insert::Added;
         }
         let (median, left, right) = match A::search_value(&self.keys, &value) {
@@ -381,14 +337,12 @@ impl<A: BTreeValue> Node<A> {
                 match action {
                     ReplacedAction(value) => return Insert::Replaced(value),
                     AddedAction => {
-                        self.count += 1;
                         return Insert::Added;
                     }
                     InsertAt => {
                         if has_room {
                             self.keys.insert(index, value);
                             self.children.insert(index + 1, None);
-                            self.count += 1;
                             return Insert::Added;
                         } else {
                             (value, None, None)
@@ -399,7 +353,6 @@ impl<A: BTreeValue> Node<A> {
                             self.children[index] = Some(Ref::from(left));
                             self.keys.insert(index, median);
                             self.children.insert(index + 1, Some(Ref::from(right)));
-                            self.count += 1;
                             return Insert::Added;
                         } else {
                             (median, Some(left), Some(right))
@@ -490,7 +443,6 @@ impl<A: BTreeValue> Node<A> {
             RemoveAction::DeleteAt(index) => {
                 let pair = self.keys.remove(index);
                 self.children.remove(index);
-                self.count -= 1;
                 Remove::Removed(pair)
             }
             RemoveAction::PullUp(target_index, pull_to, child_index) => {
@@ -503,11 +455,9 @@ impl<A: BTreeValue> Node<A> {
                         Remove::NoChange => unreachable!(),
                         Remove::Removed(pulled_value) => {
                             value = self.keys.set(pull_to, pulled_value);
-                            self.count -= 1;
                         }
                         Remove::Update(pulled_value, new_child) => {
                             value = self.keys.set(pull_to, pulled_value);
-                            self.count -= 1;
                             update = Some(new_child);
                         }
                     }
@@ -533,7 +483,6 @@ impl<A: BTreeValue> Node<A> {
                     // If we've depleted the root node, the merged child becomes the root.
                     Remove::Update(removed, new_child)
                 } else {
-                    self.count -= 1;
                     self.children[index] = Some(Ref::from(new_child));
                     Remove::Removed(removed)
                 }
@@ -568,7 +517,6 @@ impl<A: BTreeValue> Node<A> {
                             // If we did remove something, we complete the rebalancing.
                             let (left_value, _) = left.pop_max();
                             self.keys[index - 1] = left_value;
-                            self.count -= 1;
                             out_value = value;
                         }
                         Remove::Update(value, new_child) => {
@@ -576,7 +524,6 @@ impl<A: BTreeValue> Node<A> {
                             let (left_value, _) = left.pop_max();
                             self.keys[index - 1] = left_value;
                             update = Some(new_child);
-                            self.count -= 1;
                             out_value = value;
                         }
                     }
@@ -613,7 +560,6 @@ impl<A: BTreeValue> Node<A> {
                             // If we did remove something, we complete the rebalancing.
                             let (right_value, _) = right.pop_min();
                             self.keys[index] = right_value;
-                            self.count -= 1;
                             out_value = value;
                         }
                         Remove::Update(value, new_child) => {
@@ -621,7 +567,6 @@ impl<A: BTreeValue> Node<A> {
                             let (right_value, _) = right.pop_min();
                             self.keys[index] = right_value;
                             update = Some(new_child);
-                            self.count -= 1;
                             out_value = value;
                         }
                     }
@@ -652,7 +597,6 @@ impl<A: BTreeValue> Node<A> {
                         if self.keys.is_empty() {
                             return Remove::Update(value, merged);
                         }
-                        self.count -= 1;
                         update = merged;
                         out_value = value;
                     }
@@ -660,7 +604,6 @@ impl<A: BTreeValue> Node<A> {
                         if self.keys.is_empty() {
                             return Remove::Update(value, new_child);
                         }
-                        self.count -= 1;
                         update = new_child;
                         out_value = value;
                     }
@@ -676,12 +619,10 @@ impl<A: BTreeValue> Node<A> {
                     match child.remove(key) {
                         Remove::NoChange => return Remove::NoChange,
                         Remove::Removed(value) => {
-                            self.count -= 1;
                             out_value = value;
                         }
                         Remove::Update(value, new_child) => {
                             update = Some(new_child);
-                            self.count -= 1;
                             out_value = value;
                         }
                     }
@@ -713,13 +654,13 @@ pub struct Iter<'a, A: 'a> {
 }
 
 impl<'a, A: 'a + Clone> Iter<'a, A> {
-    pub fn new(root: &'a Node<A>) -> Self {
+    pub fn new(root: &'a Node<A>, total: usize) -> Self {
         Iter {
             fwd_last: None,
             fwd_stack: vec![IterItem::Consider(root)],
             back_last: None,
             back_stack: vec![IterItem::Consider(root)],
-            remaining: root.len(),
+            remaining: total,
         }
     }
 
@@ -841,13 +782,13 @@ pub struct ConsumingIter<A> {
 }
 
 impl<A: Clone> ConsumingIter<A> {
-    pub fn new(root: &Node<A>) -> Self {
+    pub fn new(root: &Node<A>, total: usize) -> Self {
         ConsumingIter {
             fwd_last: None,
             fwd_stack: vec![ConsumingIterItem::Consider(root.clone())],
             back_last: None,
             back_stack: vec![ConsumingIterItem::Consider(root.clone())],
-            remaining: root.len(),
+            remaining: total,
         }
     }
 

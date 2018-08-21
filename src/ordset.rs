@@ -171,6 +171,7 @@ impl<A: Ord + Clone + Copy> BTreeValue for Value<A> {
 /// [hashset::HashSet]: ../hashset/struct.HashSet.html
 /// [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 pub struct OrdSet<A> {
+    size: usize,
     root: Ref<Node<Value<A>>>,
 }
 
@@ -182,6 +183,7 @@ where
     #[must_use]
     pub fn new() -> Self {
         OrdSet {
+            size: 0,
             root: Ref::from(Node::new()),
         }
     }
@@ -201,6 +203,7 @@ where
     #[must_use]
     pub fn singleton(a: A) -> Self {
         OrdSet {
+            size: 1,
             root: Ref::from(Node::unit(Value(a))),
         }
     }
@@ -226,7 +229,7 @@ where
     #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.root.len() == 0
+        self.len() == 0
     }
 
     /// Get the size of a set.
@@ -245,7 +248,7 @@ where
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
-        self.root.len()
+        self.size
     }
 
     /// Get the smallest value in a set.
@@ -268,7 +271,7 @@ where
     #[must_use]
     pub fn iter(&self) -> Iter<A> {
         Iter {
-            it: NodeIter::new(&self.root),
+            it: NodeIter::new(&self.root, self.size),
         }
     }
 
@@ -330,13 +333,17 @@ where
             let root = Ref::make_mut(&mut self.root);
             match root.insert(Value(a)) {
                 Insert::Replaced(Value(old_value)) => return Some(old_value),
-                Insert::Added => return None,
+                Insert::Added => {
+                    self.size += 1;
+                    return None;
+                }
                 Insert::Update(root) => Ref::from(root),
                 Insert::Split(left, median, right) => {
                     Ref::from(Node::from_split(left, median, right))
                 }
             }
         };
+        self.size += 1;
         self.root = new_root;
         None
     }
@@ -354,10 +361,14 @@ where
             let root = Ref::make_mut(&mut self.root);
             match root.remove(a) {
                 Remove::Update(value, root) => (Ref::from(root), Some(value.0)),
-                Remove::Removed(value) => return Some(value.0),
+                Remove::Removed(value) => {
+                    self.size -= 1;
+                    return Some(value.0);
+                }
                 Remove::NoChange => return None,
             }
         };
+        self.size -= 1;
         self.root = new_root;
         removed_value
     }
@@ -639,6 +650,7 @@ where
 impl<A> Clone for OrdSet<A> {
     fn clone(&self) -> Self {
         OrdSet {
+            size: self.size,
             root: self.root.clone(),
         }
     }
@@ -843,7 +855,7 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         ConsumingIter {
-            it: ConsumingNodeIter::new(&self.root),
+            it: ConsumingNodeIter::new(&self.root, self.size),
         }
     }
 }
