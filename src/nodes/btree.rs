@@ -220,11 +220,11 @@ impl<A: BTreeValue> Node<A> {
 
             left_keys = SizedChunk::from_front(&mut self.keys, index);
             left_keys.push_back(value);
-            left_keys.extend_from_front(&mut self.keys, MEDIAN - index - 1);
+            left_keys.drain_from_front(&mut self.keys, MEDIAN - index - 1);
 
             left_children = SizedChunk::from_front(&mut self.children, index + 1);
             left_children.push_back(right_child);
-            left_children.extend_from_front(&mut self.children, MEDIAN - index - 1);
+            left_children.drain_from_front(&mut self.children, MEDIAN - index - 1);
 
             median = self.keys.pop_front();
 
@@ -240,11 +240,11 @@ impl<A: BTreeValue> Node<A> {
 
             right_keys = SizedChunk::from_front(&mut self.keys, index - MEDIAN - 1);
             right_keys.push_back(value);
-            right_keys.extend(&mut self.keys);
+            right_keys.append(&mut self.keys);
 
             right_children = SizedChunk::from_front(&mut self.children, index - MEDIAN);
             right_children.push_back(right_child);
-            right_children.extend(&mut self.children);
+            right_children.append(&mut self.children);
         } else {
             left_keys = SizedChunk::from_front(&mut self.keys, MEDIAN);
             left_children = SizedChunk::from_front(&mut self.children, MEDIAN);
@@ -278,9 +278,9 @@ impl<A: BTreeValue> Node<A> {
     fn merge(middle: A, left: Node<A>, mut right: Node<A>) -> Node<A> {
         let mut keys = left.keys;
         keys.push_back(middle);
-        keys.extend(&mut right.keys);
+        keys.append(&mut right.keys);
         let mut children = left.children;
-        children.extend(&mut right.children);
+        children.append(&mut right.children);
         Node { keys, children }
     }
 

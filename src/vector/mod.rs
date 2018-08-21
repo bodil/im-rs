@@ -53,7 +53,7 @@ use std::iter::{Chain, FromIterator, FusedIterator};
 use std::mem::{replace, swap};
 use std::ops::{Add, Index, IndexMut, RangeBounds};
 
-use nodes::chunk::{Chunk, ConsumingIter as ConsumingChunkIter, CHUNK_SIZE};
+use nodes::chunk::{Chunk, Iter as ChunkIter, CHUNK_SIZE};
 use nodes::rrb::{ConsumingIter as ConsumingNodeIter, Node, PopResult, PushResult, SplitResult};
 use sort;
 use util::{clone_ref, swap_indices, to_range, Ref, Side};
@@ -763,7 +763,7 @@ impl<A: Clone> Vector<A> {
                     // If both are single chunks and left has room for right: directly
                     // memcpy right into left
                     Single(ref mut right) if total_length <= CHUNK_SIZE => {
-                        left.extend(right);
+                        left.append(right);
                         return;
                     }
                     // If only left is a single chunk and has room for right: push
@@ -923,12 +923,12 @@ impl<A: Clone> Vector<A> {
         assert!(index <= self.len());
 
         match self {
-            Single(chunk) => Single(chunk.split(index)),
+            Single(chunk) => Single(chunk.split_off(index)),
             Full(tree) => {
                 let mut local_index = index;
 
                 if local_index < tree.outer_f.len() {
-                    let of2 = Ref::make_mut(&mut tree.outer_f).split(local_index);
+                    let of2 = Ref::make_mut(&mut tree.outer_f).split_off(local_index);
                     let right = RRB {
                         length: tree.length - index,
                         middle_level: tree.middle_level,
@@ -946,7 +946,7 @@ impl<A: Clone> Vector<A> {
                 local_index -= tree.outer_f.len();
 
                 if local_index < tree.inner_f.len() {
-                    let if2 = Ref::make_mut(&mut tree.inner_f).split(local_index);
+                    let if2 = Ref::make_mut(&mut tree.inner_f).split_off(local_index);
                     let right = RRB {
                         length: tree.length - index,
                         middle_level: tree.middle_level,
@@ -1013,7 +1013,7 @@ impl<A: Clone> Vector<A> {
                 local_index -= tree.middle.len();
 
                 if local_index < tree.inner_b.len() {
-                    let ib2 = Ref::make_mut(&mut tree.inner_b).split(local_index);
+                    let ib2 = Ref::make_mut(&mut tree.inner_b).split_off(local_index);
                     let right = RRB {
                         length: tree.length - index,
                         outer_b: replace_def(&mut tree.outer_b),
@@ -1027,7 +1027,7 @@ impl<A: Clone> Vector<A> {
 
                 local_index -= tree.inner_b.len();
 
-                let ob2 = Ref::make_mut(&mut tree.outer_b).split(local_index);
+                let ob2 = Ref::make_mut(&mut tree.outer_b).split_off(local_index);
                 tree.length = index;
                 Single(ob2)
             }
@@ -1334,11 +1334,8 @@ impl<A: Clone> RRB<A> {
     fn into_iter(
         self,
     ) -> Chain<
-        Chain<
-            Chain<Chain<ConsumingChunkIter<A>, ConsumingChunkIter<A>>, ConsumingNodeIter<A>>,
-            ConsumingChunkIter<A>,
-        >,
-        ConsumingChunkIter<A>,
+        Chain<Chain<Chain<ChunkIter<A>, ChunkIter<A>>, ConsumingNodeIter<A>>, ChunkIter<A>>,
+        ChunkIter<A>,
     > {
         let outer_f = clone_ref(self.outer_f).into_iter();
         let inner_f = clone_ref(self.inner_f).into_iter();
@@ -1888,14 +1885,11 @@ impl<'a, A: Clone> FusedIterator for IterMut<'a, A> {}
 
 /// A consuming iterator over vectors with values of type `A`.
 pub enum ConsumingIter<A> {
-    Single(ConsumingChunkIter<A>),
+    Single(ChunkIter<A>),
     Full(
         Chain<
-            Chain<
-                Chain<Chain<ConsumingChunkIter<A>, ConsumingChunkIter<A>>, ConsumingNodeIter<A>>,
-                ConsumingChunkIter<A>,
-            >,
-            ConsumingChunkIter<A>,
+            Chain<Chain<Chain<ChunkIter<A>, ChunkIter<A>>, ConsumingNodeIter<A>>, ChunkIter<A>>,
+            ChunkIter<A>,
         >,
     ),
 }

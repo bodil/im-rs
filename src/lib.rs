@@ -312,6 +312,8 @@ pub mod iter;
 #[cfg(any(test, feature = "serde"))]
 pub mod ser;
 
+pub use nodes::sized_chunk as chunk;
+
 pub use hashmap::HashMap;
 pub use hashset::HashSet;
 pub use ordmap::OrdMap;

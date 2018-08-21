@@ -789,7 +789,7 @@ impl<A: Clone> Node<A> {
                 let left_node = Ref::make_mut(&mut left);
                 let right_node = Ref::make_mut(&mut right);
                 let values = left_node.children.unwrap_values_mut();
-                values.extend(right_node.children.unwrap_values_mut());
+                values.append(right_node.children.unwrap_values_mut());
             }
             if right.children.is_empty() {
                 Self::single_parent(left.clone())

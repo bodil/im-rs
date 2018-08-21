@@ -9,8 +9,6 @@ pub mod chunk {
 
     pub type ChunkSize = U64;
     pub type Chunk<A> = sc::SizedChunk<A, ChunkSize>;
-    // pub type Iter<'a, A> = sc::Iter<'a, A, ChunkSize>;
-    // pub type IterMut<'a, A> = sc::IterMut<'a, A, ChunkSize>;
-    pub type ConsumingIter<A> = sc::ConsumingIter<A, ChunkSize>;
+    pub type Iter<A> = sc::Iter<A, ChunkSize>;
     pub const CHUNK_SIZE: usize = ChunkSize::USIZE;
 }

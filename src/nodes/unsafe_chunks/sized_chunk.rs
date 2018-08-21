@@ -2,17 +2,23 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+//! A fixed capacity smart array.
+
 use std::borrow::{Borrow, BorrowMut};
+use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};
-use std::iter::FromIterator;
-use std::iter::FusedIterator;
+use std::hash::{Hash, Hasher};
+use std::io;
+use std::iter::{FromIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::mem::{self, replace, ManuallyDrop};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::ptr;
-use std::slice::{from_raw_parts, from_raw_parts_mut};
+use std::slice::{
+    from_raw_parts, from_raw_parts_mut, Iter as SliceIter, IterMut as SliceIterMut, SliceIndex,
+};
 
-use typenum::*;
+use typenum::{UInt, UTerm, Unsigned, B0, B1, U64};
 
 pub trait ChunkLength<A>: Unsigned {
     type SizedType;
@@ -22,6 +28,7 @@ impl<A> ChunkLength<A> for UTerm {
     type SizedType = ();
 }
 
+#[doc(hidden)]
 #[allow(dead_code)]
 pub struct SizeEven<A, B> {
     parent1: B,
@@ -29,6 +36,7 @@ pub struct SizeEven<A, B> {
     _marker: PhantomData<A>,
 }
 
+#[doc(hidden)]
 #[allow(dead_code)]
 pub struct SizeOdd<A, B> {
     parent1: B,
@@ -50,6 +58,7 @@ where
     type SizedType = SizeOdd<A, N::SizedType>;
 }
 
+/// A fixed capacity smart array.
 pub struct SizedChunk<A, N = U64>
 where
     N: ChunkLength<A>,
@@ -130,15 +139,19 @@ where
 
     /// Construct a new chunk and move every item from `other` into the new
     /// chunk.
+    ///
+    /// Time: O(n)
     pub fn drain_from(other: &mut Self) -> Self {
         let other_len = other.len();
         Self::from_front(other, other_len)
     }
 
-    /// Construct a new chunk and populate it by taking `count` item from the
+    /// Construct a new chunk and populate it by taking `count` items from the
     /// iterator `iter`.
     ///
-    /// Will panic if the iterator contains less than `count` items.
+    /// Panics if the iterator contains less than `count` items.
+    ///
+    /// Time: O(n)
     pub fn collect_from<I>(iter: &mut I, mut count: usize) -> Self
     where
         I: Iterator<Item = A>,
@@ -156,6 +169,8 @@ where
 
     /// Construct a new chunk and populate it by taking `count` items from the
     /// front of `other`.
+    ///
+    /// Time: O(n) for the number of items moved
     pub fn from_front(other: &mut Self, count: usize) -> Self {
         let other_len = other.len();
         debug_assert!(count <= other_len);
@@ -168,6 +183,8 @@ where
 
     /// Construct a new chunk and populate it by taking `count` items from the
     /// back of `other`.
+    ///
+    /// Time: O(n) for the number of items moved
     pub fn from_back(other: &mut Self, count: usize) -> Self {
         let other_len = other.len();
         debug_assert!(count <= other_len);
@@ -178,16 +195,19 @@ where
         chunk
     }
 
+    /// Get the length of the chunk.
     #[inline]
     pub fn len(&self) -> usize {
         self.right - self.left
     }
 
+    /// Test if the chunk is empty.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.left == self.right
     }
 
+    /// Test if the chunk is at capacity.
     #[inline]
     pub fn is_full(&self) -> bool {
         self.left == 0 && self.right == N::USIZE
@@ -253,6 +273,11 @@ where
         }
     }
 
+    /// Push an item to the front of the chunk.
+    ///
+    /// Panics if the capacity of the chunk is exceeded.
+    ///
+    /// Time: O(1) if there's room at the front, O(n) otherwise
     pub fn push_front(&mut self, value: A) {
         if self.is_full() {
             panic!("SizedChunk::push_front: can't push to full chunk");
@@ -269,6 +294,11 @@ where
         unsafe { SizedChunk::force_write(self.left, value, self) }
     }
 
+    /// Push an item to the back of the chunk.
+    ///
+    /// Panics if the capacity of the chunk is exceeded.
+    ///
+    /// Time: O(1) if there's room at the back, O(n) otherwise
     pub fn push_back(&mut self, value: A) {
         if self.is_full() {
             panic!("SizedChunk::push_back: can't push to full chunk");
@@ -285,6 +315,11 @@ where
         self.right += 1;
     }
 
+    /// Pop an item off the front of the chunk.
+    ///
+    /// Panics if the chunk is empty.
+    ///
+    /// Time: O(1)
     pub fn pop_front(&mut self) -> A {
         if self.is_empty() {
             panic!("SizedChunk::pop_front: can't pop from empty chunk");
@@ -295,6 +330,11 @@ where
         }
     }
 
+    /// Pop an item off the back of the chunk.
+    ///
+    /// Panics if the chunk is empty.
+    ///
+    /// Time: O(1)
     pub fn pop_back(&mut self) -> A {
         if self.is_empty() {
             panic!("SizedChunk::pop_back: can't pop from empty chunk");
@@ -304,15 +344,17 @@ where
         }
     }
 
-    /// Remove all elements up to but not including `index`.
+    /// Discard all items up to but not including `index`.
+    ///
+    /// Panics if `index` is out of bounds.
+    ///
+    /// Time: O(n) for the number of items dropped
     pub fn drop_left(&mut self, index: usize) {
         if index > 0 {
             if index > self.len() {
                 panic!("SizedChunk::drop_left: index out of bounds");
             }
             let start = self.left;
-            #[allow(unknown_lints)]
-            #[allow(redundant_field_names)] // FIXME clippy is currently broken
             for i in start..(start + index) {
                 unsafe { SizedChunk::force_drop(i, self) }
             }
@@ -320,7 +362,11 @@ where
         }
     }
 
-    /// Remove all elements from `index` onward.
+    /// Discard all items from `index` onward.
+    ///
+    /// Panics if `index` is out of bounds.
+    ///
+    /// Time: O(n) for the number of items dropped
     pub fn drop_right(&mut self, index: usize) {
         if index > self.len() {
             panic!("SizedChunk::drop_right: index out of bounds");
@@ -329,8 +375,6 @@ where
             return;
         }
         let start = self.left + index;
-        #[allow(unknown_lints)]
-        #[allow(redundant_field_names)] // FIXME clippy is currently broken
         for i in start..self.right {
             unsafe { SizedChunk::force_drop(i, self) }
         }
@@ -340,7 +384,11 @@ where
     /// Split a chunk into two, the original chunk containing
     /// everything up to `index` and the returned chunk containing
     /// everything from `index` onwards.
-    pub fn split(&mut self, index: usize) -> Self {
+    ///
+    /// Panics if `index` is out of bounds.
+    ///
+    /// Time: O(n) for the number of items in the new chunk
+    pub fn split_off(&mut self, index: usize) -> Self {
         if index > self.len() {
             panic!("SizedChunk::split: index out of bounds");
         }
@@ -356,11 +404,16 @@ where
         right_chunk
     }
 
-    pub fn extend(&mut self, other: &mut Self) {
+    /// Remove all items from `other` and append them to the back of `self`.
+    ///
+    /// Panics if the capacity of the chunk is exceeded.
+    ///
+    /// Time: O(n) for the number of items moved
+    pub fn append(&mut self, other: &mut Self) {
         let self_len = self.len();
         let other_len = other.len();
         if self_len + other_len > N::USIZE {
-            panic!("SizedChunk::extend: chunk size overflow");
+            panic!("SizedChunk::append: chunk size overflow");
         }
         if self.left > 0 && self.right + other_len > N::USIZE {
             unsafe { SizedChunk::force_copy(self.left, 0, self_len, self) };
@@ -373,7 +426,13 @@ where
         other.right = 0;
     }
 
-    pub fn extend_from_front(&mut self, other: &mut Self, count: usize) {
+    /// Remove `count` items from the front of `other` and append them to the
+    /// back of `self`.
+    ///
+    /// Panics if the capacity of the chunk is exceeded.
+    ///
+    /// Time: O(n) for the number of items moved
+    pub fn drain_from_front(&mut self, other: &mut Self, count: usize) {
         let self_len = self.len();
         let other_len = other.len();
         debug_assert!(self_len + count <= other_len);
@@ -387,7 +446,13 @@ where
         other.left += count;
     }
 
-    pub fn extend_from_back(&mut self, other: &mut Self, count: usize) {
+    /// Remove `count` items from the back of `other` and append them to the
+    /// back of `self`.
+    ///
+    /// Panics if the capacity of the chunk is exceeded.
+    ///
+    /// Time: O(n) for the number of items moved
+    pub fn drain_from_back(&mut self, other: &mut Self, count: usize) {
         let self_len = self.len();
         let other_len = other.len();
         debug_assert!(self_len + count <= other_len);
@@ -401,10 +466,21 @@ where
         other.right -= count;
     }
 
+    /// Update the value at index `index`, returning the old value.
+    ///
+    /// Panics if `index` is out of bounds.
+    ///
+    /// Time: O(1)
     pub fn set(&mut self, index: usize, value: A) -> A {
         replace(&mut self[index], value)
     }
 
+    /// Insert a new value at index `index`, shifting all the following values
+    /// to the right.
+    ///
+    /// Panics if the index is out of bounds.
+    ///
+    /// Time: O(n) for the number of items shifted
     pub fn insert(&mut self, index: usize, value: A) {
         if self.is_full() {
             panic!("SizedChunk::insert: chunk is full");
@@ -430,6 +506,14 @@ where
         }
     }
 
+    /// Remove the value at index `index`, shifting all the following values to
+    /// the left.
+    ///
+    /// Returns the removed value.
+    ///
+    /// Panics if the index is out of bounds.
+    ///
+    /// Time: O(n) for the number of items shifted
     pub fn remove(&mut self, index: usize) -> A {
         if index >= self.len() {
             panic!("SizedChunk::remove: index out of bounds");
@@ -448,66 +532,40 @@ where
         value
     }
 
-    #[inline]
-    pub fn get(&self, index: usize) -> Option<&A> {
-        if index < self.len() {
-            Some(&self.values()[self.left + index])
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut A> {
-        if index < self.len() {
-            let left = self.left;
-            Some(&mut self.values_mut()[left + index])
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub fn first(&self) -> Option<&A> {
-        self.get(0)
-    }
-
-    #[inline]
-    pub fn last(&self) -> Option<&A> {
-        if self.is_empty() {
-            None
-        } else {
-            self.get(self.len() - 1)
-        }
-    }
-
-    pub fn iter(&self) -> Iter<'_, A, N> {
-        Iter {
-            chunk: self,
-            left_index: 0,
-            right_index: self.len(),
-        }
-    }
-
-    pub fn iter_mut(&mut self) -> IterMut<'_, A, N> {
-        IterMut {
-            left_index: 0,
-            right_index: self.len(),
-            chunk: self,
-        }
-    }
-
+    /// Construct an iterator that drains values from the front of the chunk.
     pub fn drain(&mut self) -> Drain<'_, A, N> {
         Drain { chunk: self }
     }
 
-    pub fn as_slice(&self) -> &[A] {
-        &self.values()[self.left..self.right]
+    /// Discard the contents of the chunk.
+    ///
+    /// Time: O(n)
+    pub fn clear(&mut self) {
+        self.drop_right(0);
+        self.left = 0;
+        self.right = 0;
     }
 
+    /// Get a reference to the contents of the chunk as a slice.
+    pub fn as_slice(&self) -> &[A] {
+        unsafe {
+            from_raw_parts(
+                (&self.data as *const ManuallyDrop<N::SizedType> as *const A)
+                    .offset(self.left as isize),
+                self.len(),
+            )
+        }
+    }
+
+    /// Get a reference to the contents of the chunk as a mutable slice.
     pub fn as_mut_slice(&mut self) -> &mut [A] {
-        let subslice = self.left..self.right;
-        &mut self.values_mut()[subslice]
+        unsafe {
+            from_raw_parts_mut(
+                (&mut self.data as *mut ManuallyDrop<N::SizedType> as *mut A)
+                    .offset(self.left as isize),
+                self.len(),
+            )
+        }
     }
 }
 
@@ -520,32 +578,24 @@ where
     }
 }
 
-impl<A, N> Index<usize> for SizedChunk<A, N>
+impl<A, N, I> Index<I> for SizedChunk<A, N>
 where
+    I: SliceIndex<[A]>,
     N: ChunkLength<A>,
 {
-    type Output = A;
-    fn index(&self, index: usize) -> &Self::Output {
-        match self.get(index) {
-            None => panic!(
-                "SizedChunk::index: index out of bounds: {} >= {}",
-                index,
-                self.len()
-            ),
-            Some(value) => value,
-        }
+    type Output = I::Output;
+    fn index(&self, index: I) -> &Self::Output {
+        self.as_slice().index(index)
     }
 }
 
-impl<A, N> IndexMut<usize> for SizedChunk<A, N>
+impl<A, N, I> IndexMut<I> for SizedChunk<A, N>
 where
+    I: SliceIndex<[A]>,
     N: ChunkLength<A>,
 {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        match self.get_mut(index) {
-            None => panic!("SizedChunk::index_mut: index out of bounds"),
-            Some(value) => value,
-        }
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        self.as_mut_slice().index_mut(index)
     }
 }
 
@@ -557,6 +607,73 @@ where
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         f.write_str("Chunk")?;
         f.debug_list().entries(self.iter()).finish()
+    }
+}
+
+impl<A, N> Hash for SizedChunk<A, N>
+where
+    A: Hash,
+    N: ChunkLength<A>,
+{
+    fn hash<H>(&self, hasher: &mut H)
+    where
+        H: Hasher,
+    {
+        for item in self {
+            item.hash(hasher)
+        }
+    }
+}
+
+impl<A, N> PartialEq for SizedChunk<A, N>
+where
+    A: PartialEq,
+    N: ChunkLength<A>,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len() && self.iter().eq(other.iter())
+    }
+}
+
+impl<A, N> Eq for SizedChunk<A, N>
+where
+    A: Eq,
+    N: ChunkLength<A>,
+{
+}
+
+impl<A, N> PartialOrd for SizedChunk<A, N>
+where
+    A: PartialOrd,
+    N: ChunkLength<A>,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.iter().partial_cmp(other.iter())
+    }
+}
+
+impl<A, N> Ord for SizedChunk<A, N>
+where
+    A: Ord,
+    N: ChunkLength<A>,
+{
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.iter().cmp(other.iter())
+    }
+}
+
+impl<N> io::Write for SizedChunk<u8, N>
+where
+    N: ChunkLength<u8>,
+{
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let old_len = self.len();
+        self.extend(buf.iter().cloned().take(N::USIZE - old_len));
+        Ok(self.len() - old_len)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
     }
 }
 
@@ -632,124 +749,75 @@ where
     }
 }
 
-pub struct Iter<'a, A: 'a, N>
-where
-    N: ChunkLength<A> + 'a,
-{
-    chunk: &'a SizedChunk<A, N>,
-    left_index: usize,
-    right_index: usize,
-}
-
-impl<'a, A, N> Iterator for Iter<'a, A, N>
-where
-    N: ChunkLength<A> + 'a,
-{
-    type Item = &'a A;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.left_index >= self.right_index {
-            None
-        } else {
-            let value = self.chunk.get(self.left_index);
-            self.left_index += 1;
-            value
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.right_index - self.left_index;
-        (remaining, Some(remaining))
-    }
-}
-
-impl<'a, A, N> DoubleEndedIterator for Iter<'a, A, N>
-where
-    N: ChunkLength<A> + 'a,
-{
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.left_index >= self.right_index {
-            None
-        } else {
-            self.right_index -= 1;
-            self.chunk.get(self.right_index)
-        }
-    }
-}
-
-impl<'a, A, N> ExactSizeIterator for Iter<'a, A, N> where N: ChunkLength<A> + 'a {}
-
-impl<'a, A, N> FusedIterator for Iter<'a, A, N> where N: ChunkLength<A> + 'a {}
-
 impl<'a, A, N> IntoIterator for &'a SizedChunk<A, N>
 where
     N: ChunkLength<A>,
 {
     type Item = &'a A;
-    type IntoIter = Iter<'a, A, N>;
+    type IntoIter = SliceIter<'a, A>;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
-pub struct IterMut<'a, A: 'a, N>
+impl<'a, A, N> IntoIterator for &'a mut SizedChunk<A, N>
 where
-    N: ChunkLength<A> + 'a,
-{
-    chunk: &'a mut SizedChunk<A, N>,
-    left_index: usize,
-    right_index: usize,
-}
-
-impl<'a, A, N> Iterator for IterMut<'a, A, N>
-where
-    N: ChunkLength<A> + 'a,
+    N: ChunkLength<A>,
 {
     type Item = &'a mut A;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.left_index >= self.right_index {
-            None
-        } else {
-            let value = self.chunk.get_mut(self.left_index);
-            self.left_index += 1;
-            // this is annoying: the trait won't allow `fn next(&'a mut self)`,
-            // so we have to turn to the Dark Side to get the right lifetime
-            unsafe { value.map(|p| &mut *(p as *mut _)) }
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.right_index - self.left_index;
-        (remaining, Some(remaining))
+    type IntoIter = SliceIterMut<'a, A>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
     }
 }
 
-impl<'a, A, N> DoubleEndedIterator for IterMut<'a, A, N>
+impl<A, N> Extend<A> for SizedChunk<A, N>
 where
-    N: ChunkLength<A> + 'a,
+    N: ChunkLength<A>,
 {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.left_index >= self.right_index {
-            None
-        } else {
-            self.right_index -= 1;
-            let value = self.chunk.get_mut(self.right_index);
-            unsafe { value.map(|p| &mut *(p as *mut _)) }
+    /// Append the contents of the iterator to the back of the chunk.
+    ///
+    /// Panics if the chunk exceeds its capacity.
+    ///
+    /// Time: O(n) for the length of the iterator
+    fn extend<I>(&mut self, it: I)
+    where
+        I: IntoIterator<Item = A>,
+    {
+        for item in it {
+            self.push_back(item);
         }
     }
 }
 
-impl<'a, A, N> ExactSizeIterator for IterMut<'a, A, N> where N: ChunkLength<A> + 'a {}
+impl<'a, A, N> Extend<&'a A> for SizedChunk<A, N>
+where
+    A: 'a + Copy,
+    N: ChunkLength<A>,
+{
+    /// Append the contents of the iterator to the back of the chunk.
+    ///
+    /// Panics if the chunk exceeds its capacity.
+    ///
+    /// Time: O(n) for the length of the iterator
+    fn extend<I>(&mut self, it: I)
+    where
+        I: IntoIterator<Item = &'a A>,
+    {
+        for item in it {
+            self.push_back(*item);
+        }
+    }
+}
 
-impl<'a, A, N> FusedIterator for IterMut<'a, A, N> where N: ChunkLength<A> + 'a {}
-
-pub struct ConsumingIter<A, N>
+pub struct Iter<A, N>
 where
     N: ChunkLength<A>,
 {
     chunk: SizedChunk<A, N>,
 }
 
-impl<A, N> Iterator for ConsumingIter<A, N>
+impl<A, N> Iterator for Iter<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -767,7 +835,7 @@ where
     }
 }
 
-impl<A, N> DoubleEndedIterator for ConsumingIter<A, N>
+impl<A, N> DoubleEndedIterator for Iter<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -780,19 +848,19 @@ where
     }
 }
 
-impl<A, N> ExactSizeIterator for ConsumingIter<A, N> where N: ChunkLength<A> {}
+impl<A, N> ExactSizeIterator for Iter<A, N> where N: ChunkLength<A> {}
 
-impl<A, N> FusedIterator for ConsumingIter<A, N> where N: ChunkLength<A> {}
+impl<A, N> FusedIterator for Iter<A, N> where N: ChunkLength<A> {}
 
 impl<A, N> IntoIterator for SizedChunk<A, N>
 where
     N: ChunkLength<A>,
 {
     type Item = A;
-    type IntoIter = ConsumingIter<A, N>;
+    type IntoIter = Iter<A, N>;
 
     fn into_iter(self) -> Self::IntoIter {
-        ConsumingIter { chunk: self }
+        Iter { chunk: self }
     }
 }
 
@@ -902,12 +970,12 @@ mod test {
     }
 
     #[test]
-    fn split() {
+    fn split_off() {
         let mut left = SizedChunk::<_, U64>::new();
         for i in 0..6 {
             left.push_back(i);
         }
-        let right = left.split(3);
+        let right = left.split_off(3);
         let left_vec: Vec<i32> = left.into_iter().collect();
         let right_vec: Vec<i32> = right.into_iter().collect();
         assert_eq!(vec![0, 1, 2], left_vec);
@@ -915,7 +983,7 @@ mod test {
     }
 
     #[test]
-    fn extend() {
+    fn append() {
         let mut left = SizedChunk::<_, U64>::new();
         for i in 0..32 {
             left.push_back(i);
@@ -924,7 +992,7 @@ mod test {
         for i in (32..64).rev() {
             right.push_front(i);
         }
-        left.extend(&mut right);
+        left.append(&mut right);
         let out_vec: Vec<i32> = left.into_iter().collect();
         let should_vec: Vec<i32> = (0..64).collect();
         assert_eq!(should_vec, out_vec);
