@@ -5,15 +5,14 @@
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::mem;
-use std::ops::IndexMut;
-use util::clone_ref;
 
-use util::Ref;
+use nodes::chunk::{Chunk, CHUNK_SIZE};
+use util::{clone_ref, Ref};
 
 use self::Insert::*;
 use self::InsertAction::*;
 
-const NODE_SIZE: usize = 16; // Must be an even number!
+const NODE_SIZE: usize = CHUNK_SIZE - 2; // Must be an even number!
 const MEDIAN: usize = (NODE_SIZE + 1) >> 1;
 
 pub trait BTreeValue: Clone {
@@ -33,8 +32,8 @@ pub trait BTreeValue: Clone {
 
 pub struct Node<A> {
     count: usize,
-    keys: Vec<A>,
-    children: Vec<Option<Ref<Node<A>>>>,
+    keys: Chunk<A>,
+    children: Chunk<Option<Ref<Node<A>>>>,
 }
 
 pub enum Insert<A> {
@@ -82,12 +81,10 @@ where
 
 impl<A> Default for Node<A> {
     fn default() -> Self {
-        let mut children = Vec::with_capacity(NODE_SIZE + 1);
-        children.push(None);
         Node {
             count: 0,
-            keys: Vec::with_capacity(NODE_SIZE),
-            children,
+            keys: Chunk::new(),
+            children: Chunk::unit(None),
         }
     }
 }
@@ -142,30 +139,19 @@ where
 
     #[inline]
     pub fn unit(value: A) -> Self {
-        let mut keys = Vec::with_capacity(NODE_SIZE);
-        keys.push(value);
-        let mut children = Vec::with_capacity(NODE_SIZE + 1);
-        children.push(None);
-        children.push(None);
         Node {
             count: 1,
-            keys,
-            children,
+            keys: Chunk::unit(value),
+            children: Chunk::pair(None, None),
         }
     }
 
     #[inline]
     pub fn from_split(left: Node<A>, median: A, right: Node<A>) -> Self {
-        let count = left.len() + right.len() + 1;
-        let mut keys = Vec::with_capacity(NODE_SIZE);
-        keys.push(median);
-        let mut children = Vec::with_capacity(NODE_SIZE + 1);
-        children.push(Some(Ref::from(left)));
-        children.push(Some(Ref::from(right)));
         Node {
-            count,
-            keys,
-            children,
+            count: left.len() + right.len() + 1,
+            keys: Chunk::unit(median),
+            children: Chunk::pair(Some(Ref::from(left)), Some(Ref::from(right))),
         }
     }
 
@@ -251,28 +237,32 @@ impl<A: BTreeValue> Node<A> {
         self.keys.insert(index, value);
         self.children.insert(index + 1, ins_right.map(Ref::from));
 
+        let mut right_keys = self.keys.split(MEDIAN);
+        let right_children = self.children.split(MEDIAN + 1);
+        let median = right_keys.pop_front();
+
         let mut left = Node {
             count: MEDIAN,
-            keys: self.keys.drain(0..MEDIAN).collect(),
-            children: self.children.drain(0..MEDIAN + 1).collect(),
+            keys: Chunk::drain_from(&mut self.keys),
+            children: Chunk::drain_from(&mut self.children),
         };
         let mut right = Node {
             count: MEDIAN,
-            keys: self.keys.drain(1..).collect(),
-            children: self.children.drain(..).collect(),
+            keys: right_keys,
+            children: right_children,
         };
         left.count = left.sum_up_children();
         right.count = right.sum_up_children();
-        Split(left, self.keys.pop().unwrap(), right)
+        Split(left, median, right)
     }
 
-    fn merge(middle: A, left: Node<A>, right: Node<A>) -> Node<A> {
+    fn merge(middle: A, left: Node<A>, mut right: Node<A>) -> Node<A> {
         let count = left.len() + right.len() + 1;
         let mut keys = left.keys;
-        keys.push(middle);
-        keys.extend(right.keys);
+        keys.push_back(middle);
+        keys.extend(&mut right.keys);
         let mut children = left.children;
-        children.extend(right.children);
+        children.extend(&mut right.children);
         Node {
             count,
             keys,
@@ -281,35 +271,35 @@ impl<A: BTreeValue> Node<A> {
     }
 
     fn pop_min(&mut self) -> (A, Option<Ref<Node<A>>>) {
-        let value = self.keys.remove(0);
-        let child = self.children.remove(0);
+        let value = self.keys.pop_front();
+        let child = self.children.pop_front();
         self.count -= 1 + Node::maybe_len(&child);
         (value, child)
     }
 
     fn pop_max(&mut self) -> (A, Option<Ref<Node<A>>>) {
-        let value = self.keys.pop().unwrap();
-        let child = self.children.pop().unwrap();
+        let value = self.keys.pop_back();
+        let child = self.children.pop_back();
         self.count -= 1 + Node::maybe_len(&child);
         (value, child)
     }
 
     fn push_min(&mut self, child: Option<Ref<Node<A>>>, value: A) {
         self.count += 1 + Node::maybe_len(&child);
-        self.keys.insert(0, value);
-        self.children.insert(0, child);
+        self.keys.push_front(value);
+        self.children.push_front(child);
     }
 
     fn push_max(&mut self, child: Option<Ref<Node<A>>>, value: A) {
         self.count += 1 + Node::maybe_len(&child);
-        self.keys.push(value);
-        self.children.push(child);
+        self.keys.push_back(value);
+        self.children.push_back(child);
     }
 
     pub fn insert(&mut self, value: A) -> Insert<A> {
         if self.keys.is_empty() {
-            self.keys.push(value);
-            self.children.push(None);
+            self.keys.push_back(value);
+            self.children.push_back(None);
             self.count += 1;
             return Insert::Added;
         }
@@ -459,13 +449,11 @@ impl<A: BTreeValue> Node<A> {
                     match child.remove_index(Ok(target_index), key) {
                         Remove::NoChange => unreachable!(),
                         Remove::Removed(pulled_value) => {
-                            self.keys.push(pulled_value);
-                            value = self.keys.swap_remove(pull_to);
+                            value = self.keys.set(pull_to, pulled_value);
                             self.count -= 1;
                         }
                         Remove::Update(pulled_value, new_child) => {
-                            self.keys.push(pulled_value);
-                            value = self.keys.swap_remove(pull_to);
+                            value = self.keys.set(pull_to, pulled_value);
                             self.count -= 1;
                             update = Some(new_child);
                         }
@@ -501,9 +489,7 @@ impl<A: BTreeValue> Node<A> {
                 let mut update = None;
                 let mut out_value;
                 {
-                    let mut children = self
-                        .children
-                        .index_mut(index - 1..index + 1)
+                    let mut children = self.children.as_mut_slice()[index - 1..index + 1]
                         .iter_mut()
                         .map(|n| {
                             if let Some(ref mut o) = *n {
@@ -551,15 +537,15 @@ impl<A: BTreeValue> Node<A> {
                 let mut update = None;
                 let mut out_value;
                 {
-                    let mut children = self.children.index_mut(index..index + 2).iter_mut().map(
-                        |n| {
+                    let mut children = self.children.as_mut_slice()[index..index + 2]
+                        .iter_mut()
+                        .map(|n| {
                             if let Some(ref mut o) = *n {
                                 o
                             } else {
                                 unreachable!()
                             }
-                        },
-                    );
+                        });
                     let mut child = Ref::make_mut(children.next().unwrap());
                     let mut right = Ref::make_mut(children.next().unwrap());
                     // Prepare the rebalanced node.
@@ -820,10 +806,10 @@ impl<A: Clone> ConsumingIter<A> {
 
     fn push(stack: &mut Vec<ConsumingIterItem<A>>, mut node: Node<A>) {
         for _n in 0..node.keys.len() {
-            ConsumingIter::push_node(stack, node.children.pop().unwrap());
-            stack.push(ConsumingIterItem::Yield(node.keys.pop().unwrap()));
+            ConsumingIter::push_node(stack, node.children.pop_back());
+            stack.push(ConsumingIterItem::Yield(node.keys.pop_back()));
         }
-        ConsumingIter::push_node(stack, node.children.pop().unwrap());
+        ConsumingIter::push_node(stack, node.children.pop_back());
     }
 
     fn push_fwd(&mut self, node: Node<A>) {
@@ -839,11 +825,11 @@ impl<A: Clone> ConsumingIter<A> {
 
     fn push_back(&mut self, mut node: Node<A>) {
         for _i in 0..node.keys.len() {
-            self.push_node_back(node.children.remove(0));
+            self.push_node_back(node.children.pop_front());
             self.back_stack
-                .push(ConsumingIterItem::Yield(node.keys.remove(0)));
+                .push(ConsumingIterItem::Yield(node.keys.pop_front()));
         }
-        self.push_node_back(node.children.pop().unwrap());
+        self.push_node_back(node.children.pop_back());
     }
 }
 

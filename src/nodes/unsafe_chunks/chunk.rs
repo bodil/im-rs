@@ -5,7 +5,7 @@
 use std::borrow::{Borrow, BorrowMut};
 use std::fmt::{Debug, Error, Formatter};
 use std::iter::FusedIterator;
-use std::mem::{self, ManuallyDrop};
+use std::mem::{self, replace, ManuallyDrop};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::ptr;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
@@ -72,6 +72,12 @@ impl<A> Chunk<A> {
             Chunk::force_write(0, left, &mut chunk);
             Chunk::force_write(1, right, &mut chunk);
         }
+        chunk
+    }
+
+    pub fn drain_from(other: &mut Self) -> Self {
+        let mut chunk = Self::new();
+        chunk.extend(other);
         chunk
     }
 
@@ -248,6 +254,10 @@ impl<A> Chunk<A> {
         self.right += other_len;
         other.left = 0;
         other.right = 0;
+    }
+
+    pub fn set(&mut self, index: usize, value: A) -> A {
+        replace(&mut self[index], value)
     }
 
     pub fn insert(&mut self, index: usize, value: A) {
