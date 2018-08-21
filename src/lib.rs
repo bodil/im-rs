@@ -295,13 +295,15 @@ mod sync;
 mod util;
 
 #[macro_use]
-pub mod ordmap;
+mod ord;
+pub use ord::map as ordmap;
+pub use ord::set as ordset;
+
 #[macro_use]
-pub mod hashmap;
-#[macro_use]
-pub mod ordset;
-#[macro_use]
-pub mod hashset;
+mod hash;
+pub use hash::map as hashmap;
+pub use hash::set as hashset;
+
 #[macro_use]
 pub mod vector;
 
