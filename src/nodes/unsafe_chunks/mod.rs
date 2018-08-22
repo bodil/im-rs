@@ -8,7 +8,7 @@ pub mod chunk {
     use typenum::*;
 
     pub type ChunkSize = U64;
-    pub type Chunk<A> = sc::SizedChunk<A, ChunkSize>;
+    pub type Chunk<A> = sc::Chunk<A, ChunkSize>;
     pub type Iter<A> = sc::Iter<A, ChunkSize>;
     pub const CHUNK_SIZE: usize = ChunkSize::USIZE;
 }

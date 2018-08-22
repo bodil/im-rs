@@ -9,6 +9,13 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- The `Chunk` datatype that's used to build `Vector` and `OrdMap` has been
+  exposed and made generally usable. It's somewhere between a
+  [`GenericArray`](https://crates.io/crates/generic-array) and a ring buffer,
+  offers O(1)* push in either direction, and is generally hyperoptimised for its
+  purpose of serving as nodes for Bagwell tries, but it's also a powered up
+  version of [`GenericArray`](https://crates.io/crates/generic-array) that might
+  be useful to others, hence the public API.
 - `Vector` now has `Focus` and `FocusMut` APIs for caching index lookups,
   yielding huge performance gains when performing multiple adjacent index
   lookups.  `Vector::iter` has been reimplemented using this API, and is now

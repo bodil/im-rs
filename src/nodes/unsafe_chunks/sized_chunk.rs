@@ -3,6 +3,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 //! A fixed capacity smart array.
+//!
+//! See [`Chunk`](struct.Chunk.html)
 
 use std::borrow::{Borrow, BorrowMut};
 use std::cmp::Ordering;
@@ -59,7 +61,60 @@ where
 }
 
 /// A fixed capacity smart array.
-pub struct SizedChunk<A, N = U64>
+///
+/// An inline array of items with a variable length but a fixed, preallocated
+/// capacity given by the `N` type, which must be an [`Unsigned`][Unsigned] type
+/// level numeral.
+///
+/// It's 'smart' because it's able to reorganise its contents based on expected
+/// behaviour. If you construct one using `push_back`, it will be laid out like
+/// a `Vec` with space at the end. If you `push_front` it will start filling in
+/// values from the back instead of the front, so that you still get linear time
+/// push as long as you don't reverse direction. If you do, and there's no room
+/// at the end you're pushing to, it'll shift its contents over to the other
+/// side, creating more space to push into. This technique is tuned for
+/// `Chunk`'s expected use case: usually, chunks always see either `push_front`
+/// or `push_back`, but not both unless they move around inside the tree, in
+/// which case they're able to reorganise themselves with reasonable efficiency
+/// to suit their new usage patterns.
+///
+/// It maintains a `left` index and a `right` index instead of a simple length
+/// counter in order to accomplish this, much like a ring buffer would, except
+/// that the `Chunk` keeps all its items sequentially in memory so that you can
+/// always get a `&[A]` slice for them, at the price of the occasional
+/// reordering operation.
+///
+/// This technique also lets us choose to shift the shortest side to account for
+/// the inserted or removed element when performing insert and remove
+/// operations, unlike `Vec` where you always need to shift the right hand side.
+///
+/// Unlike a `Vec`, the `Chunk` has a fixed capacity and cannot grow beyond it.
+/// Being intended for low level use, it expects you to know or test whether
+/// you're pushing to a full array, and has an API more geared towards panics
+/// than returning `Option`s, on the assumption that you know what you're doing.
+///
+/// # Examples
+///
+/// ```rust
+/// # #[macro_use] extern crate im;
+/// # extern crate typenum;
+/// # use im::chunk::Chunk;
+/// # use typenum::U64;
+/// # fn main() {
+/// // Construct a chunk with a 64 item capacity
+/// let mut chunk = Chunk::<i32, U64>::new();
+/// // Fill it with descending numbers
+/// chunk.extend((0..64).rev());
+/// // It derefs to a slice so we can use standard slice methods
+/// chunk.sort();
+/// // It's got all the amenities like `FromIterator` and `Eq`
+/// let expected: Chunk<i32, U64> = (0..64).collect();
+/// assert_eq!(expected, chunk);
+/// # }
+/// ```
+///
+/// [Unsigned]: https://docs.rs/typenum/1.10.0/typenum/marker_traits/trait.Unsigned.html
+pub struct Chunk<A, N = U64>
 where
     N: ChunkLength<A>,
 {
@@ -68,20 +123,20 @@ where
     data: ManuallyDrop<N::SizedType>,
 }
 
-impl<A, N> Drop for SizedChunk<A, N>
+impl<A, N> Drop for Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
     fn drop(&mut self) {
         if mem::needs_drop::<A>() {
             for i in self.left..self.right {
-                unsafe { SizedChunk::force_drop(i, self) }
+                unsafe { Chunk::force_drop(i, self) }
             }
         }
     }
 }
 
-impl<A, N> Clone for SizedChunk<A, N>
+impl<A, N> Clone for Chunk<A, N>
 where
     A: Clone,
     N: ChunkLength<A>,
@@ -91,13 +146,13 @@ where
         out.left = self.left;
         out.right = self.right;
         for index in self.left..self.right {
-            unsafe { SizedChunk::force_write(index, self.values()[index].clone(), &mut out) }
+            unsafe { Chunk::force_write(index, self.values()[index].clone(), &mut out) }
         }
         out
     }
 }
 
-impl<A, N> SizedChunk<A, N>
+impl<A, N> Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -119,7 +174,7 @@ where
             chunk = mem::uninitialized();
             ptr::write(&mut chunk.left, 0);
             ptr::write(&mut chunk.right, 1);
-            SizedChunk::force_write(0, value, &mut chunk);
+            Chunk::force_write(0, value, &mut chunk);
         }
         chunk
     }
@@ -131,8 +186,8 @@ where
             chunk = mem::uninitialized();
             ptr::write(&mut chunk.left, 0);
             ptr::write(&mut chunk.right, 2);
-            SizedChunk::force_write(0, left, &mut chunk);
-            SizedChunk::force_write(1, right, &mut chunk);
+            Chunk::force_write(0, left, &mut chunk);
+            Chunk::force_write(1, right, &mut chunk);
         }
         chunk
     }
@@ -161,7 +216,7 @@ where
             count -= 1;
             chunk.push_back(
                 iter.next()
-                    .expect("SizedChunk::collect_from: underfull iterator"),
+                    .expect("Chunk::collect_from: underfull iterator"),
             );
         }
         chunk
@@ -175,7 +230,7 @@ where
         let other_len = other.len();
         debug_assert!(count <= other_len);
         let mut chunk = Self::new();
-        unsafe { SizedChunk::force_copy_to(other.left, 0, count, other, &mut chunk) };
+        unsafe { Chunk::force_copy_to(other.left, 0, count, other, &mut chunk) };
         chunk.right = count;
         other.left += count;
         chunk
@@ -189,7 +244,7 @@ where
         let other_len = other.len();
         debug_assert!(count <= other_len);
         let mut chunk = Self::new();
-        unsafe { SizedChunk::force_copy_to(other.right - count, 0, count, other, &mut chunk) };
+        unsafe { Chunk::force_copy_to(other.right - count, 0, count, other, &mut chunk) };
         chunk.right = count;
         other.right -= count;
         chunk
@@ -280,18 +335,18 @@ where
     /// Time: O(1) if there's room at the front, O(n) otherwise
     pub fn push_front(&mut self, value: A) {
         if self.is_full() {
-            panic!("SizedChunk::push_front: can't push to full chunk");
+            panic!("Chunk::push_front: can't push to full chunk");
         }
         if self.is_empty() {
             self.left = N::USIZE;
             self.right = N::USIZE;
         } else if self.left == 0 {
             self.left = N::USIZE - self.right;
-            unsafe { SizedChunk::force_copy(0, self.left, self.right, self) };
+            unsafe { Chunk::force_copy(0, self.left, self.right, self) };
             self.right = N::USIZE;
         }
         self.left -= 1;
-        unsafe { SizedChunk::force_write(self.left, value, self) }
+        unsafe { Chunk::force_write(self.left, value, self) }
     }
 
     /// Push an item to the back of the chunk.
@@ -301,17 +356,17 @@ where
     /// Time: O(1) if there's room at the back, O(n) otherwise
     pub fn push_back(&mut self, value: A) {
         if self.is_full() {
-            panic!("SizedChunk::push_back: can't push to full chunk");
+            panic!("Chunk::push_back: can't push to full chunk");
         }
         if self.is_empty() {
             self.left = 0;
             self.right = 0;
         } else if self.right == N::USIZE {
-            unsafe { SizedChunk::force_copy(self.left, 0, self.len(), self) };
+            unsafe { Chunk::force_copy(self.left, 0, self.len(), self) };
             self.right = N::USIZE - self.left;
             self.left = 0;
         }
-        unsafe { SizedChunk::force_write(self.right, value, self) }
+        unsafe { Chunk::force_write(self.right, value, self) }
         self.right += 1;
     }
 
@@ -322,9 +377,9 @@ where
     /// Time: O(1)
     pub fn pop_front(&mut self) -> A {
         if self.is_empty() {
-            panic!("SizedChunk::pop_front: can't pop from empty chunk");
+            panic!("Chunk::pop_front: can't pop from empty chunk");
         } else {
-            let value = unsafe { SizedChunk::force_read(self.left, self) };
+            let value = unsafe { Chunk::force_read(self.left, self) };
             self.left += 1;
             value
         }
@@ -337,10 +392,10 @@ where
     /// Time: O(1)
     pub fn pop_back(&mut self) -> A {
         if self.is_empty() {
-            panic!("SizedChunk::pop_back: can't pop from empty chunk");
+            panic!("Chunk::pop_back: can't pop from empty chunk");
         } else {
             self.right -= 1;
-            unsafe { SizedChunk::force_read(self.right, self) }
+            unsafe { Chunk::force_read(self.right, self) }
         }
     }
 
@@ -352,11 +407,11 @@ where
     pub fn drop_left(&mut self, index: usize) {
         if index > 0 {
             if index > self.len() {
-                panic!("SizedChunk::drop_left: index out of bounds");
+                panic!("Chunk::drop_left: index out of bounds");
             }
             let start = self.left;
             for i in start..(start + index) {
-                unsafe { SizedChunk::force_drop(i, self) }
+                unsafe { Chunk::force_drop(i, self) }
             }
             self.left += index;
         }
@@ -369,14 +424,14 @@ where
     /// Time: O(n) for the number of items dropped
     pub fn drop_right(&mut self, index: usize) {
         if index > self.len() {
-            panic!("SizedChunk::drop_right: index out of bounds");
+            panic!("Chunk::drop_right: index out of bounds");
         }
         if index == self.len() {
             return;
         }
         let start = self.left + index;
         for i in start..self.right {
-            unsafe { SizedChunk::force_drop(i, self) }
+            unsafe { Chunk::force_drop(i, self) }
         }
         self.right = start;
     }
@@ -390,7 +445,7 @@ where
     /// Time: O(n) for the number of items in the new chunk
     pub fn split_off(&mut self, index: usize) -> Self {
         if index > self.len() {
-            panic!("SizedChunk::split: index out of bounds");
+            panic!("Chunk::split: index out of bounds");
         }
         if index == self.len() {
             return Self::new();
@@ -398,7 +453,7 @@ where
         let mut right_chunk = Self::new();
         let start = self.left + index;
         let len = self.right - start;
-        unsafe { SizedChunk::force_copy_to(start, 0, len, self, &mut right_chunk) };
+        unsafe { Chunk::force_copy_to(start, 0, len, self, &mut right_chunk) };
         right_chunk.right = len;
         self.right = start;
         right_chunk
@@ -413,14 +468,14 @@ where
         let self_len = self.len();
         let other_len = other.len();
         if self_len + other_len > N::USIZE {
-            panic!("SizedChunk::append: chunk size overflow");
+            panic!("Chunk::append: chunk size overflow");
         }
         if self.left > 0 && self.right + other_len > N::USIZE {
-            unsafe { SizedChunk::force_copy(self.left, 0, self_len, self) };
+            unsafe { Chunk::force_copy(self.left, 0, self_len, self) };
             self.right -= self.left;
             self.left = 0;
         }
-        unsafe { SizedChunk::force_copy_to(other.left, self.right, other_len, other, self) };
+        unsafe { Chunk::force_copy_to(other.left, self.right, other_len, other, self) };
         self.right += other_len;
         other.left = 0;
         other.right = 0;
@@ -437,11 +492,11 @@ where
         let other_len = other.len();
         debug_assert!(self_len + count <= other_len);
         if self.left > 0 && self.right + count > N::USIZE {
-            unsafe { SizedChunk::force_copy(self.left, 0, self_len, self) };
+            unsafe { Chunk::force_copy(self.left, 0, self_len, self) };
             self.right -= self.left;
             self.left = 0;
         }
-        unsafe { SizedChunk::force_copy_to(other.left, self.right, count, other, self) };
+        unsafe { Chunk::force_copy_to(other.left, self.right, count, other, self) };
         self.right += count;
         other.left += count;
     }
@@ -457,11 +512,11 @@ where
         let other_len = other.len();
         debug_assert!(self_len + count <= other_len);
         if self.left > 0 && self.right + count > N::USIZE {
-            unsafe { SizedChunk::force_copy(self.left, 0, self_len, self) };
+            unsafe { Chunk::force_copy(self.left, 0, self_len, self) };
             self.right -= self.left;
             self.left = 0;
         }
-        unsafe { SizedChunk::force_copy_to(other.right - count, self.right, count, other, self) };
+        unsafe { Chunk::force_copy_to(other.right - count, self.right, count, other, self) };
         self.right += count;
         other.right -= count;
     }
@@ -483,24 +538,24 @@ where
     /// Time: O(n) for the number of items shifted
     pub fn insert(&mut self, index: usize, value: A) {
         if self.is_full() {
-            panic!("SizedChunk::insert: chunk is full");
+            panic!("Chunk::insert: chunk is full");
         }
         if index > self.len() {
-            panic!("SizedChunk::insert: index out of bounds");
+            panic!("Chunk::insert: index out of bounds");
         }
         let real_index = index + self.left;
         let left_size = index;
         let right_size = self.right - real_index;
         if self.right == N::USIZE || (self.left > 0 && left_size < right_size) {
             unsafe {
-                SizedChunk::force_copy(self.left, self.left - 1, left_size, self);
-                SizedChunk::force_write(real_index - 1, value, self);
+                Chunk::force_copy(self.left, self.left - 1, left_size, self);
+                Chunk::force_write(real_index - 1, value, self);
             }
             self.left -= 1;
         } else {
             unsafe {
-                SizedChunk::force_copy(real_index, real_index + 1, right_size, self);
-                SizedChunk::force_write(real_index, value, self);
+                Chunk::force_copy(real_index, real_index + 1, right_size, self);
+                Chunk::force_write(real_index, value, self);
             }
             self.right += 1;
         }
@@ -516,17 +571,17 @@ where
     /// Time: O(n) for the number of items shifted
     pub fn remove(&mut self, index: usize) -> A {
         if index >= self.len() {
-            panic!("SizedChunk::remove: index out of bounds");
+            panic!("Chunk::remove: index out of bounds");
         }
         let real_index = index + self.left;
-        let value = unsafe { SizedChunk::force_read(real_index, self) };
+        let value = unsafe { Chunk::force_read(real_index, self) };
         let left_size = index;
         let right_size = self.right - real_index - 1;
         if left_size < right_size {
-            unsafe { SizedChunk::force_copy(self.left, self.left + 1, left_size, self) };
+            unsafe { Chunk::force_copy(self.left, self.left + 1, left_size, self) };
             self.left += 1;
         } else {
-            unsafe { SizedChunk::force_copy(real_index + 1, real_index, right_size, self) };
+            unsafe { Chunk::force_copy(real_index + 1, real_index, right_size, self) };
             self.right -= 1;
         }
         value
@@ -569,7 +624,7 @@ where
     }
 }
 
-impl<A, N> Default for SizedChunk<A, N>
+impl<A, N> Default for Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -578,7 +633,7 @@ where
     }
 }
 
-impl<A, N, I> Index<I> for SizedChunk<A, N>
+impl<A, N, I> Index<I> for Chunk<A, N>
 where
     I: SliceIndex<[A]>,
     N: ChunkLength<A>,
@@ -589,7 +644,7 @@ where
     }
 }
 
-impl<A, N, I> IndexMut<I> for SizedChunk<A, N>
+impl<A, N, I> IndexMut<I> for Chunk<A, N>
 where
     I: SliceIndex<[A]>,
     N: ChunkLength<A>,
@@ -599,7 +654,7 @@ where
     }
 }
 
-impl<A, N> Debug for SizedChunk<A, N>
+impl<A, N> Debug for Chunk<A, N>
 where
     A: Debug,
     N: ChunkLength<A>,
@@ -610,7 +665,7 @@ where
     }
 }
 
-impl<A, N> Hash for SizedChunk<A, N>
+impl<A, N> Hash for Chunk<A, N>
 where
     A: Hash,
     N: ChunkLength<A>,
@@ -625,7 +680,7 @@ where
     }
 }
 
-impl<A, N> PartialEq for SizedChunk<A, N>
+impl<A, N> PartialEq for Chunk<A, N>
 where
     A: PartialEq,
     N: ChunkLength<A>,
@@ -635,14 +690,14 @@ where
     }
 }
 
-impl<A, N> Eq for SizedChunk<A, N>
+impl<A, N> Eq for Chunk<A, N>
 where
     A: Eq,
     N: ChunkLength<A>,
 {
 }
 
-impl<A, N> PartialOrd for SizedChunk<A, N>
+impl<A, N> PartialOrd for Chunk<A, N>
 where
     A: PartialOrd,
     N: ChunkLength<A>,
@@ -652,7 +707,7 @@ where
     }
 }
 
-impl<A, N> Ord for SizedChunk<A, N>
+impl<A, N> Ord for Chunk<A, N>
 where
     A: Ord,
     N: ChunkLength<A>,
@@ -662,7 +717,7 @@ where
     }
 }
 
-impl<N> io::Write for SizedChunk<u8, N>
+impl<N> io::Write for Chunk<u8, N>
 where
     N: ChunkLength<u8>,
 {
@@ -677,7 +732,7 @@ where
     }
 }
 
-impl<A, N> Borrow<[A]> for SizedChunk<A, N>
+impl<A, N> Borrow<[A]> for Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -686,7 +741,7 @@ where
     }
 }
 
-impl<A, N> BorrowMut<[A]> for SizedChunk<A, N>
+impl<A, N> BorrowMut<[A]> for Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -695,7 +750,7 @@ where
     }
 }
 
-impl<A, N> AsRef<[A]> for SizedChunk<A, N>
+impl<A, N> AsRef<[A]> for Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -704,7 +759,7 @@ where
     }
 }
 
-impl<A, N> AsMut<[A]> for SizedChunk<A, N>
+impl<A, N> AsMut<[A]> for Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -713,7 +768,7 @@ where
     }
 }
 
-impl<A, N> Deref for SizedChunk<A, N>
+impl<A, N> Deref for Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -724,7 +779,7 @@ where
     }
 }
 
-impl<A, N> DerefMut for SizedChunk<A, N>
+impl<A, N> DerefMut for Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -733,7 +788,7 @@ where
     }
 }
 
-impl<A, N> FromIterator<A> for SizedChunk<A, N>
+impl<A, N> FromIterator<A> for Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -749,7 +804,7 @@ where
     }
 }
 
-impl<'a, A, N> IntoIterator for &'a SizedChunk<A, N>
+impl<'a, A, N> IntoIterator for &'a Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -760,7 +815,7 @@ where
     }
 }
 
-impl<'a, A, N> IntoIterator for &'a mut SizedChunk<A, N>
+impl<'a, A, N> IntoIterator for &'a mut Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -771,7 +826,7 @@ where
     }
 }
 
-impl<A, N> Extend<A> for SizedChunk<A, N>
+impl<A, N> Extend<A> for Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -790,7 +845,7 @@ where
     }
 }
 
-impl<'a, A, N> Extend<&'a A> for SizedChunk<A, N>
+impl<'a, A, N> Extend<&'a A> for Chunk<A, N>
 where
     A: 'a + Copy,
     N: ChunkLength<A>,
@@ -814,7 +869,7 @@ pub struct Iter<A, N>
 where
     N: ChunkLength<A>,
 {
-    chunk: SizedChunk<A, N>,
+    chunk: Chunk<A, N>,
 }
 
 impl<A, N> Iterator for Iter<A, N>
@@ -852,7 +907,7 @@ impl<A, N> ExactSizeIterator for Iter<A, N> where N: ChunkLength<A> {}
 
 impl<A, N> FusedIterator for Iter<A, N> where N: ChunkLength<A> {}
 
-impl<A, N> IntoIterator for SizedChunk<A, N>
+impl<A, N> IntoIterator for Chunk<A, N>
 where
     N: ChunkLength<A>,
 {
@@ -869,7 +924,7 @@ where
     A: 'a,
     N: ChunkLength<A> + 'a,
 {
-    chunk: &'a mut SizedChunk<A, N>,
+    chunk: &'a mut Chunk<A, N>,
 }
 
 impl<'a, A, N> Iterator for Drain<'a, A, N>
@@ -912,7 +967,7 @@ mod test {
 
     #[test]
     fn push_back_front() {
-        let mut chunk = SizedChunk::<_, U64>::new();
+        let mut chunk = Chunk::<_, U64>::new();
         for i in 12..20 {
             chunk.push_back(i);
         }
@@ -932,7 +987,7 @@ mod test {
 
     #[test]
     fn push_and_pop() {
-        let mut chunk = SizedChunk::<_, U64>::new();
+        let mut chunk = Chunk::<_, U64>::new();
         for i in 0..64 {
             chunk.push_back(i);
         }
@@ -949,7 +1004,7 @@ mod test {
 
     #[test]
     fn drop_left() {
-        let mut chunk = SizedChunk::<_, U64>::new();
+        let mut chunk = Chunk::<_, U64>::new();
         for i in 0..6 {
             chunk.push_back(i);
         }
@@ -960,7 +1015,7 @@ mod test {
 
     #[test]
     fn drop_right() {
-        let mut chunk = SizedChunk::<_, U64>::new();
+        let mut chunk = Chunk::<_, U64>::new();
         for i in 0..6 {
             chunk.push_back(i);
         }
@@ -971,7 +1026,7 @@ mod test {
 
     #[test]
     fn split_off() {
-        let mut left = SizedChunk::<_, U64>::new();
+        let mut left = Chunk::<_, U64>::new();
         for i in 0..6 {
             left.push_back(i);
         }
@@ -984,11 +1039,11 @@ mod test {
 
     #[test]
     fn append() {
-        let mut left = SizedChunk::<_, U64>::new();
+        let mut left = Chunk::<_, U64>::new();
         for i in 0..32 {
             left.push_back(i);
         }
-        let mut right = SizedChunk::<_, U64>::new();
+        let mut right = Chunk::<_, U64>::new();
         for i in (32..64).rev() {
             right.push_front(i);
         }
@@ -1000,7 +1055,7 @@ mod test {
 
     #[test]
     fn ref_iter() {
-        let mut chunk = SizedChunk::<_, U64>::new();
+        let mut chunk = Chunk::<_, U64>::new();
         for i in 0..64 {
             chunk.push_back(i);
         }
@@ -1012,7 +1067,7 @@ mod test {
 
     #[test]
     fn mut_ref_iter() {
-        let mut chunk = SizedChunk::<_, U64>::new();
+        let mut chunk = Chunk::<_, U64>::new();
         for i in 0..64 {
             chunk.push_back(i);
         }
@@ -1024,7 +1079,7 @@ mod test {
 
     #[test]
     fn consuming_iter() {
-        let mut chunk = SizedChunk::<_, U64>::new();
+        let mut chunk = Chunk::<_, U64>::new();
         for i in 0..64 {
             chunk.push_back(i);
         }
@@ -1035,7 +1090,7 @@ mod test {
 
     #[test]
     fn insert_middle() {
-        let mut chunk = SizedChunk::<_, U64>::new();
+        let mut chunk = Chunk::<_, U64>::new();
         for i in 0..32 {
             chunk.push_back(i);
         }
@@ -1050,7 +1105,7 @@ mod test {
 
     #[test]
     fn insert_back() {
-        let mut chunk = SizedChunk::<_, U64>::new();
+        let mut chunk = Chunk::<_, U64>::new();
         for i in 0..63 {
             chunk.push_back(i);
         }
@@ -1062,7 +1117,7 @@ mod test {
 
     #[test]
     fn insert_front() {
-        let mut chunk = SizedChunk::<_, U64>::new();
+        let mut chunk = Chunk::<_, U64>::new();
         for i in 1..64 {
             chunk.push_front(64 - i);
         }
@@ -1074,7 +1129,7 @@ mod test {
 
     #[test]
     fn remove_value() {
-        let mut chunk = SizedChunk::<_, U64>::new();
+        let mut chunk = Chunk::<_, U64>::new();
         for i in 0..64 {
             chunk.push_back(i);
         }
@@ -1107,7 +1162,7 @@ mod test {
     fn dropping() {
         let counter = AtomicUsize::new(0);
         {
-            let mut chunk: SizedChunk<DropTest> = SizedChunk::new();
+            let mut chunk: Chunk<DropTest> = Chunk::new();
             for _i in 0..20 {
                 chunk.push_back(DropTest::new(&counter))
             }

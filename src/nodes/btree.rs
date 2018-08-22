@@ -8,7 +8,7 @@ use std::mem;
 
 use typenum::{Add1, Unsigned, U64};
 
-use nodes::sized_chunk::SizedChunk;
+use nodes::sized_chunk::Chunk;
 use util::{clone_ref, Ref};
 
 use self::Insert::*;
@@ -35,8 +35,8 @@ pub trait BTreeValue: Clone {
 }
 
 pub struct Node<A> {
-    keys: SizedChunk<A, NodeSize>,
-    children: SizedChunk<Option<Ref<Node<A>>>, Add1<NodeSize>>,
+    keys: Chunk<A, NodeSize>,
+    children: Chunk<Option<Ref<Node<A>>>, Add1<NodeSize>>,
 }
 
 pub enum Insert<A> {
@@ -84,8 +84,8 @@ where
 impl<A> Default for Node<A> {
     fn default() -> Self {
         Node {
-            keys: SizedChunk::new(),
-            children: SizedChunk::unit(None),
+            keys: Chunk::new(),
+            children: Chunk::unit(None),
         }
     }
 }
@@ -117,16 +117,16 @@ where
     #[inline]
     pub fn unit(value: A) -> Self {
         Node {
-            keys: SizedChunk::unit(value),
-            children: SizedChunk::pair(None, None),
+            keys: Chunk::unit(value),
+            children: Chunk::pair(None, None),
         }
     }
 
     #[inline]
     pub fn from_split(left: Node<A>, median: A, right: Node<A>) -> Self {
         Node {
-            keys: SizedChunk::unit(median),
-            children: SizedChunk::pair(Some(Ref::from(left)), Some(Ref::from(right))),
+            keys: Chunk::unit(median),
+            children: Chunk::pair(Some(Ref::from(left)), Some(Ref::from(right))),
         }
     }
 
@@ -218,42 +218,42 @@ impl<A: BTreeValue> Node<A> {
         if index < MEDIAN {
             self.children[index] = left_child;
 
-            left_keys = SizedChunk::from_front(&mut self.keys, index);
+            left_keys = Chunk::from_front(&mut self.keys, index);
             left_keys.push_back(value);
             left_keys.drain_from_front(&mut self.keys, MEDIAN - index - 1);
 
-            left_children = SizedChunk::from_front(&mut self.children, index + 1);
+            left_children = Chunk::from_front(&mut self.children, index + 1);
             left_children.push_back(right_child);
             left_children.drain_from_front(&mut self.children, MEDIAN - index - 1);
 
             median = self.keys.pop_front();
 
-            right_keys = SizedChunk::drain_from(&mut self.keys);
-            right_children = SizedChunk::drain_from(&mut self.children);
+            right_keys = Chunk::drain_from(&mut self.keys);
+            right_children = Chunk::drain_from(&mut self.children);
         } else if index > MEDIAN {
             self.children[index] = left_child;
 
-            left_keys = SizedChunk::from_front(&mut self.keys, MEDIAN);
-            left_children = SizedChunk::from_front(&mut self.children, MEDIAN + 1);
+            left_keys = Chunk::from_front(&mut self.keys, MEDIAN);
+            left_children = Chunk::from_front(&mut self.children, MEDIAN + 1);
 
             median = self.keys.pop_front();
 
-            right_keys = SizedChunk::from_front(&mut self.keys, index - MEDIAN - 1);
+            right_keys = Chunk::from_front(&mut self.keys, index - MEDIAN - 1);
             right_keys.push_back(value);
             right_keys.append(&mut self.keys);
 
-            right_children = SizedChunk::from_front(&mut self.children, index - MEDIAN);
+            right_children = Chunk::from_front(&mut self.children, index - MEDIAN);
             right_children.push_back(right_child);
             right_children.append(&mut self.children);
         } else {
-            left_keys = SizedChunk::from_front(&mut self.keys, MEDIAN);
-            left_children = SizedChunk::from_front(&mut self.children, MEDIAN);
+            left_keys = Chunk::from_front(&mut self.keys, MEDIAN);
+            left_children = Chunk::from_front(&mut self.children, MEDIAN);
             left_children.push_back(left_child);
 
             median = value;
 
-            right_keys = SizedChunk::drain_from(&mut self.keys);
-            right_children = SizedChunk::drain_from(&mut self.children);
+            right_keys = Chunk::drain_from(&mut self.keys);
+            right_children = Chunk::drain_from(&mut self.children);
             right_children[0] = right_child;
         }
 
