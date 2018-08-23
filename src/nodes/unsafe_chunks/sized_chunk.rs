@@ -470,7 +470,7 @@ where
         if self_len + other_len > N::USIZE {
             panic!("Chunk::append: chunk size overflow");
         }
-        if self.left > 0 && self.right + other_len > N::USIZE {
+        if self.right + other_len > N::USIZE {
             unsafe { Chunk::force_copy(self.left, 0, self_len, self) };
             self.right -= self.left;
             self.left = 0;
@@ -491,7 +491,7 @@ where
         let self_len = self.len();
         let other_len = other.len();
         debug_assert!(self_len + count <= other_len);
-        if self.left > 0 && self.right + count > N::USIZE {
+        if self.right + count > N::USIZE {
             unsafe { Chunk::force_copy(self.left, 0, self_len, self) };
             self.right -= self.left;
             self.left = 0;
@@ -511,7 +511,7 @@ where
         let self_len = self.len();
         let other_len = other.len();
         debug_assert!(self_len + count <= other_len);
-        if self.left > 0 && self.right + count > N::USIZE {
+        if self.right + count > N::USIZE {
             unsafe { Chunk::force_copy(self.left, 0, self_len, self) };
             self.right -= self.left;
             self.left = 0;
