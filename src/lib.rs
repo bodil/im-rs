@@ -289,6 +289,7 @@ extern crate serde_json;
 #[cfg(all(threadsafe, any(test, feature = "rayon")))]
 extern crate rayon;
 
+mod config;
 mod nodes;
 mod sort;
 mod sync;

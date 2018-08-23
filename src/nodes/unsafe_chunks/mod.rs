@@ -5,10 +5,10 @@ pub mod sparse_chunk;
 
 pub mod chunk {
     use super::sized_chunk as sc;
-    use typenum::*;
+    use config::VectorChunkSize;
+    use typenum::Unsigned;
 
-    pub type ChunkSize = U64;
-    pub type Chunk<A> = sc::Chunk<A, ChunkSize>;
-    pub type Iter<A> = sc::Iter<A, ChunkSize>;
-    pub const CHUNK_SIZE: usize = ChunkSize::USIZE;
+    pub type Chunk<A> = sc::Chunk<A, VectorChunkSize>;
+    pub type Iter<A> = sc::Iter<A, VectorChunkSize>;
+    pub const CHUNK_SIZE: usize = VectorChunkSize::USIZE;
 }

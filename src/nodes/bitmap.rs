@@ -4,10 +4,8 @@
 
 use std::hash::{BuildHasher, Hash, Hasher};
 
-pub const HASH_SHIFT: usize = 5;
-pub const HASH_SIZE: usize = 1 << HASH_SHIFT;
+pub use config::{HashBits, HASH_SHIFT, HASH_SIZE};
 
-pub type HashBits = u32; // a uint of HASH_SIZE bits
 pub const HASH_MASK: HashBits = (HASH_SIZE - 1) as HashBits;
 //pub const HASH_COERCE: u64 = ((1 << HASH_SIZE as u64) - 1);
 

@@ -6,15 +6,14 @@ use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::mem;
 
-use typenum::{Add1, Unsigned, U64};
+use typenum::{Add1, Unsigned};
 
+use config::OrdChunkSize as NodeSize;
 use nodes::sized_chunk::Chunk;
 use util::{clone_ref, Ref};
 
 use self::Insert::*;
 use self::InsertAction::*;
-
-type NodeSize = U64; // Must be an even number!
 
 const NODE_SIZE: usize = NodeSize::USIZE;
 const MEDIAN: usize = (NODE_SIZE + 1) >> 1;
