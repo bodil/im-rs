@@ -7,10 +7,13 @@ description = "Immutable collection datatypes"
 repository = "https://github.com/bodil/im-rs"
 documentation = "http://immutable.rs/"
 homepage = "http://immutable.rs/"
-readme = "README.md"
+readme = "./README.md"
 categories = ["data-structures"]
 keywords = ["immutable", "persistent", "hamt", "b-tree", "rrb-tree"]
-build = "build.rs"
+build = "./build.rs"
+
+[lib]
+path = "./src/lib.rs"
 
 [badges]
 travis-ci = { repository = "bodil/im-rs" }
