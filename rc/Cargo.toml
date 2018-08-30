@@ -1,6 +1,6 @@
 [package]
 name = "im-rc"
-version = "11.0.1"
+version = "12.0.0"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 license = "MPL-2.0+"
 description = "Immutable collection datatypes (the fast but not thread safe version)"

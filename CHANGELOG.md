@@ -6,7 +6,15 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic
 Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [12.0.0] - 2018-08-30
+
+Starting with this release, the `arc` flag is gone, in favour of publishing `im`
+as two separate crates: `im` (using `Arc`) and `im-rc` (using `Rc`). They're
+identical (and built from the same code), except that `im` is thread safe and
+`im-rc` is a little bit more performant.
+
+This is a major release as a consequence, but there should be no breaking code
+changes other than the new default choice of reference counter.
 
 ### Added
 - The `Chunk` datatype that's used to build `Vector` and `OrdMap` has been
