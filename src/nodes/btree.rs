@@ -490,7 +490,7 @@ impl<A: BTreeValue> Node<A> {
                 let mut update = None;
                 let mut out_value;
                 {
-                    let mut children = self.children.as_mut_slice()[index - 1..index + 1]
+                    let mut children = self.children.as_mut_slice()[index - 1..=index]
                         .iter_mut()
                         .map(|n| {
                             if let Some(ref mut o) = *n {

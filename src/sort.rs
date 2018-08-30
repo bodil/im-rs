@@ -8,7 +8,8 @@ use vector::FocusMut;
 // Ported from the Java version at:
 //    http://www.cs.princeton.edu/~rs/talks/QuicksortIsOptimal.pdf
 // Should be O(n) to O(n log n)
-#[cfg_attr(feature = "cargo-clippy", allow(many_single_char_names))]
+#[allow(unknown_lints)]
+#[allow(many_single_char_names)]
 pub fn quicksort<A, F>(vector: &mut FocusMut<A>, left: usize, right: usize, cmp: &F)
 where
     A: Clone,
