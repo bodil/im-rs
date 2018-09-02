@@ -11,6 +11,7 @@ readme = "./README.md"
 categories = ["data-structures"]
 keywords = ["immutable", "persistent", "hamt", "b-tree", "rrb-tree"]
 build = "./build.rs"
+exclude = ["dist/**", "rc/**", "release.toml", "Makefile.toml", "proptest-regressions/**"]
 
 [lib]
 path = "./src/lib.rs"

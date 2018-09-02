@@ -14,9 +14,10 @@ env:
 
 install:
   - mkdir -p .cargo && echo '[build]' > .cargo/config && echo 'target-dir = "/home/travis/target"' >> .cargo/config
-  - ./build-releases.sh
+  - cargo install cargo-make
+  - cargo make prepare-release
 
-script: cd dist/latest/$CRATE; cargo test
+script: cd dist/$CRATE; cargo test
 
 matrix:
   include:

@@ -1,0 +1,196 @@
+[tasks.prepare-release]
+dependencies = ["copy-release", "patch-release"]
+
+[tasks.install-amber]
+force = true
+command = "cargo"
+args = ["install", "-q", "amber"]
+
+[tasks.patch-release]
+dependencies = ["install-amber"]
+command = "ambr"
+args = ["--no-interactive", "extern crate im", "extern crate im_rc as im", "dist/im-rc"]
+
+[tasks.copy-release]
+dependencies = ["sync"]
+script_runner = "@rust"
+script = [
+'''
+//! ```cargo
+//! [dependencies]
+//! toml_edit = "0.1"
+//! fs_extra = "1.1"
+//! glob = "0.2"
+//! ```
+extern crate toml_edit;
+extern crate fs_extra;
+extern crate glob;
+use std::fs;
+use std::path::{Path, PathBuf};
+use toml_edit::{Document, value};
+
+fn read_doc<P: AsRef<Path>>(name: P) -> Document {
+  let name: &Path = name.as_ref();
+  fs::read_to_string(name).expect(&format!("error reading {:?}", name))
+    .parse::<Document>()
+    .expect(&format!("failed to parse TOML in {:?}", name))
+}
+
+fn make_dist(root: &Path, target: &str, manifest: &str) -> PathBuf {
+  let path = root.join(target);
+  fs::create_dir_all(&path);
+  let mut src = vec!["src".into(), "build.rs".into()];
+  for item in glob::glob("*.md").unwrap() {
+    if let Ok(path) = item {
+      src.push(path);
+    }
+  }
+  fs_extra::copy_items(&src, &path, &fs_extra::dir::CopyOptions::new())
+    .expect(&format!("unable to copy files to {:?} target", target));
+  fs::copy(manifest, path.join("Cargo.toml"))
+    .expect(&format!("unable to copy Cargo.toml to {:?} target", target));
+  path
+}
+
+fn main() {
+  // Prepare target folder
+  fs::remove_dir_all("dist");
+  let path = PathBuf::from("dist");
+
+  // Copy files into im and im-rc subfolders
+  make_dist(&path, "im", "Cargo.toml");
+  make_dist(&path, "im-rc", "rc/Cargo.toml");
+
+  // Patch im-rc/Cargo.toml paths
+  let rc_manifest_path = path.join("im-rc/Cargo.toml");
+  let mut doc = read_doc(&rc_manifest_path);
+  let build = value(doc["package"]["build"].as_str().unwrap()[1..].to_string());
+  doc["package"]["build"] = build;
+  let libpath = value(doc["lib"]["path"].as_str().unwrap()[1..].to_string());
+  doc["lib"]["path"] = libpath;
+  fs::write(&rc_manifest_path, doc.to_string())
+    .expect(&format!("unable to write {:?}!", rc_manifest_path));
+}
+'''
+]
+
+[tasks.sync]
+script_runner = "@rust"
+script = [
+'''
+//! ```cargo
+//! [dependencies]
+//! toml_edit = "0.1"
+//! ```
+extern crate toml_edit;
+use std::{env, process};
+use std::fs::{read_to_string, write};
+use toml_edit::{Document, Item, Table, Value};
+
+fn read_doc(name: &str) -> Document {
+  read_to_string(name).expect(&format!("error reading {:?}", name))
+    .parse::<Document>()
+    .expect(&format!("failed to parse TOML in {:?}", name))
+}
+
+fn compare_values(left: &Value, right: &Value) -> bool {
+  if left.is_integer() && (left.as_integer() == right.as_integer()) {
+    return true;
+  }
+  if left.is_float() && (left.as_float() == right.as_float()) {
+    return true;
+  }
+  if left.is_bool() && (left.as_bool() == right.as_bool()) {
+    return true;
+  }
+  if left.is_str() && (left.as_str() == right.as_str()) {
+    return true;
+  }
+  if left.is_date_time() && (left.as_date_time() == right.as_date_time()) {
+    return true;
+  }
+  if let (Some(left), Some(right)) = (left.as_array(), right.as_array()) {
+    if left.len() != right.len() {
+      return false;
+    }
+    for (lvalue, rvalue) in left.iter().zip(right.iter()) {
+      if !compare_values(lvalue, rvalue) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if let (Some(left), Some(right)) = (left.as_inline_table(), right.as_inline_table()) {
+    if left.len() != right.len() {
+      return false;
+    }
+    for (key, value) in left.iter() {
+      if !right.contains_key(key) {
+        return false;
+      }
+      if !compare_values(value, &right.get(key).unwrap()) {
+        return false;
+      }
+    }
+    return true;
+  }
+  false
+}
+
+fn compare_tables(left: &Table, right: &Table) -> bool {
+  if left.len() != right.len() {
+    return false;
+  }
+  for (key, value) in left.iter() {
+    if !right.contains_key(key) {
+      return false;
+    }
+    if !compare(value, &right[key]) {
+      return false;
+    }
+  }
+  true
+}
+
+fn compare(left: &Item, right: &Item) -> bool {
+  match (left, right) {
+    (&Item::Value(ref left), &Item::Value(ref right)) => compare_values(left, right),
+    (&Item::Table(ref left), &Item::Table(ref right)) => compare_tables(left, right),
+    (&Item::ArrayOfTables(ref left), &Item::ArrayOfTables(ref right)) => {
+      if left.len() != right.len() {
+        return false;
+      }
+      for (ltable, rtable) in left.iter().zip(right.iter()) {
+        if !compare_tables(ltable, rtable) {
+          return false;
+        }
+      }
+      true
+    }
+    _ => false
+  }
+}
+
+fn main() {
+  let args: Vec<String> = env::args().skip(1).collect();
+  let command = args.get(0).cloned().unwrap_or("sync".to_string());
+  let src = read_doc("./Cargo.toml");
+  let mut out = read_doc("./rc/Cargo.toml");
+  if &command == "sync" {
+    out["package"]["version"] = src["package"]["version"].clone();
+    out["dependencies"] = src["dependencies"].clone();
+    out["dev-dependencies"] = src["dev-dependencies"].clone();
+    out["build-dependencies"] = src["build-dependencies"].clone();
+    write("./rc/Cargo.toml", out.to_string()).expect("unable to write rc/Cargo.toml!");
+  } else if &command == "check" {
+    if !compare(&src["package"]["version"], &out["package"]["version"])
+    || !compare(&src["dependencies"], &out["dependencies"])
+    || !compare(&src["dev-dependencies"], &out["dev-dependencies"])
+    || !compare(&src["build-dependencies"], &out["build-dependencies"]) {
+      eprintln!("*** ERROR: Cargo.toml files are out of sync!\n*** Please run `cargo make sync` and commit the changes.");
+      process::exit(1);
+    }
+  }
+}
+'''
+]
