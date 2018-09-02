@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic
 Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Single chunk `Vector`s are no longer allocated directly on the stack, meaning
+  that they're now comparable in performance to `std::vec::Vec` rather than
+  slightly faster, but they also won't eat up your stack space quite as quickly,
+  and they'll clone without copying and share structure with clones as you'd
+  expect.
+
 ## [12.0.0] - 2018-08-30
 
 Starting with this release, the `arc` flag is gone, in favour of publishing `im`

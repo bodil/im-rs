@@ -138,7 +138,7 @@ macro_rules! vector {
 /// [VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
 pub enum Vector<A> {
     #[doc(hidden)]
-    Single(Chunk<A>),
+    Single(Ref<Chunk<A>>),
     #[doc(hidden)]
     Full(RRB<A>),
 }
@@ -180,11 +180,10 @@ impl<A: Clone> Vector<A> {
 
     /// Promote a single to a full, with the single chunk becomming inner_f.
     fn promote_front(&mut self) {
-        let chunk = Ref::new(match self {
-            // TODO can we do this safely without initialising a dummy chunk?
-            Single(chunk) => replace(chunk, Chunk::new()),
+        let chunk = match self {
+            Single(chunk) => chunk.clone(),
             _ => return,
-        });
+        };
         *self = Full(RRB {
             length: chunk.len(),
             middle_level: 0,
@@ -198,11 +197,10 @@ impl<A: Clone> Vector<A> {
 
     /// Promote a single to a full, with the single chunk becomming inner_b.
     fn promote_back(&mut self) {
-        let chunk = Ref::new(match self {
-            // TODO can we do this safely without initialising a dummy chunk?
-            Single(chunk) => replace(chunk, Chunk::new()),
+        let chunk = match self {
+            Single(chunk) => chunk.clone(),
             _ => return,
-        });
+        };
         *self = Full(RRB {
             length: chunk.len(),
             middle_level: 0,
@@ -217,13 +215,13 @@ impl<A: Clone> Vector<A> {
     /// Construct an empty vector.
     #[must_use]
     pub fn new() -> Self {
-        Single(Chunk::new())
+        Single(Ref::new(Chunk::new()))
     }
 
     /// Construct a vector with a single value.
     #[must_use]
     pub fn singleton(a: A) -> Self {
-        Single(Chunk::unit(a))
+        Single(Ref::new(Chunk::unit(a)))
     }
 
     /// Get the length of a vector.
@@ -408,7 +406,7 @@ impl<A: Clone> Vector<A> {
         }
 
         match self {
-            Single(chunk) => chunk.get_mut(index),
+            Single(chunk) => Ref::make_mut(chunk).get_mut(index),
             Full(tree) => {
                 let mut local_index = index;
 
@@ -645,7 +643,7 @@ impl<A: Clone> Vector<A> {
             self.promote_back();
         }
         match self {
-            Single(chunk) => chunk.push_front(value),
+            Single(chunk) => Ref::make_mut(chunk).push_front(value),
             Full(tree) => tree.push_front(value),
         }
     }
@@ -670,7 +668,7 @@ impl<A: Clone> Vector<A> {
             self.promote_front();
         }
         match self {
-            Single(chunk) => chunk.push_back(value),
+            Single(chunk) => Ref::make_mut(chunk).push_back(value),
             Full(tree) => tree.push_back(value),
         }
     }
@@ -695,7 +693,7 @@ impl<A: Clone> Vector<A> {
             None
         } else {
             match self {
-                Single(chunk) => Some(chunk.pop_front()),
+                Single(chunk) => Some(Ref::make_mut(chunk).pop_front()),
                 Full(tree) => tree.pop_front(),
             }
         }
@@ -721,7 +719,7 @@ impl<A: Clone> Vector<A> {
             None
         } else {
             match self {
-                Single(chunk) => Some(chunk.pop_back()),
+                Single(chunk) => Some(Ref::make_mut(chunk).pop_back()),
                 Full(tree) => tree.pop_back(),
             }
         }
@@ -763,14 +761,14 @@ impl<A: Clone> Vector<A> {
                     // If both are single chunks and left has room for right: directly
                     // memcpy right into left
                     Single(ref mut right) if total_length <= CHUNK_SIZE => {
-                        left.append(right);
+                        Ref::make_mut(left).append(Ref::make_mut(right));
                         return;
                     }
                     // If only left is a single chunk and has room for right: push
                     // right's elements into left
                     ref mut right if total_length <= CHUNK_SIZE => {
                         while let Some(value) = right.pop_front() {
-                            left.push_back(value);
+                            Ref::make_mut(left).push_back(value);
                         }
                         return;
                     }
@@ -923,7 +921,7 @@ impl<A: Clone> Vector<A> {
         assert!(index <= self.len());
 
         match self {
-            Single(chunk) => Single(chunk.split_off(index)),
+            Single(chunk) => Single(Ref::new(Ref::make_mut(chunk).split_off(index))),
             Full(tree) => {
                 let mut local_index = index;
 
@@ -1029,7 +1027,7 @@ impl<A: Clone> Vector<A> {
 
                 let ob2 = Ref::make_mut(&mut tree.outer_b).split_off(local_index);
                 tree.length = index;
-                Single(ob2)
+                Single(Ref::new(ob2))
             }
         }
     }
@@ -1115,7 +1113,7 @@ impl<A: Clone> Vector<A> {
         }
         assert!(index < self.len());
         match self {
-            Single(chunk) if chunk.len() < CHUNK_SIZE => chunk.insert(index, value),
+            Single(chunk) if chunk.len() < CHUNK_SIZE => Ref::make_mut(chunk).insert(index, value),
             // TODO a lot of optimisations still possible here
             _ => {
                 let right = self.split_off(index);
@@ -1144,7 +1142,7 @@ impl<A: Clone> Vector<A> {
     pub fn remove(&mut self, index: usize) -> A {
         assert!(index < self.len());
         match self {
-            Single(chunk) => chunk.remove(index),
+            Single(chunk) => Ref::make_mut(chunk).remove(index),
             _ => {
                 if index == 0 {
                     return self.pop_front().unwrap();
@@ -1169,7 +1167,7 @@ impl<A: Clone> Vector<A> {
     /// Time: O(n)
     pub fn clear(&mut self) {
         if !self.is_empty() {
-            *self = Single(Chunk::new());
+            *self = Single(Ref::new(Chunk::new()));
         }
     }
 
@@ -1897,7 +1895,7 @@ pub enum ConsumingIter<A> {
 impl<A: Clone> ConsumingIter<A> {
     fn new(seq: Vector<A>) -> Self {
         match seq {
-            Single(chunk) => ConsumingIter::Single(chunk.into_iter()),
+            Single(chunk) => ConsumingIter::Single(clone_ref(chunk).into_iter()),
             Full(tree) => ConsumingIter::Full(tree.into_iter()),
         }
     }

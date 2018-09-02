@@ -464,7 +464,7 @@ where
     /// Construct a `FocusMut` for a `Vector`.
     pub fn new(vector: &'a mut Vector<A>) -> Self {
         match vector {
-            Vector::Single(chunk) => FocusMut::Single(chunk.as_mut_slice()),
+            Vector::Single(chunk) => FocusMut::Single(Ref::make_mut(chunk).as_mut_slice()),
             Vector::Full(tree) => FocusMut::Full(TreeFocusMut::new(tree)),
         }
     }
