@@ -520,6 +520,31 @@ where
         result
     }
 
+    /// Discard all elements from the map.
+    ///
+    /// This leaves you with an empty map, and all elements that
+    /// were previously inside it are dropped.
+    ///
+    /// Time: O(n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::HashMap;
+    /// # fn main() {
+    /// let mut map = hashmap![1=>1, 2=>2, 3=>3];
+    /// map.clear();
+    /// assert!(map.is_empty());
+    /// # }
+    /// ```
+    pub fn clear(&mut self) {
+        if !self.is_empty() {
+            self.root = Default::default();
+            self.size = 0;
+        }
+    }
+
     /// Get the [`Entry`][Entry] for a key in the map for in-place manipulation.
     ///
     /// Time: O(log n)

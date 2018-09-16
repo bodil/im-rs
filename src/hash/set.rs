@@ -332,6 +332,31 @@ where
         result.map(|v| v.0)
     }
 
+    /// Discard all elements from the set.
+    ///
+    /// This leaves you with an empty set, and all elements that
+    /// were previously inside it are dropped.
+    ///
+    /// Time: O(n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::HashSet;
+    /// # fn main() {
+    /// let mut set = hashset![1, 2, 3];
+    /// set.clear();
+    /// assert!(set.is_empty());
+    /// # }
+    /// ```
+    pub fn clear(&mut self) {
+        if !self.is_empty() {
+            self.root = Default::default();
+            self.size = 0;
+        }
+    }
+
     /// Construct a new set from the current set with the given value
     /// added.
     ///

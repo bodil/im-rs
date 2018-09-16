@@ -493,6 +493,31 @@ where
         removed_value
     }
 
+    /// Discard all elements from the map.
+    ///
+    /// This leaves you with an empty map, and all elements that
+    /// were previously inside it are dropped.
+    ///
+    /// Time: O(n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::OrdMap;
+    /// # fn main() {
+    /// let mut map = ordmap![1=>1, 2=>2, 3=>3];
+    /// map.clear();
+    /// assert!(map.is_empty());
+    /// # }
+    /// ```
+    pub fn clear(&mut self) {
+        if !self.is_empty() {
+            self.root = Default::default();
+            self.size = 0;
+        }
+    }
+
     /// Construct a new map by inserting a key/value mapping into a
     /// map.
     ///
