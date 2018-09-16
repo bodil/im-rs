@@ -505,8 +505,10 @@ where
     /// Get a mutable reference to the value at a given index.
     ///
     /// Panics if the index is out of bounds.
-    #[allow(unknown_lints)]
-    #[allow(should_implement_trait)] // would if I could
+    #[cfg_attr(
+        feature = "cargo-clippy",
+        allow(clippy::should_implement_trait)
+    )] // would if I could
     pub fn index_mut(&mut self, index: usize) -> &mut A {
         self.get_mut(index).expect("index out of bounds")
     }

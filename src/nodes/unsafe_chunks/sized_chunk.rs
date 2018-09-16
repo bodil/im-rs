@@ -605,8 +605,7 @@ where
     pub fn as_slice(&self) -> &[A] {
         unsafe {
             from_raw_parts(
-                (&self.data as *const ManuallyDrop<N::SizedType> as *const A)
-                    .offset(self.left as isize),
+                (&self.data as *const ManuallyDrop<N::SizedType> as *const A).add(self.left),
                 self.len(),
             )
         }
@@ -616,8 +615,7 @@ where
     pub fn as_mut_slice(&mut self) -> &mut [A] {
         unsafe {
             from_raw_parts_mut(
-                (&mut self.data as *mut ManuallyDrop<N::SizedType> as *mut A)
-                    .offset(self.left as isize),
+                (&mut self.data as *mut ManuallyDrop<N::SizedType> as *mut A).add(self.left),
                 self.len(),
             )
         }

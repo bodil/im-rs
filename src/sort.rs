@@ -2,14 +2,17 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#![cfg_attr(
+    feature = "cargo-clippy",
+    allow(clippy::many_single_char_names)
+)]
+
 use std::cmp::Ordering;
 use vector::FocusMut;
 
 // Ported from the Java version at:
 //    http://www.cs.princeton.edu/~rs/talks/QuicksortIsOptimal.pdf
 // Should be O(n) to O(n log n)
-#[allow(unknown_lints)]
-#[allow(many_single_char_names)]
 pub fn quicksort<A, F>(vector: &mut FocusMut<A>, left: usize, right: usize, cmp: &F)
 where
     A: Clone,

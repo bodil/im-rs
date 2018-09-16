@@ -257,8 +257,9 @@
 //! [b-tree]: https://en.wikipedia.org/wiki/B-tree
 
 #![deny(unsafe_code)]
-#![cfg_attr(feature = "cargo-clippy", allow(type_complexity))]
-#![cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
+#![cfg_attr(feature = "cargo-clippy", feature(tool_lints))]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::type_complexity))]
+#![cfg_attr(feature = "cargo-clippy", allow(clippy::unreadable_literal))]
 #![cfg_attr(has_specialisation, feature(specialization))]
 
 extern crate typenum;
