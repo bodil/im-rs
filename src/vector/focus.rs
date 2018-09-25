@@ -631,6 +631,29 @@ where
         }
     }
 
+    /// Narrow the focus onto a subslice of the vector.
+    ///
+    /// `FocusMut::narrow(range)` has the same effect as `&slice[range]`, without
+    /// actually modifying the underlying vector.
+    ///
+    /// Panics if the range isn't fully inside the current focus.
+    ///
+    /// ## Examples
+    ///
+    /// ```rust
+    /// # #[macro_use] extern crate im;
+    /// # use im::vector::Vector;
+    /// # use std::iter::FromIterator;
+    /// # fn main() {
+    /// let mut vec = Vector::from_iter(0..1000);
+    /// let narrowed = vec.focus_mut().narrow(100..200);
+    /// let narrowed_vec = narrowed.unmut().into_iter().cloned().collect();
+    /// assert_eq!(Vector::from_iter(100..200), narrowed_vec);
+    /// # }
+    /// ```
+    ///
+    /// [slice::split_at]: https://doc.rust-lang.org/std/primitive.slice.html#method.split_at
+    /// [Vector::split_at]: enum.Vector.html#method.split_at
     pub fn narrow<R>(self, range: R) -> Self
     where
         R: RangeBounds<usize>,

@@ -4,8 +4,24 @@
 
 //! # Immutable Data Structures for Rust
 //!
-//! This library implements several of the more commonly useful
-//! immutable data structures for Rust.
+//! This library implements several of the more commonly useful immutable data
+//! structures for Rust.
+//!
+//! ## What are immutable data structures?
+//!
+//! Immutable data structures are data structures which can be copied and
+//! modified efficiently without altering the original. The most uncomplicated
+//! example of this is the venerable [cons list][cons-list]. This crate offers a
+//! selection of more modern and flexible data structures with similar
+//! properties, tuned for the needs of Rust developers.
+//!
+//! Briefly, the following data structures are provided:
+//!
+//! * [Vectors][vector::Vector] based on [RRB trees][rrb-tree]
+//! * [Hash maps][hashmap::HashMap]/[sets][hashset::HashSet] based on [hash
+//!   array mapped tries][hamt]
+//! * [Ordered maps][ordmap::OrdMap]/[sets][ordset::OrdSet] based on
+//!   [B-trees][b-tree]
 //!
 //! ## Why Would I Want This?
 //!
@@ -64,11 +80,10 @@
 //! several hundred elements) before you get to the point where
 //! [`Vec`][std::vec::Vec] isn't always going to be the fastest choice.
 //! [`Vector`][vector::Vector] attempts to overcome this by actually just being
-//! an inline array at very small sizes, and being able to switch efficiently to
-//! the full data structure when it grows large enough. Thus,
-//! [`Vector`][vector::Vector] will actually be very slightly faster than
-//! [`Vec`][std::vec::Vec], because of the inlining and a couple of layout
-//! tricks, until it grows past the size of a single chunk.
+//! an array at very small sizes, and being able to switch efficiently to the
+//! full data structure when it grows large enough. Thus,
+//! [`Vector`][vector::Vector] will actually be equivalent to
+//! [Vec][std::vec::Vec] until it grows past the size of a single chunk.
 //!
 //! The maps - [`HashMap`][hashmap::HashMap] and
 //! [`OrdMap`][ordmap::OrdMap] - generally perform similarly to their
@@ -255,6 +270,7 @@
 //! [rrb-tree]: https://infoscience.epfl.ch/record/213452/files/rrbvector.pdf
 //! [hamt]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
 //! [b-tree]: https://en.wikipedia.org/wiki/B-tree
+//! [cons-list]: https://en.wikipedia.org/wiki/Cons#Lists
 
 #![deny(unsafe_code)]
 #![cfg_attr(feature = "cargo-clippy", feature(tool_lints))]

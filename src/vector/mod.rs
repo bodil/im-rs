@@ -126,10 +126,9 @@ macro_rules! vector {
 /// an initial capacity of 256. Beyond that, it will allocate tree nodes of
 /// capacity *k* as needed.
 ///
-/// In addition, vectors start out as single inlined chunks, and only expand
-/// into the full data structure once you go past the chunk size. This makes
-/// them extremely fast at small sizes - actually slightly faster than
-/// [`Vec`][Vec].
+/// In addition, vectors start out as single chunks, and only expand into the
+/// full data structure once you go past the chunk size. This makes them
+/// perform identically to [`Vec`][Vec] at small sizes.
 ///
 /// [rrbpaper]: https://infoscience.epfl.ch/record/213452/files/rrbvector.pdf
 /// [chunkedseq]: http://deepsea.inria.fr/pasl/chunkedseq.pdf
