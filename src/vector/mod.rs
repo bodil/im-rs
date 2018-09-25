@@ -26,18 +26,17 @@
 //! number of items above double the tree's branching factor (that's
 //! `self.len()` = 2 × *k* (where *k* = 64) = 128) on either side, the
 //! data structure is still just a handful of arrays, not yet an RRB
-//! tree, so you'll see performance and memory characteristics similar
-//! to [`Vec`][Vec] or [`VecDeque`][VecDeque].
+//! tree, so you'll see performance and memory characteristics fairly
+//! close to [`Vec`][Vec] or [`VecDeque`][VecDeque].
 //!
 //! This means that the structure always preallocates four chunks of
 //! size *k* (*k* being the tree's branching factor), equivalent to a
 //! [`Vec`][Vec] with an initial capacity of 256. Beyond that, it will
 //! allocate tree nodes of capacity *k* as needed.
 //!
-//! In addition, vectors start out as single inlined chunks, and only expand
-//! into the full data structure once you go past the chunk size. This makes
-//! them extremely fast at small sizes - actually slightly faster than
-//! [`Vec`][Vec].
+//! In addition, vectors start out as single chunks, and only expand into the
+//! full data structure once you go past the chunk size. This makes them
+//! perform identically to [`Vec`][Vec] at small sizes.
 //!
 //! [rrbpaper]: https://infoscience.epfl.ch/record/213452/files/rrbvector.pdf
 //! [chunkedseq]: http://deepsea.inria.fr/pasl/chunkedseq.pdf
