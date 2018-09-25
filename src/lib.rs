@@ -261,6 +261,7 @@
 #![cfg_attr(feature = "cargo-clippy", allow(clippy::type_complexity))]
 #![cfg_attr(feature = "cargo-clippy", allow(clippy::unreadable_literal))]
 #![cfg_attr(has_specialisation, feature(specialization))]
+#![cfg_attr(docs_rs_workaround, feature(slice_get_slice))]
 
 extern crate typenum;
 
