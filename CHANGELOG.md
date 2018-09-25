@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic
 Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `FocusMut` now has an `unmut` method to turn it into an immutable `Focus`,
+  releasing its exclusive hold on the underlying `Vector`.
+- `Focus` now implements `Clone`.
+
 ## [12.1.0] - 2018-09-25
 
 ### Added

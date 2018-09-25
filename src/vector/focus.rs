@@ -244,6 +244,18 @@ where
     }
 }
 
+impl<'a, A> Clone for Focus<'a, A>
+where
+    A: Clone + 'a,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Focus::Single(chunk) => Focus::Single(chunk),
+            Focus::Full(tree) => Focus::Full(tree.clone()),
+        }
+    }
+}
+
 pub struct TreeFocus<A> {
     tree: RRB<A>,
     view: Range<usize>,
@@ -685,6 +697,23 @@ where
             }
         }
     }
+
+    /// Convert a `FocusMut` into a `Focus`.
+    pub fn unmut(self) -> Focus<'a, A> {
+        match self {
+            FocusMut::Single(chunk) => Focus::Single(chunk),
+            FocusMut::Full(mut tree) => Focus::Full(TreeFocus {
+                tree: {
+                    let t = tree.tree.lock().unwrap();
+                    (*t).clone()
+                },
+                view: tree.view.clone(),
+                middle_range: tree.middle_range.clone(),
+                target_range: 0..0,
+                target_ptr: null(),
+            }),
+        }
+    }
 }
 
 impl<'a, A> IntoIterator for FocusMut<'a, A>
@@ -696,6 +725,15 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         IterMut::from_focus(self)
+    }
+}
+
+impl<'a, A> Into<Focus<'a, A>> for FocusMut<'a, A>
+where
+    A: Clone + 'a,
+{
+    fn into(self) -> Focus<'a, A> {
+        self.unmut()
     }
 }
 
