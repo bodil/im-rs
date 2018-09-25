@@ -8,6 +8,9 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Maps and sets now have the `clear` method just like `Vector`. (#46)
+
 ### Changed
 - Single chunk `Vector`s are no longer allocated directly on the stack, meaning
   that they're now comparable in performance to `std::vec::Vec` rather than
