@@ -38,7 +38,7 @@ fn read_doc<P: AsRef<Path>>(name: P) -> Document {
 
 fn make_dist(root: &Path, target: &str, manifest: &str) -> PathBuf {
   let path = root.join(target);
-  fs::create_dir_all(&path);
+  fs::create_dir_all(&path).unwrap();
   let mut src = vec!["src".into(), "build.rs".into()];
   for item in glob::glob("*.md").unwrap() {
     if let Ok(path) = item {
@@ -54,7 +54,7 @@ fn make_dist(root: &Path, target: &str, manifest: &str) -> PathBuf {
 
 fn main() {
   // Prepare target folder
-  fs::remove_dir_all("dist");
+  fs::remove_dir_all("dist").unwrap();
   let path = PathBuf::from("dist");
 
   // Copy files into im and im-rc subfolders
@@ -66,6 +66,7 @@ fn main() {
   let mut doc = read_doc(&rc_manifest_path);
   let build = value(doc["package"]["build"].as_str().unwrap()[1..].to_string());
   doc["package"]["build"] = build;
+  doc["package"]["readme"] = value("../../README.md".to_string());
   let libpath = value(doc["lib"]["path"].as_str().unwrap()[1..].to_string());
   doc["lib"]["path"] = libpath;
   fs::write(&rc_manifest_path, doc.to_string())
