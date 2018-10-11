@@ -1814,10 +1814,10 @@ impl<'a, K: Ord + Hash + Eq + Clone, V: Clone, S: BuildHasher> From<&'a HashMap<
 
 // QuickCheck
 
-#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, feature = "quickcheck"))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, feature = "quickcheck"))]
 impl<K: Ord + Clone + Arbitrary + Sync, V: Clone + Arbitrary + Sync> Arbitrary for OrdMap<K, V> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         OrdMap::from_iter(Vec::<(K, V)>::arbitrary(g))
@@ -1870,6 +1870,7 @@ mod test {
     use super::proptest::*;
     use super::*;
     use nodes::btree::DiffItem;
+    use proptest::bool;
     use proptest::collection;
     use proptest::num::{i16, usize};
     use test::is_sorted;
@@ -2073,119 +2074,68 @@ mod test {
         assert_eq!(vec![(3, 4), (2, 3), (1, 2)], range);
     }
 
-    quickcheck! {
-        fn length(input: Vec<i32>) -> bool {
-            let mut vec = input;
-            vec.sort();
-            vec.dedup();
-            let map: OrdMap<i32, i32> = OrdMap::from_iter(vec.iter().cloned().map(|i| (i, i)));
-            vec.len() == map.len()
+    proptest! {
+        #[test]
+        fn length(ref input in collection::btree_map(i16::ANY, i16::ANY, 0..1000)) {
+            let map: OrdMap<i32, i32> = OrdMap::from(input.clone());
+            input.len() == map.len()
         }
 
-        fn order(vec: Vec<(i32, i32)>) -> bool {
-            let map: OrdMap<i32, i32> = OrdMap::from_iter(vec.into_iter());
+        #[test]
+        fn order(ref input in collection::hash_map(i16::ANY, i16::ANY, 0..1000)) {
+            let map: OrdMap<i32, i32> = OrdMap::from(input.clone());
             is_sorted(map.keys())
         }
 
-        fn overwrite_values(vec: Vec<(usize, usize)>, index_rand: usize, new_val: usize) -> bool {
-            if vec.is_empty() {
-                return true
-            }
+        #[test]
+        fn overwrite_values(ref vec in collection::vec((i16::ANY, i16::ANY), 1..1000), index_rand in usize::ANY, new_val in i16::ANY) {
             let index = vec[index_rand % vec.len()].0;
             let map1 = OrdMap::from_iter(vec.clone());
             let map2 = map1.update(index, new_val);
-            map2.iter().all(|(k, v)| if *k == index {
-                *v == new_val
-            } else {
-                match map1.get(&k) {
-                    None => false,
-                    Some(other_v) => v == other_v
+            for (k, v) in map2 {
+                if k == index {
+                    assert_eq!(v, new_val);
+                } else {
+                    match map1.get(&k) {
+                        None => panic!("map1 didn't have key {:?}", k),
+                        Some(other_v) => {
+                            assert_eq!(v, *other_v);
+                        }
+                    }
                 }
-            })
+            }
         }
 
-        fn delete_values(vec: Vec<(usize, usize)>, index_rand: usize) -> bool {
-            if vec.is_empty() {
-                return true
-            }
+        #[test]
+        fn delete_values(ref vec in collection::vec((usize::ANY, usize::ANY), 1..1000), index_rand in usize::ANY) {
             let index = vec[index_rand % vec.len()].0;
             let map1: OrdMap<usize, usize> = OrdMap::from_iter(vec.clone());
             let map2 = map1.without(&index);
-            map2.keys().all(|k| *k != index) && map1.len() == map2.len() + 1
+            assert_eq!(map1.len(), map2.len() + 1);
+            for k in map2.keys() {
+                assert_ne!(*k, index);
+            }
         }
 
+        #[test]
         fn insert_and_delete_values(
-            input_unbounded: Vec<(usize, usize)>, ops: Vec<(bool, usize, usize)>
-        ) -> bool {
-            let input: Vec<(usize, usize)> =
-                input_unbounded.into_iter().map(|(k, v)| (k % 64, v % 64)).collect();
-            let mut map = OrdMap::from(input.clone());
-            let mut tree: collections::BTreeMap<usize, usize> =
-                input.into_iter().collect();
+            ref input in ord_map(0usize..64, 0usize..64, 1..1000),
+            ref ops in collection::vec((bool::ANY, usize::ANY, usize::ANY), 1..1000)
+        ) {
+            let mut map = input.clone();
+            let mut tree: collections::BTreeMap<usize, usize> = input.iter().cloned().collect();
             for (ins, key, val) in ops {
-                if ins {
-                    tree.insert(key, val);
-                    map = map.update(key, val)
+                if *ins {
+                    tree.insert(*key, *val);
+                    map = map.update(*key, *val)
                 } else {
-                    tree.remove(&key);
-                    map = map.without(&key)
+                    tree.remove(key);
+                    map = map.without(key)
                 }
             }
-            map.iter().map(|(k, v)| (*k, *v)).eq(tree.iter().map(|(k, v)| (*k, *v)))
+            assert!(map.iter().map(|(k, v)| (*k, *v)).eq(tree.iter().map(|(k, v)| (*k, *v))));
         }
 
-        fn diff_added_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
-            let a: OrdMap<usize, usize> = OrdMap::from(a);
-            let b: OrdMap<usize, usize> = OrdMap::from(b);
-            let ab = a.clone().union(b.clone());
-            a.diff(&ab).eq(b.iter().filter(|&(ref k, _)| !a.contains_key(k)).map(DiffItem::Add))
-        }
-
-        // fn diff_updated_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
-        //     let a: OrdMap<usize, usize> = OrdMap::from(a);
-        //     let b: OrdMap<usize, usize> = OrdMap::from(b);
-        //     let ab: OrdMap<usize, usize> = a.union(&b);
-        //     let ba: OrdMap<usize, usize> = ab.union_with(&b, |_, b| *b);
-        //     ab.diff(&ba).eq(b.iter().filter(|&(ref k, ref v)| ab.get(k) != Some(&v))
-        //                    .map(|(k, v)| DiffItem::Update {
-        //                        old: &(*k, *(ab.get(&k).unwrap())),
-        //                        new: &(*k, *v)
-        //                    }))
-        // }
-
-        fn diff_removed_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
-            let a: OrdMap<usize, usize> = OrdMap::from(a);
-            let b: OrdMap<usize, usize> = OrdMap::from(b);
-            let ab = a.clone().union(b.clone());
-            ab.diff(&a).eq(b.iter().filter(|&(ref k, _)| !a.contains_key(k)).map(DiffItem::Remove))
-        }
-
-        // fn diff_all_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
-        //     let a: OrdMap<usize, usize> = OrdMap::from(a);
-        //     let b: OrdMap<usize, usize> = OrdMap::from(b);
-        //     a.diff(&b).eq(b.union(&a).iter().filter_map(|(k, v)| {
-        //         if a.contains_key(&k) {
-        //             if b.contains_key(&k) {
-        //                 let old = a.get(&k).unwrap();
-        //                 if old != v	{
-        //                     Some(DiffItem::Update {
-        //                         old: &(*k, *old),
-        //                         new: &(*k, *v),
-        //                     })
-        //                 } else {
-        //                     None
-        //                 }
-        //             } else {
-        //                 Some(DiffItem::Remove(&(*k, *v)))
-        //             }
-        //         } else {
-        //             Some(DiffItem::Add(&(*k, *v)))
-        //         }
-        //     }))
-        // }
-    }
-
-    proptest! {
         #[test]
         fn proptest_works(ref m in ord_map(0..9999, ".*", 10..100)) {
             assert!(m.len() < 100);
@@ -2310,5 +2260,53 @@ mod test {
             }
             assert_eq!(0, it.len());
         }
+
+        #[test]
+        fn diff_added_values(a in ord_map(i16::ANY, i16::ANY, 0..1000), b in ord_map(i16::ANY, i16::ANY, 0..1000)) {
+            let ab = a.clone().union(b.clone());
+            assert!(a.diff(&ab).eq(b.iter().filter(|&(ref k, _)| !a.contains_key(k)).map(DiffItem::Add)));
+        }
+
+        // fn diff_updated_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
+        //     let a: OrdMap<usize, usize> = OrdMap::from(a);
+        //     let b: OrdMap<usize, usize> = OrdMap::from(b);
+        //     let ab: OrdMap<usize, usize> = a.union(&b);
+        //     let ba: OrdMap<usize, usize> = ab.union_with(&b, |_, b| *b);
+        //     ab.diff(&ba).eq(b.iter().filter(|&(ref k, ref v)| ab.get(k) != Some(&v))
+        //                    .map(|(k, v)| DiffItem::Update {
+        //                        old: &(*k, *(ab.get(&k).unwrap())),
+        //                        new: &(*k, *v)
+        //                    }))
+        // }
+
+        #[test]
+        fn diff_removed_values(a in ord_map(i16::ANY, i16::ANY, 0..1000), b in ord_map(i16::ANY, i16::ANY, 0..1000)) {
+            let ab = a.clone().union(b.clone());
+            assert!(ab.diff(&a).eq(b.iter().filter(|&(ref k, _)| !a.contains_key(k)).map(DiffItem::Remove)));
+        }
+
+        // fn diff_all_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
+        //     let a: OrdMap<usize, usize> = OrdMap::from(a);
+        //     let b: OrdMap<usize, usize> = OrdMap::from(b);
+        //     a.diff(&b).eq(b.union(&a).iter().filter_map(|(k, v)| {
+        //         if a.contains_key(&k) {
+        //             if b.contains_key(&k) {
+        //                 let old = a.get(&k).unwrap();
+        //                 if old != v	{
+        //                     Some(DiffItem::Update {
+        //                         old: &(*k, *old),
+        //                         new: &(*k, *v),
+        //                     })
+        //                 } else {
+        //                     None
+        //                 }
+        //             } else {
+        //                 Some(DiffItem::Remove(&(*k, *v)))
+        //             }
+        //         } else {
+        //             Some(DiffItem::Add(&(*k, *v)))
+        //         }
+        //     }))
+        // }
     }
 }

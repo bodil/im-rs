@@ -285,12 +285,8 @@ extern crate typenum;
 #[macro_use]
 extern crate pretty_assertions;
 
-#[cfg(any(test, feature = "quickcheck"))]
-#[macro_use]
-extern crate quickcheck;
-
 #[cfg(feature = "quickcheck")]
-quickcheck!{}
+extern crate quickcheck;
 
 #[cfg(any(test, feature = "proptest"))]
 #[macro_use]

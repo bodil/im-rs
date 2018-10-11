@@ -961,10 +961,10 @@ where
 
 // QuickCheck
 
-#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, feature = "quickcheck"))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, feature = "quickcheck"))]
 impl<A, S> Arbitrary for HashSet<A, S>
 where
     A: Hash + Eq + Arbitrary + Sync,
@@ -1007,7 +1007,8 @@ pub mod proptest {
             .prop_map(HashSet::from)
             .prop_filter("HashSet minimum size".to_owned(), move |s| {
                 s.len() >= size.start
-            }).boxed()
+            })
+            .boxed()
     }
 }
 

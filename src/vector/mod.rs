@@ -2260,10 +2260,10 @@ pub mod rayon {
 }
 
 // QuickCheck
-#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, feature = "quickcheck"))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, feature = "quickcheck"))]
 impl<A: Arbitrary + Sync + Clone> Arbitrary for Vector<A> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         Vector::from_iter(Vec::<A>::arbitrary(g))
@@ -2551,7 +2551,8 @@ mod test {
         #[test]
         fn chunks_mut(ref mut input_src in vector(i32::ANY, 0..10000)) {
             let mut input = input_src.clone();
-            let output: Vector<_> = input.chunks_mut().flat_map(|a|a).map(|v| *v).collect();
+            #[cfg_attr(feature = "cargo-clippy", allow(clippy::map_clone))]
+            let output: Vector<_> = input.chunks_mut().flat_map(|a| a).map(|v| *v).collect();
             assert_eq!(input, output);
             let rev_in: Vector<_> = input.iter().rev().cloned().collect();
             let rev_out: Vector<_> = input.chunks_mut().rev().map(|c| c.iter().rev()).flat_map(|a|a).cloned().collect();

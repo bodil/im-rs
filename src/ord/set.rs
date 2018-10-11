@@ -1032,10 +1032,10 @@ impl<'a, A: Hash + Eq + Ord + Clone, S: BuildHasher> From<&'a HashSet<A, S>> for
 
 // QuickCheck
 
-#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, feature = "quickcheck"))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(threadsafe, any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, feature = "quickcheck"))]
 impl<A: Ord + Clone + Arbitrary + Sync> Arbitrary for OrdSet<A> {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         OrdSet::from_iter(Vec::<A>::arbitrary(g))
