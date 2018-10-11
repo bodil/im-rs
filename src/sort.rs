@@ -2,11 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#![cfg_attr(
-    feature = "cargo-clippy",
-    allow(clippy::many_single_char_names)
-)]
-
 use std::cmp::Ordering;
 use vector::FocusMut;
 
@@ -24,55 +19,55 @@ where
 
     let l = left as isize;
     let r = right as isize;
-    let mut i = l;
-    let mut j = r;
-    let mut p = l - 1;
-    let mut q = r;
+    let mut l1 = l;
+    let mut r1 = r;
+    let mut l2 = l - 1;
+    let mut r2 = r;
     loop {
-        while i != r && vector.pair(i as usize, r as usize, |a, b| cmp(a, b)) == Ordering::Less {
-            i += 1;
+        while l1 != r && vector.pair(l1 as usize, r as usize, |a, b| cmp(a, b)) == Ordering::Less {
+            l1 += 1;
         }
-        j -= 1;
-        while j != r && vector.pair(r as usize, j as usize, |a, b| cmp(a, b)) == Ordering::Less {
-            if j == l {
+        r1 -= 1;
+        while r1 != r && vector.pair(r as usize, r1 as usize, |a, b| cmp(a, b)) == Ordering::Less {
+            if r1 == l {
                 break;
             }
-            j -= 1;
+            r1 -= 1;
         }
-        if i >= j {
+        if l1 >= r1 {
             break;
         }
-        vector.swap(i as usize, j as usize);
-        if i != r && vector.pair(i as usize, r as usize, |a, b| cmp(a, b)) == Ordering::Equal {
-            p += 1;
-            vector.swap(p as usize, i as usize);
+        vector.swap(l1 as usize, r1 as usize);
+        if l1 != r && vector.pair(l1 as usize, r as usize, |a, b| cmp(a, b)) == Ordering::Equal {
+            l2 += 1;
+            vector.swap(l2 as usize, l1 as usize);
         }
-        if j != r && vector.pair(r as usize, j as usize, |a, b| cmp(a, b)) == Ordering::Equal {
-            q -= 1;
-            vector.swap(j as usize, q as usize);
+        if r1 != r && vector.pair(r as usize, r1 as usize, |a, b| cmp(a, b)) == Ordering::Equal {
+            r2 -= 1;
+            vector.swap(r1 as usize, r2 as usize);
         }
     }
-    vector.swap(i as usize, r as usize);
+    vector.swap(l1 as usize, r as usize);
 
-    j = i - 1;
-    i += 1;
+    r1 = l1 - 1;
+    l1 += 1;
     let mut k = l;
-    while k < p {
-        vector.swap(k as usize, j as usize);
-        j -= 1;
+    while k < l2 {
+        vector.swap(k as usize, r1 as usize);
+        r1 -= 1;
         k += 1;
     }
     k = r - 1;
-    while k > q {
-        vector.swap(i as usize, k as usize);
+    while k > r2 {
+        vector.swap(l1 as usize, k as usize);
         k -= 1;
-        i += 1;
+        l1 += 1;
     }
 
-    if j >= 0 {
-        quicksort(vector, left, j as usize, cmp);
+    if r1 >= 0 {
+        quicksort(vector, left, r1 as usize, cmp);
     }
-    quicksort(vector, i as usize, right, cmp);
+    quicksort(vector, l1 as usize, right, cmp);
 }
 
 #[cfg(test)]
