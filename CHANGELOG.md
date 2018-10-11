@@ -9,6 +9,11 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- `OrdMap` and `OrdSet` now have a `range()` method which makes an iterator over
+  a bounded subset of the values. The improved iterator implementation is also
+  considerably more efficient than the previous (about an order of magnitude
+  faster for nontrivial data sets). `iter()` has been updated to take advantage
+  of this, and is now just an alias for `range(..)`. (#27)
 - `FocusMut` now has an `unmut` method to turn it into an immutable `Focus`,
   releasing its exclusive hold on the underlying `Vector`.
 - `Focus` now implements `Clone`.

@@ -11,6 +11,7 @@ extern crate rand;
 extern crate test;
 
 use rand::{rngs::SmallRng, FromEntropy, Rng};
+use std::collections::BTreeSet;
 use std::iter::FromIterator;
 use test::Bencher;
 
@@ -18,19 +19,17 @@ use im::ordmap::OrdMap;
 
 fn random_keys(size: usize) -> Vec<i64> {
     let mut gen = SmallRng::from_entropy();
-    let mut set = Vec::new();
+    let mut set = BTreeSet::new();
     while set.len() < size {
         let next = gen.gen::<i64>() % 10000;
-        if !set.contains(&next) {
-            set.push(next);
-        }
+        set.insert(next);
     }
-    set
+    set.into_iter().collect()
 }
 
 fn reorder<A: Copy>(vec: &[A]) -> Vec<A> {
     let mut gen = SmallRng::from_entropy();
-    let mut set = vec.to_owned();
+    let mut set: Vec<A> = vec.to_owned();
     let mut out = Vec::new();
     while !set.is_empty() {
         let i = gen.gen::<usize>() % set.len();
@@ -275,4 +274,56 @@ fn ordmap_lookup_once_1000(b: &mut Bencher) {
 #[bench]
 fn ordmap_lookup_once_10000(b: &mut Bencher) {
     ordmap_lookup_once_n(10000, b)
+}
+
+fn ordmap_iter(size: usize, b: &mut Bencher) {
+    let keys = random_keys(size);
+    let m: OrdMap<i64, i64> = OrdMap::from_iter(keys.into_iter().map(|i| (i, 1)));
+    b.iter(|| for _ in m.iter() {})
+}
+
+#[bench]
+fn ordmap_iter_10(b: &mut Bencher) {
+    ordmap_iter(10, b)
+}
+
+#[bench]
+fn ordmap_iter_100(b: &mut Bencher) {
+    ordmap_iter(100, b)
+}
+
+#[bench]
+fn ordmap_iter_1000(b: &mut Bencher) {
+    ordmap_iter(1000, b)
+}
+
+#[bench]
+fn ordmap_iter_10000(b: &mut Bencher) {
+    ordmap_iter(10000, b)
+}
+
+fn ordmap_range_iter(size: usize, b: &mut Bencher) {
+    let keys = random_keys(size);
+    let m: OrdMap<i64, i64> = OrdMap::from_iter(keys.into_iter().map(|i| (i, 1)));
+    b.iter(|| for _ in m.range(..) {})
+}
+
+#[bench]
+fn ordmap_range_iter_10(b: &mut Bencher) {
+    ordmap_range_iter(10, b)
+}
+
+#[bench]
+fn ordmap_range_iter_100(b: &mut Bencher) {
+    ordmap_range_iter(100, b)
+}
+
+#[bench]
+fn ordmap_range_iter_1000(b: &mut Bencher) {
+    ordmap_range_iter(1000, b)
+}
+
+#[bench]
+fn ordmap_range_iter_10000(b: &mut Bencher) {
+    ordmap_range_iter(10000, b)
 }

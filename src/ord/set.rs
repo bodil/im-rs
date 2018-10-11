@@ -23,7 +23,7 @@ use std::collections;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::{FromIterator, IntoIterator, Sum};
-use std::ops::{Add, Deref, Mul};
+use std::ops::{Add, Deref, Mul, RangeBounds};
 
 use hashset::HashSet;
 use nodes::btree::{
@@ -63,7 +63,7 @@ macro_rules! ordset {
     }};
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 struct Value<A>(A);
 
 impl<A> Deref for Value<A> {
@@ -271,7 +271,20 @@ where
     #[must_use]
     pub fn iter(&self) -> Iter<A> {
         Iter {
-            it: NodeIter::new(&self.root, self.size),
+            it: NodeIter::new(&self.root, self.size, ..),
+        }
+    }
+
+    // Create an iterator over a range inside the set.
+    #[must_use]
+    pub fn range<R, BA>(&self, range: R) -> RangedIter<A>
+    where
+        R: RangeBounds<BA>,
+        A: Borrow<BA>,
+        BA: Ord + ?Sized,
+    {
+        RangedIter {
+            it: NodeIter::new(&self.root, self.size, range),
         }
     }
 
@@ -296,6 +309,18 @@ where
     /// Test if a value is part of a set.
     ///
     /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordset::OrdSet;
+    /// # fn main() {
+    /// let mut set = ordset!{1, 2, 3};
+    /// assert!(set.contains(&1));
+    /// assert!(!set.contains(&4));
+    /// # }
+    /// ```
     #[inline]
     #[must_use]
     pub fn contains<BA>(&self, a: &BA) -> bool
@@ -325,8 +350,6 @@ where
     /// );
     /// # }
     /// ```
-    ///
-    /// [insert]: #method.insert
     #[inline]
     pub fn insert(&mut self, a: A) -> Option<A> {
         let new_root = {
@@ -381,7 +404,8 @@ where
         let key = match self.get_min() {
             None => return None,
             Some(v) => v,
-        }.clone();
+        }
+        .clone();
         self.remove(&key)
     }
 
@@ -393,7 +417,8 @@ where
         let key = match self.get_max() {
             None => return None,
             Some(v) => v,
-        }.clone();
+        }
+        .clone();
         self.remove(&key)
     }
 
@@ -802,6 +827,57 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.it.next().map(Deref::deref)
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.it.remaining, Some(self.it.remaining))
+    }
+}
+
+impl<'a, A> DoubleEndedIterator for Iter<'a, A>
+where
+    A: 'a + Ord + Clone,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.it.next_back().map(Deref::deref)
+    }
+}
+
+impl<'a, A> ExactSizeIterator for Iter<'a, A> where A: 'a + Ord + Clone {}
+
+// A ranged iterator over the elements of a set.
+//
+// The only difference from `Iter` is that this one doesn't implement
+// `ExactSizeIterator` because we can't know the size of the range without first
+// iterating over it to count.
+pub struct RangedIter<'a, A>
+where
+    A: 'a,
+{
+    it: NodeIter<'a, Value<A>>,
+}
+
+impl<'a, A> Iterator for RangedIter<'a, A>
+where
+    A: 'a + Ord + Clone,
+{
+    type Item = &'a A;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.it.next().map(Deref::deref)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.it.size_hint()
+    }
+}
+
+impl<'a, A> DoubleEndedIterator for RangedIter<'a, A>
+where
+    A: 'a + Ord + Clone,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.it.next_back().map(Deref::deref)
+    }
 }
 
 // A consuming iterator over the elements of a set.
@@ -998,7 +1074,8 @@ pub mod proptest {
             .prop_map(OrdSet::from)
             .prop_filter("OrdSet minimum size".to_owned(), move |s| {
                 s.len() >= size.start
-            }).boxed()
+            })
+            .boxed()
     }
 }
 
@@ -1016,11 +1093,50 @@ mod test {
         assert!(!set.contains("foo"));
     }
 
+    #[test]
+    fn ranged_iter() {
+        let set: OrdSet<i32> = ordset![1, 2, 3, 4, 5];
+        let range: Vec<i32> = set.range(..).cloned().collect();
+        assert_eq!(vec![1, 2, 3, 4, 5], range);
+        let range: Vec<i32> = set.range(..).rev().cloned().collect();
+        assert_eq!(vec![5, 4, 3, 2, 1], range);
+        let range: Vec<i32> = set.range(2..5).cloned().collect();
+        assert_eq!(vec![2, 3, 4], range);
+        let range: Vec<i32> = set.range(2..5).rev().cloned().collect();
+        assert_eq!(vec![4, 3, 2], range);
+        let range: Vec<i32> = set.range(3..).cloned().collect();
+        assert_eq!(vec![3, 4, 5], range);
+        let range: Vec<i32> = set.range(3..).rev().cloned().collect();
+        assert_eq!(vec![5, 4, 3], range);
+        let range: Vec<i32> = set.range(..4).cloned().collect();
+        assert_eq!(vec![1, 2, 3], range);
+        let range: Vec<i32> = set.range(..4).rev().cloned().collect();
+        assert_eq!(vec![3, 2, 1], range);
+        let range: Vec<i32> = set.range(..=3).cloned().collect();
+        assert_eq!(vec![1, 2, 3], range);
+        let range: Vec<i32> = set.range(..=3).rev().cloned().collect();
+        assert_eq!(vec![3, 2, 1], range);
+    }
+
     proptest! {
         #[test]
         fn proptest_a_set(ref s in ord_set(".*", 10..100)) {
             assert!(s.len() < 100);
             assert!(s.len() >= 10);
+        }
+
+        #[test]
+        fn long_ranged_iter(max in 1..1000) {
+            let range = 0..max;
+            let expected: Vec<i32> = range.clone().collect();
+            let set: OrdSet<i32> = OrdSet::from_iter(range.clone());
+            let result: Vec<i32> = set.range(..).cloned().collect();
+            assert_eq!(expected, result);
+
+            let expected: Vec<i32> = range.clone().rev().collect();
+            let set: OrdSet<i32> = OrdSet::from_iter(range);
+            let result: Vec<i32> = set.range(..).rev().cloned().collect();
+            assert_eq!(expected, result);
         }
     }
 }

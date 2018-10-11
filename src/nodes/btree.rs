@@ -5,6 +5,7 @@
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::mem;
+use std::ops::{Bound, RangeBounds};
 
 use typenum::{Add1, Unsigned};
 
@@ -195,6 +196,124 @@ impl<A: BTreeValue> Node<A> {
                 Some(ref mut child_ref) => {
                     let child = Ref::make_mut(child_ref);
                     child.lookup_mut(key)
+                }
+            },
+        }
+    }
+
+    pub fn path_first<'a, BK>(
+        &'a self,
+        mut path: Vec<(&'a Node<A>, usize)>,
+    ) -> Vec<(&'a Node<A>, usize)>
+    where
+        A: 'a,
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
+        if self.keys.is_empty() {
+            return Vec::new();
+        }
+        match self.children[0] {
+            None => {
+                path.push((self, 0));
+                path
+            }
+            Some(ref node) => {
+                path.push((self, 0));
+                node.path_first(path)
+            }
+        }
+    }
+
+    pub fn path_last<'a, BK>(
+        &'a self,
+        mut path: Vec<(&'a Node<A>, usize)>,
+    ) -> Vec<(&'a Node<A>, usize)>
+    where
+        A: 'a,
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
+        if self.keys.is_empty() {
+            return Vec::new();
+        }
+        let end = self.children.len() - 1;
+        match self.children[end] {
+            None => {
+                path.push((self, end - 1));
+                path
+            }
+            Some(ref node) => {
+                path.push((self, end));
+                node.path_last(path)
+            }
+        }
+    }
+
+    pub fn path_next<'a, BK>(
+        &'a self,
+        key: &BK,
+        mut path: Vec<(&'a Node<A>, usize)>,
+    ) -> Vec<(&'a Node<A>, usize)>
+    where
+        A: 'a,
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
+        if self.keys.is_empty() {
+            return Vec::new();
+        }
+        match A::search_key(&self.keys, key) {
+            Ok(index) => {
+                path.push((self, index));
+                path
+            }
+            Err(index) => match self.children[index] {
+                None => match self.keys.get(index) {
+                    Some(_) => {
+                        path.push((self, index));
+                        path
+                    }
+                    None => Vec::new(),
+                },
+                Some(ref node) => {
+                    path.push((self, index));
+                    node.path_next(key, path)
+                }
+            },
+        }
+    }
+
+    pub fn path_prev<'a, BK>(
+        &'a self,
+        key: &BK,
+        mut path: Vec<(&'a Node<A>, usize)>,
+    ) -> Vec<(&'a Node<A>, usize)>
+    where
+        A: 'a,
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
+        if self.keys.is_empty() {
+            return Vec::new();
+        }
+        match A::search_key(&self.keys, key) {
+            Ok(index) => {
+                path.push((self, index));
+                path
+            }
+            Err(index) => match self.children[index] {
+                None if index == 0 => Vec::new(),
+                None => match self.keys.get(index - 1) {
+                    Some(_) => {
+                        path.push((self, index));
+                        path
+                    }
+                    None => Vec::new(),
+                },
+                Some(ref node) => {
+                    path.push((self, index));
+                    node.path_prev(key, path)
                 }
             },
         }
@@ -639,133 +758,192 @@ impl<A: BTreeValue> Node<A> {
 
 // Iterator
 
-enum IterItem<'a, A: 'a> {
-    Consider(&'a Node<A>),
-    Yield(&'a A),
-}
-
 pub struct Iter<'a, A: 'a> {
-    fwd_last: Option<&'a A>,
-    fwd_stack: Vec<IterItem<'a, A>>,
-    back_last: Option<&'a A>,
-    back_stack: Vec<IterItem<'a, A>>,
-    remaining: usize,
+    fwd_path: Vec<(&'a Node<A>, usize)>,
+    back_path: Vec<(&'a Node<A>, usize)>,
+    pub(crate) remaining: usize,
 }
 
-impl<'a, A: 'a + Clone> Iter<'a, A> {
-    pub fn new(root: &'a Node<A>, total: usize) -> Self {
+impl<'a, A: 'a + BTreeValue> Iter<'a, A> {
+    pub fn new<R, BK>(root: &'a Node<A>, size: usize, range: R) -> Self
+    where
+        R: RangeBounds<BK>,
+        A::Key: Borrow<BK>,
+        BK: Ord + ?Sized,
+    {
+        let fwd_path = match range.start_bound() {
+            Bound::Included(key) => root.path_next(key, Vec::new()),
+            Bound::Excluded(key) => {
+                let mut path = root.path_next(key, Vec::new());
+                if let Some(value) = Self::get(&path) {
+                    if value.cmp_keys(key) == Ordering::Equal {
+                        Self::step_forward(&mut path);
+                    }
+                }
+                path
+            }
+            Bound::Unbounded => root.path_first(Vec::new()),
+        };
+        let back_path = match range.end_bound() {
+            Bound::Included(key) => root.path_prev(key, Vec::new()),
+            Bound::Excluded(key) => {
+                let mut path = root.path_prev(key, Vec::new());
+                if let Some(value) = Self::get(&path) {
+                    if value.cmp_keys(key) == Ordering::Equal {
+                        Self::step_back(&mut path);
+                    }
+                }
+                path
+            }
+            Bound::Unbounded => root.path_last(Vec::new()),
+        };
         Iter {
-            fwd_last: None,
-            fwd_stack: vec![IterItem::Consider(root)],
-            back_last: None,
-            back_stack: vec![IterItem::Consider(root)],
-            remaining: total,
+            fwd_path,
+            back_path,
+            remaining: size,
         }
     }
 
-    fn push_node(stack: &mut Vec<IterItem<'a, A>>, maybe_node: &'a Option<Ref<Node<A>>>) {
-        if let Some(ref node) = *maybe_node {
-            stack.push(IterItem::Consider(&node))
+    fn get(path: &[(&'a Node<A>, usize)]) -> Option<&'a A> {
+        match path.last() {
+            Some((node, index)) => Some(&node.keys[*index]),
+            None => None,
         }
     }
 
-    fn push(stack: &mut Vec<IterItem<'a, A>>, node: &'a Node<A>) {
-        for n in 0..node.keys.len() {
-            let i = node.keys.len() - n;
-            Iter::push_node(stack, &node.children[i]);
-            stack.push(IterItem::Yield(&node.keys[i - 1]));
+    fn step_forward(path: &mut Vec<(&'a Node<A>, usize)>) -> Option<&'a A> {
+        match path.pop() {
+            Some((node, index)) => {
+                let index = index + 1;
+                match node.children[index] {
+                    // Child between current and next key -> step down
+                    Some(ref child) => {
+                        path.push((node, index));
+                        path.push((child, 0));
+                        let mut node = child;
+                        while let Some(ref left_child) = node.children[0] {
+                            path.push((left_child, 0));
+                            node = left_child;
+                        }
+                        Some(&node.keys[0])
+                    }
+                    None => match node.keys.get(index) {
+                        // Yield next key
+                        value @ Some(_) => {
+                            path.push((node, index));
+                            value
+                        }
+                        // No more keys -> exhausted level, step up and yield
+                        None => loop {
+                            match path.pop() {
+                                None => {
+                                    return None;
+                                }
+                                Some((node, index)) => {
+                                    if let value @ Some(_) = node.keys.get(index) {
+                                        path.push((node, index));
+                                        return value;
+                                    }
+                                }
+                            }
+                        },
+                    },
+                }
+            }
+            None => None,
         }
-        Iter::push_node(stack, &node.children[0]);
     }
 
-    fn push_fwd(&mut self, node: &'a Node<A>) {
-        Iter::push(&mut self.fwd_stack, node)
-    }
-
-    fn push_node_back(&mut self, maybe_node: &'a Option<Ref<Node<A>>>) {
-        if let Some(ref node) = *maybe_node {
-            self.back_stack.push(IterItem::Consider(&node))
+    fn step_back(path: &mut Vec<(&'a Node<A>, usize)>) -> Option<&'a A> {
+        match path.pop() {
+            Some((node, index)) => match node.children[index] {
+                Some(ref child) => {
+                    path.push((node, index));
+                    let mut end = child.keys.len() - 1;
+                    path.push((child, end));
+                    let mut node = child;
+                    while let Some(ref right_child) = node.children[end + 1] {
+                        end = right_child.keys.len() - 1;
+                        path.push((right_child, end));
+                        node = right_child;
+                    }
+                    Some(&node.keys[end])
+                }
+                None => {
+                    if index == 0 {
+                        loop {
+                            match path.pop() {
+                                None => {
+                                    return None;
+                                }
+                                Some((node, index)) => {
+                                    if index > 0 {
+                                        let index = index - 1;
+                                        path.push((node, index));
+                                        return Some(&node.keys[index]);
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        let index = index - 1;
+                        path.push((node, index));
+                        Some(&node.keys[index])
+                    }
+                }
+            },
+            None => None,
         }
-    }
-
-    fn push_back(&mut self, node: &'a Node<A>) {
-        for i in 0..node.keys.len() {
-            self.push_node_back(&node.children[i]);
-            self.back_stack.push(IterItem::Yield(&node.keys[i]));
-        }
-        self.push_node_back(&node.children[node.keys.len()]);
     }
 }
 
-impl<'a, A> Iterator for Iter<'a, A>
-where
-    A: 'a + BTreeValue,
-{
+impl<'a, A: 'a + BTreeValue> Iterator for Iter<'a, A> {
     type Item = &'a A;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match self.fwd_stack.pop() {
-                None => {
-                    self.remaining = 0;
-                    return None;
-                }
-                Some(IterItem::Consider(node)) => self.push_fwd(&node),
-                Some(IterItem::Yield(value)) => {
-                    if let Some(ref last) = self.back_last {
-                        if value.cmp_values(last) != Ordering::Less {
-                            self.fwd_stack.clear();
-                            self.back_stack.clear();
-                            self.remaining = 0;
-                            return None;
-                        }
-                    }
+        match Iter::get(&self.fwd_path) {
+            None => None,
+            Some(value) => match Iter::get(&self.back_path) {
+                Some(last_value) if value.cmp_values(last_value) == Ordering::Greater => None,
+                None => None,
+                Some(_) => {
+                    Iter::step_forward(&mut self.fwd_path);
                     self.remaining -= 1;
-                    self.fwd_last = Some(value);
-                    return Some(value);
+                    Some(value)
                 }
-            }
+            },
         }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.remaining, Some(self.remaining))
+        // (0, Some(self.remaining))
+        (0, None)
     }
 }
 
-impl<'a, A> DoubleEndedIterator for Iter<'a, A>
-where
-    A: 'a + BTreeValue,
-{
+impl<'a, A: 'a + BTreeValue> DoubleEndedIterator for Iter<'a, A> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        loop {
-            match self.back_stack.pop() {
-                None => {
-                    self.remaining = 0;
-                    return None;
-                }
-                Some(IterItem::Consider(node)) => self.push_back(&node),
-                Some(IterItem::Yield(value)) => {
-                    if let Some(ref last) = self.fwd_last {
-                        if value.cmp_values(last) != Ordering::Greater {
-                            self.fwd_stack.clear();
-                            self.back_stack.clear();
-                            self.remaining = 0;
-                            return None;
-                        }
-                    }
+        match Iter::get(&self.back_path) {
+            None => None,
+            Some(value) => match Iter::get(&self.fwd_path) {
+                Some(last_value) if value.cmp_values(last_value) == Ordering::Less => None,
+                None => None,
+                Some(_) => {
+                    Iter::step_back(&mut self.back_path);
                     self.remaining -= 1;
-                    self.back_last = Some(value);
-                    return Some(value);
+                    Some(value)
                 }
-            }
+            },
         }
     }
 }
 
-impl<'a, A: 'a + BTreeValue> ExactSizeIterator for Iter<'a, A> {}
-
 // Consuming iterator
+
+enum IterItem<'a, A: 'a> {
+    Consider(&'a Node<A>),
+    Yield(&'a A),
+}
 
 enum ConsumingIterItem<A> {
     Consider(Node<A>),
@@ -923,6 +1101,21 @@ impl<'a, A: 'a> DiffIter<'a, A> {
             },
         }
     }
+
+    fn push_node(stack: &mut Vec<IterItem<'a, A>>, maybe_node: &'a Option<Ref<Node<A>>>) {
+        if let Some(ref node) = *maybe_node {
+            stack.push(IterItem::Consider(&node))
+        }
+    }
+
+    fn push(stack: &mut Vec<IterItem<'a, A>>, node: &'a Node<A>) {
+        for n in 0..node.keys.len() {
+            let i = node.keys.len() - n;
+            Self::push_node(stack, &node.children[i]);
+            stack.push(IterItem::Yield(&node.keys[i - 1]));
+        }
+        Self::push_node(stack, &node.children[0]);
+    }
 }
 
 impl<'a, A> Iterator for DiffIter<'a, A>
@@ -936,46 +1129,48 @@ where
             match (self.old_stack.pop(), self.new_stack.pop()) {
                 (None, None) => return None,
                 (None, Some(new)) => match new {
-                    IterItem::Consider(new) => Iter::push(&mut self.new_stack, &new),
+                    IterItem::Consider(new) => Self::push(&mut self.new_stack, &new),
                     IterItem::Yield(new) => return Some(DiffItem::Add(new)),
                 },
                 (Some(old), None) => match old {
-                    IterItem::Consider(old) => Iter::push(&mut self.old_stack, &old),
+                    IterItem::Consider(old) => Self::push(&mut self.old_stack, &old),
                     IterItem::Yield(old) => return Some(DiffItem::Remove(old)),
                 },
                 (Some(old), Some(new)) => match (old, new) {
                     (IterItem::Consider(old), IterItem::Consider(new)) => {
                         match old.keys[0].cmp_values(&new.keys[0]) {
                             Ordering::Less => {
-                                Iter::push(&mut self.old_stack, &old);
+                                Self::push(&mut self.old_stack, &old);
                                 self.new_stack.push(IterItem::Consider(new));
                             }
                             Ordering::Greater => {
                                 self.old_stack.push(IterItem::Consider(old));
-                                Iter::push(&mut self.new_stack, &new);
+                                Self::push(&mut self.new_stack, &new);
                             }
                             Ordering::Equal => {
-                                Iter::push(&mut self.old_stack, &old);
-                                Iter::push(&mut self.new_stack, &new);
+                                Self::push(&mut self.old_stack, &old);
+                                Self::push(&mut self.new_stack, &new);
                             }
                         }
                     }
                     (IterItem::Consider(old), IterItem::Yield(new)) => {
-                        Iter::push(&mut self.old_stack, &old);
+                        Self::push(&mut self.old_stack, &old);
                         self.new_stack.push(IterItem::Yield(new));
                     }
                     (IterItem::Yield(old), IterItem::Consider(new)) => {
                         self.old_stack.push(IterItem::Yield(old));
-                        Iter::push(&mut self.new_stack, &new);
+                        Self::push(&mut self.new_stack, &new);
                     }
                     (IterItem::Yield(old), IterItem::Yield(new)) => match old.cmp_values(&new) {
                         Ordering::Less => {
                             self.new_stack.push(IterItem::Yield(new));
                             return Some(DiffItem::Remove(old));
                         }
-                        Ordering::Equal => if old != new {
-                            return Some(DiffItem::Update { old, new });
-                        },
+                        Ordering::Equal => {
+                            if old != new {
+                                return Some(DiffItem::Update { old, new });
+                            }
+                        }
                         Ordering::Greater => {
                             self.old_stack.push(IterItem::Yield(old));
                             return Some(DiffItem::Add(new));

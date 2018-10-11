@@ -24,7 +24,7 @@ use std::fmt::{Debug, Error, Formatter};
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::{FromIterator, Iterator, Sum};
 use std::mem;
-use std::ops::{Add, Index, IndexMut};
+use std::ops::{Add, Index, IndexMut, RangeBounds};
 
 use hashmap::HashMap;
 use nodes::btree::{BTreeValue, Insert, Node, Remove};
@@ -32,7 +32,7 @@ use nodes::btree::{BTreeValue, Insert, Node, Remove};
 use util::linear_search_by;
 use util::Ref;
 
-pub use nodes::btree::{ConsumingIter, DiffItem, DiffIter, Iter};
+pub use nodes::btree::{ConsumingIter, DiffItem, DiffIter, Iter as RangedIter};
 
 /// Construct a map from a sequence of key/value pairs.
 ///
@@ -296,8 +296,21 @@ where
 
     /// Get an iterator over the key/value pairs of a map.
     #[must_use]
-    pub fn iter(&self) -> Iter<'_, (K, V)> {
-        Iter::new(&self.root, self.size)
+    pub fn iter(&self) -> Iter<(K, V)> {
+        Iter {
+            it: RangedIter::new(&self.root, self.size, ..),
+        }
+    }
+
+    // Create an iterator over a range of key/value pairs.
+    #[must_use]
+    pub fn range<R, BK>(&self, range: R) -> RangedIter<(K, V)>
+    where
+        R: RangeBounds<BK>,
+        K: Borrow<BK>,
+        BK: Ord + ?Sized,
+    {
+        RangedIter::new(&self.root, self.size, range)
     }
 
     /// Get an iterator over a map's keys.
@@ -898,9 +911,11 @@ where
                 None => {
                     out.insert(key, right_value);
                 }
-                Some(left_value) => if let Some(final_value) = f(&key, left_value, right_value) {
-                    out.insert(key, final_value);
-                },
+                Some(left_value) => {
+                    if let Some(final_value) = f(&key, left_value, right_value) {
+                        out.insert(key, final_value);
+                    }
+                }
             }
         }
         out.union(self)
@@ -1510,6 +1525,36 @@ where
 
 // Iterators
 
+pub struct Iter<'a, A: 'a> {
+    it: RangedIter<'a, A>,
+}
+
+impl<'a, A> Iterator for Iter<'a, A>
+where
+    A: 'a + BTreeValue,
+{
+    type Item = &'a A;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.it.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.it.remaining, Some(self.it.remaining))
+    }
+}
+
+impl<'a, A> DoubleEndedIterator for Iter<'a, A>
+where
+    A: 'a + BTreeValue,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.it.next_back()
+    }
+}
+
+impl<'a, A> ExactSizeIterator for Iter<'a, A> where A: 'a + BTreeValue {}
+
 pub struct Keys<'a, K: 'a, V: 'a> {
     it: Iter<'a, (K, V)>,
 }
@@ -1813,7 +1858,8 @@ pub mod proptest {
             .prop_map(OrdMap::from)
             .prop_filter("OrdMap minimum size".to_owned(), move |m| {
                 m.len() >= size.start
-            }).boxed()
+            })
+            .boxed()
     }
 }
 
@@ -2000,6 +2046,31 @@ mod test {
         assert_eq!(Some(3), map.remove("baz"));
         map["bar"] = 8;
         assert_eq!(8, map["bar"]);
+    }
+
+    #[test]
+    fn ranged_iter() {
+        let map: OrdMap<i32, i32> = ordmap![1=>2, 2=>3, 3=>4, 4=>5, 5=>6];
+        let range: Vec<(i32, i32)> = map.range(..).cloned().collect();
+        assert_eq!(vec![(1, 2), (2, 3), (3, 4), (4, 5), (5, 6)], range);
+        let range: Vec<(i32, i32)> = map.range(..).rev().cloned().collect();
+        assert_eq!(vec![(5, 6), (4, 5), (3, 4), (2, 3), (1, 2)], range);
+        let range: Vec<(i32, i32)> = map.range(2..5).cloned().collect();
+        assert_eq!(vec![(2, 3), (3, 4), (4, 5)], range);
+        let range: Vec<(i32, i32)> = map.range(2..5).rev().cloned().collect();
+        assert_eq!(vec![(4, 5), (3, 4), (2, 3)], range);
+        let range: Vec<(i32, i32)> = map.range(3..).cloned().collect();
+        assert_eq!(vec![(3, 4), (4, 5), (5, 6)], range);
+        let range: Vec<(i32, i32)> = map.range(3..).rev().cloned().collect();
+        assert_eq!(vec![(5, 6), (4, 5), (3, 4)], range);
+        let range: Vec<(i32, i32)> = map.range(..4).cloned().collect();
+        assert_eq!(vec![(1, 2), (2, 3), (3, 4)], range);
+        let range: Vec<(i32, i32)> = map.range(..4).rev().cloned().collect();
+        assert_eq!(vec![(3, 4), (2, 3), (1, 2)], range);
+        let range: Vec<(i32, i32)> = map.range(..=3).cloned().collect();
+        assert_eq!(vec![(1, 2), (2, 3), (3, 4)], range);
+        let range: Vec<(i32, i32)> = map.range(..=3).rev().cloned().collect();
+        assert_eq!(vec![(3, 4), (2, 3), (1, 2)], range);
     }
 
     quickcheck! {
