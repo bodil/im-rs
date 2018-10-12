@@ -101,6 +101,65 @@
 //! optimisations - and you may find, especially for larger data sets,
 //! that immutable data structures are still the right choice.
 //!
+//! ## Values
+//!
+//! Because we need to make copies of shared nodes in these data structures
+//! before updating them, the values you store in them must implement
+//! [`Clone`][std::clone::Clone].  For primitive values that implement
+//! [`Copy`][std::marker::Copy], such as numbers, everything is fine: this is
+//! the case for which the data structures are optimised, and performance is
+//! going to be great.
+//!
+//! On the other hand, if you want to store values for which cloning is
+//! expensive, or values that don't implement [`Clone`][std::clone::Clone], you
+//! need to wrap them in [`Rc`][std::rc::Rc] or [`Arc`][std::sync::Arc]. Thus,
+//! if you have a complex structure `BigBlobOfData` and you want to store a list
+//! of them as a `Vector<BigBlobOfData>`, you should instead use a
+//! `Vector<Rc<BigBlobOfData>>`, which is going to save you not only the time
+//! spent cloning the big blobs of data, but also the memory spent keeping
+//! multiple copies of it around, as [`Rc`][std::rc::Rc] keeps a single
+//! reference counted copy around instead.
+//!
+//! If you're storing smaller values that aren't
+//! [`Copy`][std::marker::Copy]able, you'll need to exercise judgement: if your
+//! values are going to be very cheap to clone, as would be the case for short
+//! [`String`][std::string::String]s or small [`Vec`][std::vec::Vec]s, you're
+//! probably better off storing them directly without wrapping them in an
+//! [`Rc`][std::rc::Rc], because, like the [`Rc`][std::rc::Rc], they're just
+//! pointers to some data on the heap, and that data isn't expensive to clone -
+//! you might actually lose more performance from the extra redirection of
+//! wrapping them in an [`Rc`][std::rc::Rc] than you would from occasionally
+//! cloning them.
+//!
+//! ### When does cloning happen?
+//!
+//! So when will your values actually be cloned? The easy answer is only if you
+//! [`clone`][std::clone::Clone::clone] the data structure itself, and then only
+//! lazily as you change it. Values are stored in tree nodes inside the data
+//! structure, each node of which contains up to 64 values. When you
+//! [`clone`][std::clone::Clone::clone] a data structure, nothing is actually
+//! copied - it's just the reference count on the root node that's incremented,
+//! to indicate that it's shared between two data structures. It's only when you
+//! actually modify one of the shared data structures that nodes are cloned:
+//! when you make a change somewhere in the tree, the node containing the change
+//! needs to be cloned, and then its parent nodes need to be updated to contain
+//! the new child node instead of the old version, and so they're cloned as
+//! well.
+//!
+//! We can call this "lazy" cloning - if you make two copies of a data structure
+//! and you never change either of them, there's never any need to clone the
+//! data they contain. It's only when you start making changes that cloning
+//! starts to happen, and then only on the specific tree nodes that are part of
+//! the change. Note that the implications of lazily cloning the data structure
+//! extend to memory usage as well as the CPU workload of copying the data
+//! around - cloning an immutable data structure means both copies share the
+//! same allocated memory, until you start making changes.
+//!
+//! Most crucially, if you never clone the data structure, the data inside it is
+//! also never cloned, and in this case it acts just like a mutable data
+//! structure, with minimal performance differences (but still non-zero, as we
+//! still have to check for shared nodes).
+//!
 //! ## Data Structures
 //!
 //! We'll attempt to provide a comprehensive guide to the available
@@ -252,12 +311,14 @@
 //! [std::collections]: https://doc.rust-lang.org/std/collections/index.html
 //! [std::collections::VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
 //! [std::vec::Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
+//! [std::string::String]: https://doc.rust-lang.org/std/string/struct.String.html
 //! [std::rc::Rc]: https://doc.rust-lang.org/std/rc/struct.Rc.html
 //! [std::sync::Arc]: https://doc.rust-lang.org/std/sync/struct.Arc.html
 //! [std::cmp::Eq]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
 //! [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 //! [std::clone::Clone]: https://doc.rust-lang.org/std/clone/trait.Clone.html
 //! [std::clone::Clone::clone]: https://doc.rust-lang.org/std/clone/trait.Clone.html#tymethod.clone
+//! [std::marker::Copy]: https://doc.rust-lang.org/std/marker/trait.Copy.html
 //! [std::hash::Hash]: https://doc.rust-lang.org/std/hash/trait.Hash.html
 //! [std::marker::Send]: https://doc.rust-lang.org/std/marker/trait.Send.html
 //! [std::marker::Sync]: https://doc.rust-lang.org/std/marker/trait.Sync.html
