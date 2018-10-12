@@ -2349,20 +2349,20 @@ mod test {
 
     #[test]
     fn large_vector_focus() {
-        let input = Vector::from_iter(0..100000);
+        let input = Vector::from_iter(0..100_000);
         let vec = input.clone();
         let mut sum: i64 = 0;
         let mut focus = vec.focus();
         for i in 0..input.len() {
             sum += *focus.index(i);
         }
-        let expected: i64 = (0..100000).sum();
+        let expected: i64 = (0..100_000).sum();
         assert_eq!(expected, sum);
     }
 
     #[test]
     fn large_vector_focus_mut() {
-        let input = Vector::from_iter(0..100000);
+        let input = Vector::from_iter(0..100_000);
         let mut vec = input.clone();
         {
             let mut focus = vec.focus_mut();

@@ -956,9 +956,11 @@ where
                 None => {
                     out.insert(key, right_value);
                 }
-                Some(left_value) => if let Some(final_value) = f(&key, left_value, right_value) {
-                    out.insert(key, final_value);
-                },
+                Some(left_value) => {
+                    if let Some(final_value) = f(&key, left_value, right_value) {
+                        out.insert(key, final_value);
+                    }
+                }
             }
         }
         out.union(self)
@@ -1946,7 +1948,8 @@ pub mod proptest {
             .prop_map(HashMap::from)
             .prop_filter("Map minimum size".to_owned(), move |m| {
                 m.len() >= size.start
-            }).boxed()
+            })
+            .boxed()
     }
 }
 
@@ -1962,11 +1965,11 @@ mod test {
 
     #[test]
     fn safe_mutation() {
-        let v1: HashMap<usize, usize> = HashMap::from_iter((0..131072).map(|i| (i, i)));
+        let v1: HashMap<usize, usize> = HashMap::from_iter((0..131_072).map(|i| (i, i)));
         let mut v2 = v1.clone();
-        v2.insert(131000, 23);
-        assert_eq!(Some(&23), v2.get(&131000));
-        assert_eq!(Some(&131000), v1.get(&131000));
+        v2.insert(131_000, 23);
+        assert_eq!(Some(&23), v2.get(&131_000));
+        assert_eq!(Some(&131_000), v1.get(&131_000));
     }
 
     #[test]
