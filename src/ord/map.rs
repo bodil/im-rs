@@ -1187,6 +1187,11 @@ where
         }
     }
 
+    /// Get the [`Entry`][Entry] for a key in the map for in-place manipulation.
+    ///
+    /// Time: O(log n)
+    ///
+    /// [Entry]: enum.Entry.html
     #[must_use]
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
         if self.contains_key(&key) {
@@ -1199,6 +1204,7 @@ where
 
 // Entries
 
+/// A handle for a key and its associated value.
 pub enum Entry<'a, K, V>
 where
     K: 'a + Ord + Clone,
@@ -1213,10 +1219,15 @@ where
     K: 'a + Ord + Clone,
     V: 'a + Clone,
 {
+    /// Insert the default value provided if there was no value
+    /// already, and return a mutable reference to the value.
     pub fn or_insert(self, default: V) -> &'a mut V {
         self.or_insert_with(|| default)
     }
 
+    /// Insert the default value from the provided function if there
+    /// was no value already, and return a mutable reference to the
+    /// value.
     pub fn or_insert_with<F>(self, default: F) -> &'a mut V
     where
         F: FnOnce() -> V,
@@ -1227,6 +1238,8 @@ where
         }
     }
 
+    /// Insert a default value if there was no value already, and
+    /// return a mutable reference to the value.
     pub fn or_default(self) -> &'a mut V
     where
         V: Default,
@@ -1234,6 +1247,7 @@ where
         self.or_insert_with(Default::default)
     }
 
+    /// Get the key for this entry.
     #[must_use]
     pub fn key(&self) -> &K {
         match self {
@@ -1242,6 +1256,8 @@ where
         }
     }
 
+    /// Call the provided function to modify the value if the value
+    /// exists.
     pub fn and_modify<F>(mut self, f: F) -> Self
     where
         F: FnOnce(&mut V),
@@ -1254,6 +1270,7 @@ where
     }
 }
 
+/// An entry for a mapping that already exists in the map.
 pub struct OccupiedEntry<'a, K, V>
 where
     K: 'a + Ord + Clone,
@@ -1268,41 +1285,49 @@ where
     K: 'a + Ord + Clone,
     V: 'a + Clone,
 {
+    /// Get the key for this entry.
     #[must_use]
     pub fn key(&self) -> &K {
         &self.key
     }
 
+    /// Remove this entry from the map and return the removed mapping.
     pub fn remove_entry(self) -> (K, V) {
         self.map
             .remove_with_key(&self.key)
             .expect("ordmap::OccupiedEntry::remove_entry: key has vanished!")
     }
 
+    /// Get the current value.
     #[must_use]
     pub fn get(&self) -> &V {
         self.map.get(&self.key).unwrap()
     }
 
+    /// Get a mutable reference to the current value.
     #[must_use]
     pub fn get_mut(&mut self) -> &mut V {
         self.map.get_mut(&self.key).unwrap()
     }
 
+    /// Convert this entry into a mutable reference.
     #[must_use]
     pub fn into_mut(self) -> &'a mut V {
         self.map.get_mut(&self.key).unwrap()
     }
 
+    /// Overwrite the current value.
     pub fn insert(&mut self, value: V) -> V {
         mem::replace(self.get_mut(), value)
     }
 
+    /// Remove this entry from the map and return the removed value.
     pub fn remove(self) -> V {
         self.remove_entry().1
     }
 }
 
+/// An entry for a mapping that does not already exist in the map.
 pub struct VacantEntry<'a, K, V>
 where
     K: 'a + Ord + Clone,
@@ -1317,16 +1342,19 @@ where
     K: 'a + Ord + Clone,
     V: 'a + Clone,
 {
+    /// Get the key for this entry.
     #[must_use]
     pub fn key(&self) -> &K {
         &self.key
     }
 
+    /// Convert this entry into its key.
     #[must_use]
     pub fn into_key(self) -> K {
         self.key
     }
 
+    /// Insert a value into this entry.
     pub fn insert(self, value: V) -> &'a mut V {
         self.map.insert(self.key.clone(), value);
         // TODO insert_mut ought to return this reference
