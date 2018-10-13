@@ -209,7 +209,7 @@ impl<A, N: Bits + ChunkLength<A>> IntoIterator for SparseChunk<A, N> {
     }
 }
 
-pub struct Iter<'a, A: 'a, N: Bits + ChunkLength<A>> {
+pub struct Iter<'a, A: 'a, N: 'a + Bits + ChunkLength<A>> {
     indices: BitmapIter<N>,
     chunk: &'a SparseChunk<A, N>,
 }
@@ -222,7 +222,7 @@ impl<'a, A, N: Bits + ChunkLength<A>> Iterator for Iter<'a, A, N> {
     }
 }
 
-pub struct IterMut<'a, A: 'a, N: Bits + ChunkLength<A>> {
+pub struct IterMut<'a, A: 'a, N: 'a + Bits + ChunkLength<A>> {
     indices: BitmapIter<N>,
     chunk: &'a mut SparseChunk<A, N>,
 }
