@@ -3,15 +3,36 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::borrow::Borrow;
+use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::FusedIterator;
 use std::slice::{Iter as SliceIter, IterMut as SliceIterMut};
 use std::{mem, ptr};
 
-use nodes::bitmap::{mask, HashBits, HASH_SHIFT, HASH_SIZE};
+use typenum::{Pow, Unsigned, U2};
+
+use config::HashLevelSize;
 use nodes::sparse_chunk::{
     Drain as ChunkDrain, Iter as ChunkIter, IterMut as ChunkIterMut, SparseChunk,
 };
+use nodes::types::Bits;
 use util::{clone_ref, Ref};
+
+pub type HashWidth = <U2 as Pow<HashLevelSize>>::Output;
+pub type HashBits = <HashWidth as Bits>::Store; // a uint of HASH_SIZE bits
+pub const HASH_SHIFT: usize = HashLevelSize::USIZE;
+pub const HASH_WIDTH: usize = HashWidth::USIZE;
+pub const HASH_MASK: HashBits = (HASH_WIDTH - 1) as HashBits;
+
+pub fn hash_key<K: Hash + ?Sized, S: BuildHasher>(bh: &S, key: &K) -> HashBits {
+    let mut hasher = bh.build_hasher();
+    key.hash(&mut hasher);
+    hasher.finish() as HashBits
+}
+
+#[inline]
+fn mask(hash: HashBits, shift: usize) -> HashBits {
+    hash >> shift & HASH_MASK
+}
 
 pub trait HashValue: Clone {
     type Key: Eq;
@@ -22,7 +43,7 @@ pub trait HashValue: Clone {
 
 #[derive(Clone)]
 pub struct Node<A> {
-    data: SparseChunk<Entry<A>>,
+    data: SparseChunk<Entry<A>, HashWidth>,
 }
 
 #[derive(Clone)]
@@ -130,7 +151,7 @@ impl<A: HashValue> Node<A> {
                 index2,
                 Entry::Value(value2, hash2),
             )
-        } else if shift + HASH_SHIFT >= HASH_SIZE {
+        } else if shift + HASH_SHIFT >= HASH_WIDTH {
             // If we're at the bottom, we've got a collision.
             Node::unit(
                 index1,
@@ -151,11 +172,13 @@ impl<A: HashValue> Node<A> {
         let index = mask(hash, shift) as usize;
         if let Some(entry) = self.data.get(index) {
             match entry {
-                Entry::Value(ref value, _) => if key == value.extract_key().borrow() {
-                    Some(value)
-                } else {
-                    None
-                },
+                Entry::Value(ref value, _) => {
+                    if key == value.extract_key().borrow() {
+                        Some(value)
+                    } else {
+                        None
+                    }
+                }
                 Entry::Collision(ref coll) => coll.get(key),
                 Entry::Node(ref child) => child.get(hash, shift + HASH_SHIFT, key),
             }
@@ -172,11 +195,13 @@ impl<A: HashValue> Node<A> {
         let index = mask(hash, shift) as usize;
         if let Some(entry) = self.data.get_mut(index) {
             match entry {
-                Entry::Value(ref mut value, _) => if key == value.extract_key().borrow() {
-                    Some(value)
-                } else {
-                    None
-                },
+                Entry::Value(ref mut value, _) => {
+                    if key == value.extract_key().borrow() {
+                        Some(value)
+                    } else {
+                        None
+                    }
+                }
                 Entry::Collision(ref mut coll_ref) => {
                     let coll = Ref::make_mut(coll_ref);
                     coll.get_mut(key)
@@ -224,7 +249,7 @@ impl<A: HashValue> Node<A> {
                 // that we overwrite it with the merged node.
                 #[allow(unsafe_code)]
                 let old_entry = unsafe { ptr::read(entry) };
-                if shift + HASH_SHIFT >= HASH_SIZE {
+                if shift + HASH_SHIFT >= HASH_WIDTH {
                     // We're at the lowest level, need to set up a collision node.
                     let coll = CollisionNode::new(hash, old_entry.unwrap_value(), value);
                     #[allow(unsafe_code)]
@@ -386,8 +411,8 @@ where
     A: 'a,
 {
     count: usize,
-    stack: Vec<ChunkIter<'a, Entry<A>>>,
-    current: ChunkIter<'a, Entry<A>>,
+    stack: Vec<ChunkIter<'a, Entry<A>, HashWidth>>,
+    current: ChunkIter<'a, Entry<A>, HashWidth>,
     collision: Option<(HashBits, SliceIter<'a, A>)>,
 }
 
@@ -398,7 +423,7 @@ where
     pub fn new(root: &'a Node<A>, size: usize) -> Self {
         Iter {
             count: size,
-            stack: Vec::with_capacity((HASH_SIZE / HASH_SHIFT) + 1),
+            stack: Vec::with_capacity((HASH_WIDTH / HASH_SHIFT) + 1),
             current: root.data.iter(),
             collision: None,
         }
@@ -468,8 +493,8 @@ where
     A: 'a,
 {
     count: usize,
-    stack: Vec<ChunkIterMut<'a, Entry<A>>>,
-    current: ChunkIterMut<'a, Entry<A>>,
+    stack: Vec<ChunkIterMut<'a, Entry<A>, HashWidth>>,
+    current: ChunkIterMut<'a, Entry<A>, HashWidth>,
     collision: Option<(HashBits, SliceIterMut<'a, A>)>,
 }
 
@@ -480,7 +505,7 @@ where
     pub fn new(root: &'a mut Node<A>, size: usize) -> Self {
         IterMut {
             count: size,
-            stack: Vec::with_capacity((HASH_SIZE / HASH_SHIFT) + 1),
+            stack: Vec::with_capacity((HASH_WIDTH / HASH_SHIFT) + 1),
             current: root.data.iter_mut(),
             collision: None,
         }
@@ -552,8 +577,8 @@ where
     A: HashValue,
 {
     count: usize,
-    stack: Vec<ChunkDrain<Entry<A>>>,
-    current: ChunkDrain<Entry<A>>,
+    stack: Vec<ChunkDrain<Entry<A>, HashWidth>>,
+    current: ChunkDrain<Entry<A>, HashWidth>,
     collision: Option<CollisionNode<A>>,
 }
 

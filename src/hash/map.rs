@@ -33,8 +33,10 @@ use std::iter::{FromIterator, FusedIterator, Sum};
 use std::mem;
 use std::ops::{Add, Index, IndexMut};
 
-use nodes::bitmap::{hash_key, HashBits};
-use nodes::hamt::{Drain as NodeDrain, HashValue, Iter as NodeIter, IterMut as NodeIterMut, Node};
+use nodes::hamt::{
+    hash_key, Drain as NodeDrain, HashBits, HashValue, Iter as NodeIter, IterMut as NodeIterMut,
+    Node,
+};
 use util::Ref;
 
 /// Construct a hash map from a sequence of key/value pairs.

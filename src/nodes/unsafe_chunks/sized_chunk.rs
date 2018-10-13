@@ -12,7 +12,6 @@ use std::fmt::{Debug, Error, Formatter};
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::iter::{FromIterator, FusedIterator};
-use std::marker::PhantomData;
 use std::mem::{self, replace, ManuallyDrop};
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::ptr;
@@ -20,45 +19,9 @@ use std::slice::{
     from_raw_parts, from_raw_parts_mut, Iter as SliceIter, IterMut as SliceIterMut, SliceIndex,
 };
 
-use typenum::{UInt, UTerm, Unsigned, B0, B1, U64};
+use typenum::U64;
 
-pub trait ChunkLength<A>: Unsigned {
-    type SizedType;
-}
-
-impl<A> ChunkLength<A> for UTerm {
-    type SizedType = ();
-}
-
-#[doc(hidden)]
-#[allow(dead_code)]
-pub struct SizeEven<A, B> {
-    parent1: B,
-    parent2: B,
-    _marker: PhantomData<A>,
-}
-
-#[doc(hidden)]
-#[allow(dead_code)]
-pub struct SizeOdd<A, B> {
-    parent1: B,
-    parent2: B,
-    data: A,
-}
-
-impl<A, N> ChunkLength<A> for UInt<N, B0>
-where
-    N: ChunkLength<A>,
-{
-    type SizedType = SizeEven<A, N::SizedType>;
-}
-
-impl<A, N> ChunkLength<A> for UInt<N, B1>
-where
-    N: ChunkLength<A>,
-{
-    type SizedType = SizeOdd<A, N::SizedType>;
-}
+use nodes::types::ChunkLength;
 
 /// A fixed capacity smart array.
 ///

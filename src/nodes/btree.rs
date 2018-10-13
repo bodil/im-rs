@@ -940,11 +940,6 @@ impl<'a, A: 'a + BTreeValue> DoubleEndedIterator for Iter<'a, A> {
 
 // Consuming iterator
 
-enum IterItem<'a, A: 'a> {
-    Consider(&'a Node<A>),
-    Yield(&'a A),
-}
-
 enum ConsumingIterItem<A> {
     Consider(Node<A>),
     Yield(A),
@@ -1084,6 +1079,11 @@ pub enum DiffItem<'a, A: 'a> {
     Add(&'a A),
     Update { old: &'a A, new: &'a A },
     Remove(&'a A),
+}
+
+enum IterItem<'a, A: 'a> {
+    Consider(&'a Node<A>),
+    Yield(&'a A),
 }
 
 impl<'a, A: 'a> DiffIter<'a, A> {

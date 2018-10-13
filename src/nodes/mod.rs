@@ -6,6 +6,7 @@ pub mod bitmap;
 pub mod btree;
 pub mod hamt;
 pub mod rrb;
+mod types;
 
 mod unsafe_chunks;
 pub use self::unsafe_chunks::{chunk, sized_chunk, sparse_chunk};

@@ -33,8 +33,9 @@ use std::iter::FusedIterator;
 use std::iter::{FromIterator, IntoIterator, Sum};
 use std::ops::{Add, Deref, Mul};
 
-use nodes::bitmap::hash_key;
-use nodes::hamt::{Drain as NodeDrain, HashValue, Iter as NodeIter, IterMut as NodeIterMut, Node};
+use nodes::hamt::{
+    hash_key, Drain as NodeDrain, HashValue, Iter as NodeIter, IterMut as NodeIterMut, Node,
+};
 use ordset::OrdSet;
 use util::Ref;
 

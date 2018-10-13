@@ -2,31 +2,30 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::hash::{BuildHasher, Hash, Hasher};
+use nodes::types::Bits;
 
-pub use config::{HashBits, HASH_SHIFT, HASH_SIZE};
-
-pub const HASH_MASK: HashBits = (HASH_SIZE - 1) as HashBits;
-//pub const HASH_COERCE: u64 = ((1 << HASH_SIZE as u64) - 1);
-
-#[inline]
-pub fn mask(hash: HashBits, shift: usize) -> HashBits {
-    hash >> shift & HASH_MASK
+#[derive(PartialEq, Eq)]
+pub struct Bitmap<Size: Bits> {
+    data: Size::Store,
 }
 
-pub fn hash_key<K: Hash + ?Sized, S: BuildHasher>(bh: &S, key: &K) -> HashBits {
-    let mut hasher = bh.build_hasher();
-    key.hash(&mut hasher);
-    // (hasher.finish() & HASH_COERCE) as HashBits
-    hasher.finish() as HashBits
+impl<Size: Bits> Clone for Bitmap<Size> {
+    fn clone(&self) -> Self {
+        Bitmap { data: self.data }
+    }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Default)]
-pub struct Bitmap {
-    data: HashBits,
+impl<Size: Bits> Copy for Bitmap<Size> {}
+
+impl<Size: Bits> Default for Bitmap<Size> {
+    fn default() -> Self {
+        Bitmap {
+            data: Size::Store::default(),
+        }
+    }
 }
 
-impl Bitmap {
+impl<Size: Bits> Bitmap<Size> {
     #[inline]
     pub fn new() -> Self {
         Self::default()
@@ -34,30 +33,23 @@ impl Bitmap {
 
     #[inline]
     pub fn get(self, index: usize) -> bool {
-        self.data & (1 << index) != 0
+        Size::get(&self.data, index)
     }
 
     #[inline]
     pub fn set(&mut self, index: usize, value: bool) -> bool {
-        let mask = 1 << index;
-        let prev = self.data & mask;
-        if value {
-            self.data |= mask;
-        } else {
-            self.data &= !mask;
-        }
-        prev != 0
+        Size::set(&mut self.data, index, value)
     }
 
     #[inline]
     pub fn len(self) -> usize {
-        self.data.count_ones() as usize
+        Size::len(&self.data)
     }
 }
 
-impl IntoIterator for Bitmap {
+impl<Size: Bits> IntoIterator for Bitmap<Size> {
     type Item = usize;
-    type IntoIter = Iter;
+    type IntoIter = Iter<Size>;
 
     fn into_iter(self) -> Self::IntoIter {
         Iter {
@@ -67,24 +59,22 @@ impl IntoIterator for Bitmap {
     }
 }
 
-pub struct Iter {
+pub struct Iter<Size: Bits> {
     index: usize,
-    data: HashBits,
+    data: Size::Store,
 }
 
-impl Iterator for Iter {
+impl<Size: Bits> Iterator for Iter<Size> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= HASH_SIZE {
+        if self.index >= Size::USIZE {
             return None;
         }
-        if self.data & 1 != 0 {
-            self.data >>= 1;
+        if Size::get(&self.data, self.index) {
             self.index += 1;
             Some(self.index - 1)
         } else {
-            self.data >>= 1;
             self.index += 1;
             self.next()
         }
