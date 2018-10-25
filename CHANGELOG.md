@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic
 Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `Vector::chunks` and `Vector::chunks_mut` have been deprecated and renamed to
+  `leaves` and `leaves_mut` to avoid confusion with `Vec::chunks`. (#50)
+
 ## [12.2.0] - 2018-10-12
 
 ### Added
