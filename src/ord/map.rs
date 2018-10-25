@@ -180,21 +180,34 @@ where
 
     /// Construct a map with a single mapping.
     ///
+    /// This method has been deprecated; use [`unit`][unit] instead.
+    ///
+    /// [unit]: #method.unit
+    #[inline]
+    #[must_use]
+    #[deprecated(since = "12.3.0", note = "renamed to `unit` for consistency")]
+    pub fn singleton(key: K, value: V) -> Self {
+        Self::unit(key, value)
+    }
+
+    /// Construct a map with a single mapping.
+    ///
     /// # Examples
     ///
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
     /// # fn main() {
-    /// let map = OrdMap::singleton(123, "onetwothree");
+    /// let map = OrdMap::unit(123, "onetwothree");
     /// assert_eq!(
     ///   map.get(&123),
     ///   Some(&"onetwothree")
     /// );
     /// # }
     /// ```
+    #[inline]
     #[must_use]
-    pub fn singleton(key: K, value: V) -> Self {
+    pub fn unit(key: K, value: V) -> Self {
         OrdMap {
             size: 1,
             root: Ref::from(Node::unit((key, value))),
@@ -1623,7 +1636,8 @@ impl<'a, K, V> ExactSizeIterator for Keys<'a, K, V>
 where
     K: 'a + Ord + Clone,
     V: 'a + Clone,
-{}
+{
+}
 
 pub struct Values<'a, K: 'a, V: 'a> {
     it: Iter<'a, (K, V)>,
@@ -1665,7 +1679,8 @@ impl<'a, K, V> ExactSizeIterator for Values<'a, K, V>
 where
     K: 'a + Ord + Clone,
     V: 'a + Clone,
-{}
+{
+}
 
 impl<K, V, RK, RV> FromIterator<(RK, RV)> for OrdMap<K, V>
 where

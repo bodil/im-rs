@@ -190,18 +190,31 @@ where
 
     /// Construct a set with a single value.
     ///
+    /// This method has been deprecated; use [`unit`][unit] instead.
+    ///
+    /// [unit]: #method.unit
+    #[inline]
+    #[must_use]
+    #[deprecated(since = "12.3.0", note = "renamed to `unit` for consistency")]
+    pub fn singleton(a: A) -> Self {
+        Self::unit(a)
+    }
+
+    /// Construct a set with a single value.
+    ///
     /// # Examples
     ///
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordset::OrdSet;
     /// # fn main() {
-    /// let set = OrdSet::singleton(123);
+    /// let set = OrdSet::unit(123);
     /// assert!(set.contains(&123));
     /// # }
     /// ```
+    #[inline]
     #[must_use]
-    pub fn singleton(a: A) -> Self {
+    pub fn unit(a: A) -> Self {
         OrdSet {
             size: 1,
             root: Ref::from(Node::unit(Value(a))),

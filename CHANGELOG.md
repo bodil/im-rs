@@ -10,6 +10,7 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `singleton` methods have been deprecated and renamed to `unit`.
 - `Vector::chunks` and `Vector::chunks_mut` have been deprecated and renamed to
   `leaves` and `leaves_mut` to avoid confusion with `Vec::chunks`. (#50)
 

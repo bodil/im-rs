@@ -217,8 +217,36 @@ impl<A: Clone> Vector<A> {
     }
 
     /// Construct a vector with a single value.
+    ///
+    /// This method has been deprecated; use [`unit`][unit] instead.
+    ///
+    /// [unit]: #method.unit
+    #[inline]
     #[must_use]
+    #[deprecated(since = "12.3.0", note = "renamed to `unit` for consistency")]
     pub fn singleton(a: A) -> Self {
+        Self::unit(a)
+    }
+
+    /// Construct a vector with a single value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::vector::Vector;
+    /// # fn main() {
+    /// let vec = Vector::unit(1337);
+    /// assert_eq!(1, vec.len());
+    /// assert_eq!(
+    ///   vec.get(0),
+    ///   Some(&1337)
+    /// );
+    /// # }
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn unit(a: A) -> Self {
         Single(Ref::new(Chunk::unit(a)))
     }
 

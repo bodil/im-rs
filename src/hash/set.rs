@@ -139,6 +139,18 @@ where
 
     /// Construct a set with a single value.
     ///
+    /// This method has been deprecated; use [`unit`][unit] instead.
+    ///
+    /// [unit]: #method.unit
+    #[inline]
+    #[must_use]
+    #[deprecated(since = "12.3.0", note = "renamed to `unit` for consistency")]
+    pub fn singleton(a: A) -> Self {
+        Self::unit(a)
+    }
+
+    /// Construct a set with a single value.
+    ///
     /// # Examples
     ///
     /// ```
@@ -146,12 +158,13 @@ where
     /// # use im::hashset::HashSet;
     /// # use std::sync::Arc;
     /// # fn main() {
-    /// let set = HashSet::singleton(123);
+    /// let set = HashSet::unit(123);
     /// assert!(set.contains(&123));
     /// # }
     /// ```
+    #[inline]
     #[must_use]
-    pub fn singleton(a: A) -> Self {
+    pub fn unit(a: A) -> Self {
         HashSet::new().update(a)
     }
 }

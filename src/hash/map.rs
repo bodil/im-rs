@@ -140,13 +140,25 @@ where
 
     /// Construct a hash map with a single mapping.
     ///
+    /// This method has been deprecated; use [`unit`][unit] instead.
+    ///
+    /// [unit]: #method.unit
+    #[inline]
+    #[must_use]
+    #[deprecated(since = "12.3.0", note = "renamed to `unit` for consistency")]
+    pub fn singleton(k: K, v: V) -> HashMap<K, V> {
+        Self::unit(k, v)
+    }
+
+    /// Construct a hash map with a single mapping.
+    ///
     /// # Examples
     ///
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
     /// # fn main() {
-    /// let map = HashMap::singleton(123, "onetwothree");
+    /// let map = HashMap::unit(123, "onetwothree");
     /// assert_eq!(
     ///   map.get(&123),
     ///   Some(&"onetwothree")
@@ -155,7 +167,7 @@ where
     /// ```
     #[inline]
     #[must_use]
-    pub fn singleton(k: K, v: V) -> HashMap<K, V> {
+    pub fn unit(k: K, v: V) -> HashMap<K, V> {
         HashMap::new().update(k, v)
     }
 }
@@ -1397,7 +1409,8 @@ where
     K: Hash + Eq + Clone,
     V: Eq + Clone,
     S: BuildHasher,
-{}
+{
+}
 
 impl<K, V, S> PartialOrd for HashMap<K, V, S>
 where
