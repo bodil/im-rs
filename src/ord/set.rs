@@ -1003,7 +1003,7 @@ impl<A: Ord + Clone> From<Vec<A>> for OrdSet<A> {
 
 impl<'a, A: Ord + Clone> From<&'a Vec<A>> for OrdSet<A> {
     fn from(vec: &Vec<A>) -> Self {
-        vec.into_iter().cloned().collect()
+        vec.iter().cloned().collect()
     }
 }
 
@@ -1015,7 +1015,7 @@ impl<A: Eq + Hash + Ord + Clone> From<collections::HashSet<A>> for OrdSet<A> {
 
 impl<'a, A: Eq + Hash + Ord + Clone> From<&'a collections::HashSet<A>> for OrdSet<A> {
     fn from(hash_set: &collections::HashSet<A>) -> Self {
-        hash_set.into_iter().cloned().collect()
+        hash_set.iter().cloned().collect()
     }
 }
 
@@ -1027,7 +1027,7 @@ impl<A: Ord + Clone> From<collections::BTreeSet<A>> for OrdSet<A> {
 
 impl<'a, A: Ord + Clone> From<&'a collections::BTreeSet<A>> for OrdSet<A> {
     fn from(btree_set: &collections::BTreeSet<A>) -> Self {
-        btree_set.into_iter().cloned().collect()
+        btree_set.iter().cloned().collect()
     }
 }
 

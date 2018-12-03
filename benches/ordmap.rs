@@ -3,7 +3,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #![feature(test)]
-#![cfg_attr(feature = "cargo-clippy", allow(clippy::unreadable_literal))]
 
 extern crate im;
 extern crate rand;

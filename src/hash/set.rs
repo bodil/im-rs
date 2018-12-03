@@ -899,7 +899,7 @@ where
     S: BuildHasher + Default,
 {
     fn from(slice: &'a [A]) -> Self {
-        slice.into_iter().cloned().collect()
+        slice.iter().cloned().collect()
     }
 }
 
@@ -919,7 +919,7 @@ where
     S: BuildHasher + Default,
 {
     fn from(vec: &Vec<A>) -> Self {
-        vec.into_iter().cloned().collect()
+        vec.iter().cloned().collect()
     }
 }
 
@@ -939,7 +939,7 @@ where
     S: BuildHasher + Default,
 {
     fn from(hash_set: &collections::HashSet<A>) -> Self {
-        hash_set.into_iter().cloned().collect()
+        hash_set.iter().cloned().collect()
     }
 }
 
@@ -949,7 +949,7 @@ where
     S: BuildHasher + Default,
 {
     fn from(btree_set: &BTreeSet<A>) -> Self {
-        btree_set.into_iter().cloned().collect()
+        btree_set.iter().cloned().collect()
     }
 }
 
@@ -1054,8 +1054,8 @@ mod test {
 
     #[test]
     fn macro_allows_trailing_comma() {
-        let set1 = hashset!{"foo", "bar"};
-        let set2 = hashset!{
+        let set1 = hashset! {"foo", "bar"};
+        let set2 = hashset! {
             "foo",
             "bar",
         };

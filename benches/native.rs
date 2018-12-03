@@ -3,7 +3,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #![feature(test)]
-#![cfg_attr(feature = "cargo-clippy", allow(clippy::unreadable_literal))]
 
 extern crate im;
 extern crate rand;
@@ -133,7 +132,7 @@ fn vecdeque_push_front_mut_1000(b: &mut Bencher) {
 
 #[bench]
 fn vecdeque_push_front_mut_100000(b: &mut Bencher) {
-    vecdeque_push_front_mut(b, 100000)
+    vecdeque_push_front_mut(b, 100_000)
 }
 
 fn vecdeque_push_back_mut(b: &mut Bencher, count: usize) {
@@ -162,7 +161,7 @@ fn vecdeque_push_back_mut_1000(b: &mut Bencher) {
 
 #[bench]
 fn vecdeque_push_back_mut_100000(b: &mut Bencher) {
-    vecdeque_push_back_mut(b, 100000)
+    vecdeque_push_back_mut(b, 100_000)
 }
 
 fn vecdeque_pop_front_mut(b: &mut Bencher, count: usize) {
@@ -192,7 +191,7 @@ fn vecdeque_pop_front_mut_1000(b: &mut Bencher) {
 
 #[bench]
 fn vecdeque_pop_front_mut_100000(b: &mut Bencher) {
-    vecdeque_pop_front_mut(b, 100000)
+    vecdeque_pop_front_mut(b, 100_000)
 }
 
 fn vecdeque_pop_back_mut(b: &mut Bencher, count: usize) {
@@ -222,7 +221,7 @@ fn vecdeque_pop_back_mut_1000(b: &mut Bencher) {
 
 #[bench]
 fn vecdeque_pop_back_mut_100000(b: &mut Bencher) {
-    vecdeque_pop_back_mut(b, 100000)
+    vecdeque_pop_back_mut(b, 100_000)
 }
 
 fn vecdeque_split(b: &mut Bencher, count: usize) {
@@ -250,7 +249,7 @@ fn vecdeque_split_1000(b: &mut Bencher) {
 
 #[bench]
 fn vecdeque_split_100000(b: &mut Bencher) {
-    vecdeque_split(b, 100000)
+    vecdeque_split(b, 100_000)
 }
 
 fn vecdeque_append(b: &mut Bencher, count: usize) {
@@ -279,7 +278,7 @@ fn vecdeque_append_1000(b: &mut Bencher) {
 
 #[bench]
 fn vecdeque_append_100000(b: &mut Bencher) {
-    vecdeque_append(b, 100000)
+    vecdeque_append(b, 100_000)
 }
 
 fn vec_split(b: &mut Bencher, count: usize) {
@@ -307,7 +306,7 @@ fn vec_split_1000(b: &mut Bencher) {
 
 #[bench]
 fn vec_split_100000(b: &mut Bencher) {
-    vec_split(b, 100000)
+    vec_split(b, 100_000)
 }
 
 fn vec_append(b: &mut Bencher, count: usize) {
@@ -336,5 +335,5 @@ fn vec_append_1000(b: &mut Bencher) {
 
 #[bench]
 fn vec_append_100000(b: &mut Bencher) {
-    vec_append(b, 100000)
+    vec_append(b, 100_000)
 }

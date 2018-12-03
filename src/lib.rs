@@ -334,7 +334,6 @@
 //! [cons-list]: https://en.wikipedia.org/wiki/Cons#Lists
 
 #![deny(unsafe_code)]
-#![cfg_attr(feature = "cargo-clippy", allow(clippy::type_complexity))]
 #![cfg_attr(has_specialisation, feature(specialization))]
 #![cfg_attr(docs_rs_workaround, feature(slice_get_slice))]
 

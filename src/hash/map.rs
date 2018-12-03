@@ -1829,7 +1829,7 @@ where
     S: BuildHasher + Default,
 {
     fn from(m: &'a [(K, V)]) -> Self {
-        m.into_iter().cloned().collect()
+        m.iter().cloned().collect()
     }
 }
 
@@ -1851,7 +1851,7 @@ where
     S: BuildHasher + Default,
 {
     fn from(m: &'a Vec<(K, V)>) -> Self {
-        m.into_iter().cloned().collect()
+        m.iter().cloned().collect()
     }
 }
 
@@ -1873,7 +1873,7 @@ where
     S: BuildHasher + Default,
 {
     fn from(m: &'a collections::HashMap<K, V>) -> Self {
-        m.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        m.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 }
 
@@ -1895,7 +1895,7 @@ where
     S: BuildHasher + Default,
 {
     fn from(m: &'a collections::BTreeMap<K, V>) -> Self {
-        m.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        m.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 }
 
@@ -2028,7 +2028,7 @@ mod test {
     #[test]
     fn match_string_keys_with_string_slices() {
         let mut map: HashMap<String, i32> =
-            From::from(&hashmap!{ "foo" => &1, "bar" => &2, "baz" => &3 });
+            From::from(&hashmap! { "foo" => &1, "bar" => &2, "baz" => &3 });
         assert_eq!(Some(&1), map.get("foo"));
         map = map.without("foo");
         assert_eq!(Some(3), map.remove("baz"));
@@ -2038,8 +2038,8 @@ mod test {
 
     #[test]
     fn macro_allows_trailing_comma() {
-        let map1 = hashmap!{"x" => 1, "y" => 2};
-        let map2 = hashmap!{
+        let map1 = hashmap! {"x" => 1, "y" => 2};
+        let map2 = hashmap! {
             "x" => 1,
             "y" => 2,
         };
@@ -2066,7 +2066,7 @@ mod test {
 
     #[test]
     fn entry_api() {
-        let mut map = hashmap!{"bar" => 5};
+        let mut map = hashmap! {"bar" => 5};
         map.entry(&"foo").and_modify(|v| *v += 5).or_insert(1);
         assert_eq!(1, map[&"foo"]);
         map.entry(&"foo").and_modify(|v| *v += 5).or_insert(1);

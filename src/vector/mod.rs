@@ -1769,7 +1769,7 @@ where
 
 impl<'a, A: Clone> From<&'a [A]> for Vector<A> {
     fn from(slice: &[A]) -> Self {
-        slice.into_iter().cloned().collect()
+        slice.iter().cloned().collect()
     }
 }
 
@@ -1791,7 +1791,7 @@ impl<'a, A: Clone> From<&'a Vec<A>> for Vector<A> {
     ///
     /// [vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
     fn from(vec: &Vec<A>) -> Self {
-        vec.into_iter().cloned().collect()
+        vec.iter().cloned().collect()
     }
 }
 
@@ -2316,7 +2316,7 @@ pub mod rayon {
         use proptest::num::i32;
         use rayon::iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
 
-        proptest!{
+        proptest! {
             #[test]
             fn par_iter(ref mut input in vector(i32::ANY, 0..10000)) {
                 assert_eq!(input.iter().max(), input.par_iter().max())

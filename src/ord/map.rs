@@ -1757,7 +1757,7 @@ where
     RV: ToOwned<Owned = OV>,
 {
     fn from(m: &'a [(RK, RV)]) -> OrdMap<K, V> {
-        m.into_iter()
+        m.iter()
             .map(|&(ref k, ref v)| (k.to_owned(), v.to_owned()))
             .collect()
     }
@@ -1783,7 +1783,7 @@ where
     RV: ToOwned<Owned = OV>,
 {
     fn from(m: &'a Vec<(RK, RV)>) -> OrdMap<K, V> {
-        m.into_iter()
+        m.iter()
             .map(|&(ref k, ref v)| (k.to_owned(), v.to_owned()))
             .collect()
     }
@@ -1809,7 +1809,7 @@ where
     RV: ToOwned<Owned = OV>,
 {
     fn from(m: &'a collections::HashMap<RK, RV>) -> OrdMap<K, V> {
-        m.into_iter()
+        m.iter()
             .map(|(k, v)| (k.to_owned(), v.to_owned()))
             .collect()
     }
@@ -1835,7 +1835,7 @@ where
     RV: ToOwned<Owned = OV>,
 {
     fn from(m: &'a collections::BTreeMap<RK, RV>) -> OrdMap<K, V> {
-        m.into_iter()
+        m.iter()
             .map(|(k, v)| (k.to_owned(), v.to_owned()))
             .collect()
     }
@@ -1851,7 +1851,7 @@ impl<'a, K: Ord + Hash + Eq + Clone, V: Clone, S: BuildHasher> From<&'a HashMap<
     for OrdMap<K, V>
 {
     fn from(m: &'a HashMap<K, V, S>) -> Self {
-        m.into_iter().cloned().collect()
+        m.iter().cloned().collect()
     }
 }
 
@@ -1920,7 +1920,7 @@ mod test {
 
     #[test]
     fn iterates_in_order() {
-        let map = ordmap!{
+        let map = ordmap! {
             2 => 22,
             1 => 11,
             3 => 33,
@@ -1946,7 +1946,7 @@ mod test {
 
     #[test]
     fn into_iter() {
-        let map = ordmap!{
+        let map = ordmap! {
             2 => 22,
             1 => 11,
             3 => 33,
@@ -1967,7 +1967,7 @@ mod test {
 
     #[test]
     fn deletes_correctly() {
-        let map = ordmap!{
+        let map = ordmap! {
             2 => 22,
             1 => 11,
             3 => 33,
@@ -1996,7 +1996,7 @@ mod test {
     #[test]
     fn debug_output() {
         assert_eq!(
-            format!("{:?}", ordmap!{ 3 => 4, 5 => 6, 1 => 2 }),
+            format!("{:?}", ordmap! { 3 => 4, 5 => 6, 1 => 2 }),
             "{1: 2, 3: 4, 5: 6}"
         );
     }
@@ -2025,7 +2025,7 @@ mod test {
 
     #[test]
     fn double_ended_iterator_1() {
-        let m = ordmap!{1 => 1, 2 => 2, 3 => 3, 4 => 4};
+        let m = ordmap! {1 => 1, 2 => 2, 3 => 3, 4 => 4};
         let mut it = m.iter();
         assert_eq!(Some(&(1, 1)), it.next());
         assert_eq!(Some(&(4, 4)), it.next_back());
@@ -2036,7 +2036,7 @@ mod test {
 
     #[test]
     fn double_ended_iterator_2() {
-        let m = ordmap!{1 => 1, 2 => 2, 3 => 3, 4 => 4};
+        let m = ordmap! {1 => 1, 2 => 2, 3 => 3, 4 => 4};
         let mut it = m.iter();
         assert_eq!(Some(&(1, 1)), it.next());
         assert_eq!(Some(&(4, 4)), it.next_back());
@@ -2056,15 +2056,15 @@ mod test {
 
     #[test]
     fn index_operator() {
-        let mut map = ordmap!{1 => 2, 3 => 4, 5 => 6};
+        let mut map = ordmap! {1 => 2, 3 => 4, 5 => 6};
         assert_eq!(4, map[&3]);
         map[&3] = 8;
-        assert_eq!(ordmap!{1 => 2, 3 => 8, 5 => 6}, map);
+        assert_eq!(ordmap! {1 => 2, 3 => 8, 5 => 6}, map);
     }
 
     #[test]
     fn entry_api() {
-        let mut map = ordmap!{"bar" => 5};
+        let mut map = ordmap! {"bar" => 5};
         map.entry(&"foo").and_modify(|v| *v += 5).or_insert(1);
         assert_eq!(1, map[&"foo"]);
         map.entry(&"foo").and_modify(|v| *v += 5).or_insert(1);
@@ -2084,7 +2084,7 @@ mod test {
     #[test]
     fn match_string_keys_with_string_slices() {
         let mut map: OrdMap<String, i32> =
-            From::from(&ordmap!{ "foo" => &1, "bar" => &2, "baz" => &3 });
+            From::from(&ordmap! { "foo" => &1, "bar" => &2, "baz" => &3 });
         assert_eq!(Some(&1), map.get("foo"));
         map = map.without("foo");
         assert_eq!(Some(3), map.remove("baz"));
