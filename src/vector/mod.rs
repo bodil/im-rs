@@ -887,7 +887,7 @@ impl<A: Clone> Vector<A> {
 
                     let mut middle1 = clone_ref(replace(&mut left.middle, Ref::from(Node::new())));
                     let mut middle2 = clone_ref(right.middle);
-                    left.middle_level = if left.middle_level > right.middle_level {
+                    let normalised_middle = if left.middle_level > right.middle_level {
                         middle2 = middle2.elevate(left.middle_level - right.middle_level);
                         left.middle_level
                     } else if left.middle_level < right.middle_level {
@@ -895,12 +895,13 @@ impl<A: Clone> Vector<A> {
                         right.middle_level
                     } else {
                         left.middle_level
-                    } + 1;
+                    };
                     left.middle = Ref::new(Node::merge(
                         Ref::from(middle1),
                         Ref::from(middle2),
-                        left.middle_level - 1,
+                        normalised_middle,
                     ));
+                    left.middle_level = normalised_middle + 1;
 
                     left.inner_b = right.inner_b;
                     left.outer_b = right.outer_b;
@@ -1432,9 +1433,14 @@ impl<A: Clone> RRB<A> {
     }
 
     fn prune(&mut self) {
-        while self.middle_level > 0 && self.middle.is_single() {
-            self.middle = self.middle.first_child().clone();
-            self.middle_level -= 1;
+        if self.middle.is_empty() {
+            self.middle = Ref::new(Node::new());
+            self.middle_level = 0;
+        } else {
+            while self.middle_level > 0 && self.middle.is_single() {
+                self.middle = self.middle.first_child().clone();
+                self.middle_level -= 1;
+            }
         }
     }
 
@@ -1515,6 +1521,9 @@ impl<A: Clone> RRB<A> {
     }
 
     fn push_middle(&mut self, side: Side, chunk: Ref<Chunk<A>>) {
+        if chunk.is_empty() {
+            return;
+        }
         let new_middle = {
             let middle = Ref::make_mut(&mut self.middle);
             match middle.push_chunk(self.middle_level, side, chunk) {
@@ -1577,6 +1586,14 @@ impl<A: Clone> Clone for Vector<A> {
 impl<A: Clone + Debug> Debug for Vector<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         f.debug_list().entries(self.iter()).finish()
+        // match self {
+        //     Full(rrb) => {
+        //         writeln!(f, "Head: {:?} {:?}", rrb.outer_f, rrb.inner_f)?;
+        //         rrb.middle.print(f, 0, rrb.middle_level)?;
+        //         writeln!(f, "Tail: {:?} {:?}", rrb.inner_b, rrb.outer_b)
+        //     }
+        //     Single(_) => write!(f, "nowt"),
+        // }
     }
 }
 
@@ -2449,6 +2466,38 @@ mod test {
         assert_eq!(expected, vec);
     }
 
+    #[test]
+    fn issue_55_fwd() {
+        let mut l = Vector::new();
+        for i in 0..4098 {
+            l.append(Vector::unit(i));
+        }
+        l.append(Vector::unit(4098));
+        assert_eq!(Some(&4097), l.get(4097));
+        assert_eq!(Some(&4096), l.get(4096));
+    }
+
+    #[test]
+    fn issue_55_back() {
+        let mut l = Vector::unit(0);
+        for i in 0..4099 {
+            let mut tmp = Vector::unit(i + 1);
+            tmp.append(l);
+            l = tmp;
+        }
+        assert_eq!(Some(&4098), l.get(1));
+        assert_eq!(Some(&4097), l.get(2));
+        let len = l.len();
+        l.slice(2..len);
+    }
+
+    #[test]
+    fn issue_55_append() {
+        let mut vec1 = Vector::from_iter(0..92);
+        let vec2 = Vector::from_iter(0..165);
+        vec1.append(vec2);
+    }
+
     proptest! {
         #[test]
         fn iter(ref vec in vec(i32::ANY, 0..1000)) {
@@ -2632,5 +2681,34 @@ mod test {
             let rev_out: Vector<_> = input.chunks_mut().rev().map(|c| c.iter().rev()).flat_map(|a|a).cloned().collect();
             assert_eq!(rev_in, rev_out);
         }
+
+        // The following two tests are very slow and there are unit tests above
+        // which test for regression of issue #55.  It would still be good to
+        // run them occasionally.
+
+        // #[test]
+        // fn issue55_back(count in 0..10000, slice_at in usize::ANY) {
+        //     let count = count as usize;
+        //     let slice_at = slice_at % count;
+        //     let mut l = Vector::unit(0);
+        //     for _ in 0..count {
+        //         let mut tmp = Vector::unit(0);
+        //         tmp.append(l);
+        //         l = tmp;
+        //     }
+        //     let len = l.len();
+        //     l.slice(slice_at..len);
+        // }
+
+        // #[test]
+        // fn issue55_fwd(count in 0..10000, slice_at in usize::ANY) {
+        //     let count = count as usize;
+        //     let slice_at = slice_at % count;
+        //     let mut l = Vector::new();
+        //     for i in 0..count {
+        //         l.append(Vector::unit(i));
+        //     }
+        //     assert_eq!(Some(&slice_at), l.get(slice_at));
+        // }
     }
 }

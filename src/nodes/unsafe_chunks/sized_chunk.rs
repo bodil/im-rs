@@ -447,13 +447,15 @@ where
     /// Remove `count` items from the front of `other` and append them to the
     /// back of `self`.
     ///
-    /// Panics if the capacity of the chunk is exceeded.
+    /// Panics if `self` doesn't have `count` items left, or if `other` has
+    /// fewer than `count` items.
     ///
     /// Time: O(n) for the number of items moved
     pub fn drain_from_front(&mut self, other: &mut Self, count: usize) {
         let self_len = self.len();
         let other_len = other.len();
-        debug_assert!(self_len + count <= other_len);
+        debug_assert!(self_len + count <= N::USIZE);
+        debug_assert!(other_len >= count);
         if self.right + count > N::USIZE {
             unsafe { Chunk::force_copy(self.left, 0, self_len, self) };
             self.right -= self.left;
@@ -465,22 +467,24 @@ where
     }
 
     /// Remove `count` items from the back of `other` and append them to the
-    /// back of `self`.
+    /// front of `self`.
     ///
-    /// Panics if the capacity of the chunk is exceeded.
+    /// Panics if `self` doesn't have `count` items left, or if `other` has
+    /// fewer than `count` items.
     ///
     /// Time: O(n) for the number of items moved
     pub fn drain_from_back(&mut self, other: &mut Self, count: usize) {
         let self_len = self.len();
         let other_len = other.len();
-        debug_assert!(self_len + count <= other_len);
-        if self.right + count > N::USIZE {
-            unsafe { Chunk::force_copy(self.left, 0, self_len, self) };
-            self.right -= self.left;
-            self.left = 0;
+        debug_assert!(self_len + count <= N::USIZE);
+        debug_assert!(other_len >= count);
+        if self.left < count {
+            self.left = N::USIZE - self.right;
+            unsafe { Chunk::force_copy(0, self.left, self.right, self) };
+            self.right = N::USIZE;
         }
-        unsafe { Chunk::force_copy_to(other.right - count, self.right, count, other, self) };
-        self.right += count;
+        unsafe { Chunk::force_copy_to(other.right - count, self.left - count, count, other, self) };
+        self.left -= count;
         other.right -= count;
     }
 
@@ -925,6 +929,16 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn is_full() {
+        let mut chunk = Chunk::<_, U64>::new();
+        for i in 0..64 {
+            assert_eq!(false, chunk.is_full());
+            chunk.push_back(i);
+        }
+        assert_eq!(true, chunk.is_full());
+    }
 
     #[test]
     fn push_back_front() {
