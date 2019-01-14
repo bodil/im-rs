@@ -25,7 +25,7 @@ where
     Ref::try_unwrap(r).unwrap_or_else(|r| (*r).clone())
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Side {
     Left,
     Right,
