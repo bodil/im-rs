@@ -80,3 +80,24 @@ impl<Size: Bits> Iterator for Iter<Size> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use proptest::collection::btree_set;
+    use typenum::U64;
+
+    proptest! {
+        #[test]
+        fn get_set_and_iter(bits in btree_set(0..64usize, 0..64)) {
+            let mut bitmap = Bitmap::<U64>::new();
+            for i in &bits {
+                bitmap.set(*i, true);
+            }
+            for i in 0..64 {
+                assert_eq!(bitmap.get(i), bits.contains(&i));
+            }
+            assert!(bitmap.into_iter().eq(bits.into_iter()));
+        }
+    }
+}
