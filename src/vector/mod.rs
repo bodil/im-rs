@@ -2674,7 +2674,7 @@ mod test {
         #[test]
         fn chunks_mut(ref mut input_src in vector(i32::ANY, 0..10000)) {
             let mut input = input_src.clone();
-            #[cfg_attr(feature = "cargo-clippy", allow(clippy::map_clone))]
+            #[allow(clippy::map_clone)]
             let output: Vector<_> = input.chunks_mut().flat_map(|a| a).map(|v| *v).collect();
             assert_eq!(input, output);
             let rev_in: Vector<_> = input.iter().rev().cloned().collect();
