@@ -2,7 +2,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::hash::Hasher;
+use metrohash::MetroHash64;
+use std::hash::{BuildHasher, Hasher};
+use std::marker::PhantomData;
+use typenum::{Unsigned, U64};
 
 pub fn is_sorted<A, I>(l: I) -> bool
 where
@@ -19,12 +22,13 @@ where
     }
 }
 
-pub struct LolHasher {
+pub struct LolHasher<N: Unsigned = U64> {
     state: u64,
     shift: usize,
+    size: PhantomData<N>,
 }
 
-impl LolHasher {
+impl<N: Unsigned> LolHasher<N> {
     fn feed_me(&mut self, byte: u8) {
         self.state ^= u64::from(byte) << self.shift;
         self.shift += 8;
@@ -34,7 +38,7 @@ impl LolHasher {
     }
 }
 
-impl Hasher for LolHasher {
+impl<N: Unsigned> Hasher for LolHasher<N> {
     fn write(&mut self, bytes: &[u8]) {
         for byte in bytes {
             self.feed_me(*byte)
@@ -42,12 +46,41 @@ impl Hasher for LolHasher {
     }
 
     fn finish(&self) -> u64 {
-        self.state
+        if N::USIZE == 64 {
+            self.state
+        } else {
+            self.state & ((1 << N::USIZE) - 1)
+        }
     }
 }
 
-impl Default for LolHasher {
+impl<N: Unsigned> Default for LolHasher<N> {
     fn default() -> Self {
-        LolHasher { state: 0, shift: 0 }
+        LolHasher {
+            state: 0,
+            shift: 0,
+            size: PhantomData,
+        }
+    }
+}
+
+pub struct MetroHashBuilder {
+    seed: u64,
+}
+
+impl MetroHashBuilder {
+    pub fn new(seed: u64) -> Self {
+        MetroHashBuilder { seed }
+    }
+
+    pub fn seed(&self) -> u64 {
+        self.seed
+    }
+}
+
+impl BuildHasher for MetroHashBuilder {
+    type Hasher = MetroHash64;
+    fn build_hasher(&self) -> Self::Hasher {
+        MetroHash64::with_seed(self.seed)
     }
 }

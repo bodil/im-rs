@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::borrow::Borrow;
+use std::fmt;
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::FusedIterator;
 use std::slice::{Iter as SliceIter, IterMut as SliceIterMut};
@@ -11,9 +12,7 @@ use std::{mem, ptr};
 use typenum::{Pow, Unsigned, U2};
 
 use config::HashLevelSize;
-use nodes::sparse_chunk::{
-    Drain as ChunkDrain, Iter as ChunkIter, IterMut as ChunkIterMut, SparseChunk,
-};
+use nodes::sparse_chunk::{Iter as ChunkIter, IterMut as ChunkIterMut, SparseChunk};
 use nodes::types::Bits;
 use util::{clone_ref, Ref};
 
@@ -577,8 +576,8 @@ where
     A: HashValue,
 {
     count: usize,
-    stack: Vec<ChunkDrain<Entry<A>, HashWidth>>,
-    current: ChunkDrain<Entry<A>, HashWidth>,
+    stack: Vec<Ref<Node<A>>>,
+    current: Ref<Node<A>>,
     collision: Option<CollisionNode<A>>,
 }
 
@@ -587,11 +586,10 @@ where
     A: HashValue,
 {
     pub fn new(root: Ref<Node<A>>, size: usize) -> Self {
-        let node = clone_ref(root);
         Drain {
             count: size,
             stack: vec![],
-            current: node.data.drain(),
+            current: root,
             collision: None,
         }
     }
@@ -617,7 +615,7 @@ where
             self.collision = None;
             return self.next();
         }
-        match self.current.next() {
+        match Ref::make_mut(&mut self.current).data.pop() {
             Some(Entry::Value(value, hash)) => {
                 self.count -= 1;
                 Some((value, hash))
@@ -626,16 +624,15 @@ where
                 self.collision = Some(clone_ref(coll_ref));
                 self.next()
             }
-            Some(Entry::Node(node_ref)) => {
-                let node = clone_ref(node_ref);
-                let current = mem::replace(&mut self.current, node.data.drain());
-                self.stack.push(current);
+            Some(Entry::Node(child)) => {
+                let parent = mem::replace(&mut self.current, child);
+                self.stack.push(parent);
                 self.next()
             }
             None => match self.stack.pop() {
                 None => None,
-                Some(iter) => {
-                    self.current = iter;
+                Some(parent) => {
+                    self.current = parent;
                     self.next()
                 }
             },
@@ -650,3 +647,18 @@ where
 impl<A: HashValue> ExactSizeIterator for Drain<A> {}
 
 impl<A: HashValue> FusedIterator for Drain<A> {}
+
+impl<A: HashValue + fmt::Debug> fmt::Debug for Node<A> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "Node[ ")?;
+        for i in self.data.indices() {
+            write!(f, "{}: ", i)?;
+            match &self.data[i] {
+                Entry::Value(v, h) => write!(f, "{:?} :: {}, ", v, h)?,
+                Entry::Collision(c) => write!(f, "Coll{:?} :: {}", c.data, c.hash)?,
+                Entry::Node(n) => write!(f, "{:?}, ", n)?,
+            }
+        }
+        write!(f, " ]")
+    }
+}

@@ -28,13 +28,9 @@ impl<A, N: Bits + ChunkLength<A>> Drop for SparseChunk<A, N> {
 
 impl<A: Clone, N: Bits + ChunkLength<A>> Clone for SparseChunk<A, N> {
     fn clone(&self) -> Self {
-        let mut out: Self;
-        unsafe {
-            out = mem::uninitialized();
-            ptr::write(&mut out.map, self.map);
-            for index in self.map {
-                SparseChunk::force_write(index, self.values()[index].clone(), &mut out);
-            }
+        let mut out = Self::new();
+        for index in self.map {
+            out.insert(index, self[index].clone());
         }
         out
     }
@@ -131,13 +127,13 @@ impl<A, N: Bits + ChunkLength<A>> SparseChunk<A, N> {
     }
 
     pub fn pop(&mut self) -> Option<A> {
-        self.map
-            .into_iter()
-            .next()
-            .and_then(|index| self.remove(index))
+        self.first_index().and_then(|index| self.remove(index))
     }
 
     pub fn get(&self, index: usize) -> Option<&A> {
+        if index >= N::USIZE {
+            return None;
+        }
         if self.map.get(index) {
             Some(&self.values()[index])
         } else {
@@ -146,6 +142,9 @@ impl<A, N: Bits + ChunkLength<A>> SparseChunk<A, N> {
     }
 
     pub fn get_mut(&mut self, index: usize) -> Option<&mut A> {
+        if index >= N::USIZE {
+            return None;
+        }
         if self.map.get(index) {
             Some(&mut self.values_mut()[index])
         } else {
@@ -158,7 +157,7 @@ impl<A, N: Bits + ChunkLength<A>> SparseChunk<A, N> {
     }
 
     pub fn first_index(&self) -> Option<usize> {
-        self.indices().next()
+        self.map.first_index()
     }
 
     pub fn iter(&self) -> Iter<'_, A, N> {
@@ -176,10 +175,7 @@ impl<A, N: Bits + ChunkLength<A>> SparseChunk<A, N> {
     }
 
     pub fn drain(self) -> Drain<A, N> {
-        Drain {
-            indices: self.indices(),
-            chunk: self,
-        }
+        Drain { chunk: self }
     }
 }
 
@@ -243,7 +239,6 @@ impl<'a, A, N: Bits + ChunkLength<A>> Iterator for IterMut<'a, A, N> {
 }
 
 pub struct Drain<A, N: Bits + ChunkLength<A>> {
-    indices: BitmapIter<N>,
     chunk: SparseChunk<A, N>,
 }
 
@@ -251,9 +246,7 @@ impl<'a, A, N: Bits + ChunkLength<A>> Iterator for Drain<A, N> {
     type Item = A;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.indices
-            .next()
-            .map(|index| self.chunk.remove(index).unwrap())
+        self.chunk.pop()
     }
 }
 

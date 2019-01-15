@@ -100,7 +100,7 @@ pub struct HashSet<A, S = RandomState> {
     size: usize,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 struct Value<A>(A);
 
 impl<A> Deref for Value<A> {
@@ -720,7 +720,7 @@ where
 impl<A, S> Debug for HashSet<A, S>
 where
     A: Hash + Eq + Clone + Debug,
-    S: BuildHasher + Default,
+    S: BuildHasher,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         f.debug_set().entries(self.iter()).finish()
@@ -731,7 +731,7 @@ where
 impl<A, S> Debug for HashSet<A, S>
 where
     A: Hash + Eq + Clone + Debug,
-    S: BuildHasher + Default,
+    S: BuildHasher,
 {
     default fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         f.debug_set().entries(self.iter()).finish()
@@ -742,7 +742,7 @@ where
 impl<A, S> Debug for HashSet<A, S>
 where
     A: Hash + Eq + Clone + Debug + Ord,
-    S: BuildHasher + Default,
+    S: BuildHasher,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         f.debug_set().entries(self.iter()).finish()
@@ -1060,6 +1060,32 @@ mod test {
             "bar",
         };
         assert_eq!(set1, set2);
+    }
+
+    #[test]
+    fn issue_60_drain_iterator_memory_corruption() {
+        use test::MetroHashBuilder;
+        for i in 0..1000 {
+            let mut lhs = vec![0, 1, 2];
+            lhs.sort();
+
+            let mut hasher = Ref::from(MetroHashBuilder::new(i));
+            let mut iset: HashSet<_, MetroHashBuilder> = HashSet::with_hasher(hasher.clone());
+            for &i in &lhs {
+                iset.insert(i);
+            }
+
+            let mut rhs: Vec<_> = iset.clone().into_iter().collect();
+            rhs.sort();
+
+            if lhs != rhs {
+                println!("iteration: {}", i);
+                println!("seed: {}", hasher.seed());
+                println!("lhs: {}: {:?}", lhs.len(), &lhs);
+                println!("rhs: {}: {:?}", rhs.len(), &rhs);
+                panic!();
+            }
+        }
     }
 
     proptest! {

@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use typenum::*;
@@ -49,11 +50,12 @@ where
 // Bit field sizes
 
 pub trait Bits: Unsigned {
-    type Store: Default + Copy;
+    type Store: Default + Copy + PartialEq + Debug;
 
     fn get(bits: &Self::Store, index: usize) -> bool;
     fn set(bits: &mut Self::Store, index: usize, value: bool) -> bool;
     fn len(bits: &Self::Store) -> usize;
+    fn first_index(bits: &Self::Store) -> Option<usize>;
 }
 
 macro_rules! bits_for {
@@ -62,10 +64,12 @@ macro_rules! bits_for {
             type Store = $result;
 
             fn get(bits: &$result, index: usize) -> bool {
+                debug_assert!(index < Self::USIZE);
                 bits & (1 << index) != 0
             }
 
             fn set(bits: &mut $result, index: usize, value: bool) -> bool {
+                debug_assert!(index < Self::USIZE);
                 let mask = 1 << index;
                 let prev = *bits & mask;
                 if value {
@@ -78,6 +82,14 @@ macro_rules! bits_for {
 
             fn len(bits: &$result) -> usize {
                 bits.count_ones() as usize
+            }
+
+            fn first_index(bits: &$result) -> Option<usize> {
+                if *bits == 0 {
+                    None
+                } else {
+                    Some(bits.trailing_zeros() as usize)
+                }
             }
         }
     };

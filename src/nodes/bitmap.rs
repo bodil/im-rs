@@ -4,7 +4,6 @@
 
 use nodes::types::Bits;
 
-#[derive(PartialEq, Eq)]
 pub struct Bitmap<Size: Bits> {
     data: Size::Store,
 }
@@ -22,6 +21,20 @@ impl<Size: Bits> Default for Bitmap<Size> {
         Bitmap {
             data: Size::Store::default(),
         }
+    }
+}
+
+impl<Size: Bits> PartialEq for Bitmap<Size> {
+    fn eq(&self, other: &Self) -> bool {
+        self.data == other.data
+    }
+}
+
+use std::fmt;
+
+impl<Size: Bits> fmt::Debug for Bitmap<Size> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        self.data.fmt(f)
     }
 }
 
@@ -44,6 +57,11 @@ impl<Size: Bits> Bitmap<Size> {
     #[inline]
     pub fn len(self) -> usize {
         Size::len(&self.data)
+    }
+
+    #[inline]
+    pub fn first_index(self) -> Option<usize> {
+        Size::first_index(&self.data)
     }
 }
 

@@ -351,7 +351,7 @@ extern crate quickcheck;
 extern crate proptest;
 
 #[cfg(feature = "proptest")]
-proptest!{}
+proptest! {}
 
 #[cfg(any(test, feature = "serde"))]
 extern crate serde;
@@ -360,6 +360,9 @@ extern crate serde_json;
 
 #[cfg(all(threadsafe, any(test, feature = "rayon")))]
 extern crate rayon;
+
+#[cfg(test)]
+extern crate metrohash;
 
 mod config;
 mod nodes;
