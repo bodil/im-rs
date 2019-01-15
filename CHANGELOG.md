@@ -14,6 +14,13 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 - `Vector::chunks` and `Vector::chunks_mut` have been deprecated and renamed to
   `leaves` and `leaves_mut` to avoid confusion with `Vec::chunks`. (#50)
 
+### Fixed
+
+- Fixed an issue where the `HashMap` draining iterator might access uninitialised memory leading to
+  undefined behaviour. (#60)
+- Fixed multiple issues in `Vector::split_off` and `Vector::append` that would cause lookup errors
+  and unexpectedly unbalanced trees. (#55).
+
 ## [12.2.0] - 2018-10-12
 
 ### Added
