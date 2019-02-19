@@ -337,6 +337,7 @@
 #![cfg_attr(has_specialisation, feature(specialization))]
 #![cfg_attr(docs_rs_workaround, feature(slice_get_slice))]
 
+extern crate sized_chunks;
 extern crate typenum;
 
 #[cfg(test)]
@@ -388,12 +389,14 @@ pub mod iter;
 #[cfg(any(test, feature = "serde"))]
 pub mod ser;
 
-pub use nodes::sized_chunk as chunk;
+#[deprecated(since = "12.3.1", note = "please use the `sized_chunks` crate instead")]
+pub use sized_chunks::sized_chunk as chunk;
 
 pub use hashmap::HashMap;
 pub use hashset::HashSet;
 pub use ordmap::OrdMap;
 pub use ordset::OrdSet;
+#[doc(inline)]
 pub use vector::Vector;
 
 #[cfg(test)]
