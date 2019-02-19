@@ -2664,10 +2664,10 @@ mod test {
 
         #[test]
         fn chunks(ref input in vector(i32::ANY, 0..10000)) {
-            let output: Vector<_> = input.chunks().flat_map(|a|a).cloned().collect();
+            let output: Vector<_> = input.leaves().flat_map(|a|a).cloned().collect();
             assert_eq!(input, &output);
             let rev_in: Vector<_> = input.iter().rev().cloned().collect();
-            let rev_out: Vector<_> = input.chunks().rev().map(|c| c.iter().rev()).flat_map(|a|a).cloned().collect();
+            let rev_out: Vector<_> = input.leaves().rev().map(|c| c.iter().rev()).flat_map(|a|a).cloned().collect();
             assert_eq!(rev_in, rev_out);
         }
 
@@ -2675,10 +2675,10 @@ mod test {
         fn chunks_mut(ref mut input_src in vector(i32::ANY, 0..10000)) {
             let mut input = input_src.clone();
             #[allow(clippy::map_clone)]
-            let output: Vector<_> = input.chunks_mut().flat_map(|a| a).map(|v| *v).collect();
+            let output: Vector<_> = input.leaves_mut().flat_map(|a| a).map(|v| *v).collect();
             assert_eq!(input, output);
             let rev_in: Vector<_> = input.iter().rev().cloned().collect();
-            let rev_out: Vector<_> = input.chunks_mut().rev().map(|c| c.iter().rev()).flat_map(|a|a).cloned().collect();
+            let rev_out: Vector<_> = input.leaves_mut().rev().map(|c| c.iter().rev()).flat_map(|a|a).cloned().collect();
             assert_eq!(rev_in, rev_out);
         }
 

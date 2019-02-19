@@ -2009,8 +2009,8 @@ mod test {
         let p1 = Vec::<String>::new();
         let p2 = Vec::<String>::new();
         assert_eq!(p1, p2);
-        let c1 = OrdMap::singleton(v1, p1);
-        let c2 = OrdMap::singleton(v2, p2);
+        let c1 = OrdMap::unit(v1, p1);
+        let c2 = OrdMap::unit(v2, p2);
         assert_eq!(c1, c2);
     }
 
@@ -2018,7 +2018,7 @@ mod test {
     fn insert_remove_single_mut() {
         let mut m = OrdMap::new();
         m.insert(0, 0);
-        assert_eq!(OrdMap::singleton(0, 0), m);
+        assert_eq!(OrdMap::unit(0, 0), m);
         m.remove(&0);
         assert_eq!(OrdMap::new(), m);
     }
