@@ -14,6 +14,7 @@ env:
   - CRATE=im-rc
 
 install:
+  - rustup update
   - mkdir -p .cargo && echo '[build]' > .cargo/config && echo 'target-dir = "/home/travis/target"' >> .cargo/config
   - cargo install cargo-make; true
   - cargo make prepare-release
