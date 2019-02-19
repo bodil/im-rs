@@ -78,7 +78,7 @@ impl<A, N: Bits + ChunkLength<A>> SparseChunk<A, N> {
     pub fn new() -> Self {
         let mut chunk: Self;
         unsafe {
-            chunk = mem::uninitialized();
+            chunk = mem::zeroed();
             ptr::write(&mut chunk.map, Bitmap::new());
         }
         chunk

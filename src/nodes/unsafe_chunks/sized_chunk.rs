@@ -123,7 +123,7 @@ where
     pub fn new() -> Self {
         let mut chunk: Self;
         unsafe {
-            chunk = mem::uninitialized();
+            chunk = mem::zeroed();
             ptr::write(&mut chunk.left, 0);
             ptr::write(&mut chunk.right, 0);
         }
@@ -134,7 +134,7 @@ where
     pub fn unit(value: A) -> Self {
         let mut chunk: Self;
         unsafe {
-            chunk = mem::uninitialized();
+            chunk = mem::zeroed();
             ptr::write(&mut chunk.left, 0);
             ptr::write(&mut chunk.right, 1);
             Chunk::force_write(0, value, &mut chunk);
@@ -146,7 +146,7 @@ where
     pub fn pair(left: A, right: A) -> Self {
         let mut chunk: Self;
         unsafe {
-            chunk = mem::uninitialized();
+            chunk = mem::zeroed();
             ptr::write(&mut chunk.left, 0);
             ptr::write(&mut chunk.right, 2);
             Chunk::force_write(0, left, &mut chunk);
