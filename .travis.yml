@@ -5,6 +5,7 @@ rust:
   - nightly
 cache:
   directories:
+    - /home/travis/.rustup
     - /home/travis/.cargo
     - /home/travis/target
 
@@ -22,8 +23,7 @@ script: cd dist/$CRATE; cargo test
 matrix:
   include:
     - env: CLIPPY=1
-      rust: nightly
+      rust: stable
       install:
-        - rustup toolchain add nightly
-        - rustup component add --toolchain nightly clippy-preview; true
-      script: cargo +nightly clippy -- -D warnings
+        - rustup component add clippy; true
+      script: cargo clippy -- -D warnings
