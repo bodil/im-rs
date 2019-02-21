@@ -25,14 +25,14 @@ use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::{FromIterator, IntoIterator, Sum};
 use std::ops::{Add, Deref, Mul, RangeBounds};
 
-use hashset::HashSet;
-use nodes::btree::{
+use crate::hashset::HashSet;
+use crate::nodes::btree::{
     BTreeValue, ConsumingIter as ConsumingNodeIter, DiffItem as NodeDiffItem,
     DiffIter as NodeDiffIter, Insert, Iter as NodeIter, Node, Remove,
 };
 #[cfg(has_specialisation)]
-use util::linear_search_by;
-use util::Ref;
+use crate::util::linear_search_by;
+use crate::util::Ref;
 
 pub type DiffItem<'a, A> = NodeDiffItem<'a, A>;
 
@@ -556,7 +556,7 @@ where
     where
         I: IntoIterator<Item = Self>,
     {
-        i.into_iter().fold(Self::default(), |a, b| a.union(b))
+        i.into_iter().fold(Self::default(), Self::union)
     }
 
     /// Construct the difference between two sets.
@@ -1060,7 +1060,7 @@ impl<A: Ord + Clone + Arbitrary + Sync> Arbitrary for OrdSet<A> {
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     use super::*;
-    use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
+    use ::proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
     use std::ops::Range;
 
     /// A strategy for a set of a given size.
@@ -1096,6 +1096,7 @@ pub mod proptest {
 mod test {
     use super::proptest::*;
     use super::*;
+    use ::proptest::proptest;
 
     #[test]
     fn match_strings_with_string_slices() {

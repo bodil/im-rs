@@ -26,13 +26,13 @@ use std::iter::{FromIterator, Iterator, Sum};
 use std::mem;
 use std::ops::{Add, Index, IndexMut, RangeBounds};
 
-use hashmap::HashMap;
-use nodes::btree::{BTreeValue, Insert, Node, Remove};
+use crate::hashmap::HashMap;
+use crate::nodes::btree::{BTreeValue, Insert, Node, Remove};
 #[cfg(has_specialisation)]
-use util::linear_search_by;
-use util::Ref;
+use crate::util::linear_search_by;
+use crate::util::Ref;
 
-pub use nodes::btree::{ConsumingIter, DiffItem, DiffIter, Iter as RangedIter};
+pub use crate::nodes::btree::{ConsumingIter, DiffItem, DiffIter, Iter as RangedIter};
 
 /// Construct a map from a sequence of key/value pairs.
 ///
@@ -812,7 +812,7 @@ where
     where
         I: IntoIterator<Item = Self>,
     {
-        i.into_iter().fold(Self::default(), |a, b| a.union(b))
+        i.into_iter().fold(Self::default(), Self::union)
     }
 
     /// Construct the union of a sequence of maps, using a function to
@@ -1872,7 +1872,7 @@ impl<K: Ord + Clone + Arbitrary + Sync, V: Clone + Arbitrary + Sync> Arbitrary f
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     use super::*;
-    use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
+    use ::proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
     use std::ops::Range;
 
     /// A strategy for a map of a given size.
@@ -1912,11 +1912,10 @@ pub mod proptest {
 mod test {
     use super::proptest::*;
     use super::*;
-    use nodes::btree::DiffItem;
-    use proptest::bool;
-    use proptest::collection;
-    use proptest::num::{i16, usize};
-    use test::is_sorted;
+    use crate::nodes::btree::DiffItem;
+    use crate::test::is_sorted;
+    use ::proptest::num::{i16, usize};
+    use ::proptest::{bool, collection, proptest};
 
     #[test]
     fn iterates_in_order() {

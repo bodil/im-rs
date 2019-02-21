@@ -33,11 +33,11 @@ use std::iter::{FromIterator, FusedIterator, Sum};
 use std::mem;
 use std::ops::{Add, Index, IndexMut};
 
-use nodes::hamt::{
+use crate::nodes::hamt::{
     hash_key, Drain as NodeDrain, HashBits, HashValue, Iter as NodeIter, IterMut as NodeIterMut,
     Node,
 };
-use util::Ref;
+use crate::util::Ref;
 
 /// Construct a hash map from a sequence of key/value pairs.
 ///
@@ -856,7 +856,7 @@ where
         S: Default,
         I: IntoIterator<Item = Self>,
     {
-        i.into_iter().fold(Self::default(), |a, b| a.union(b))
+        i.into_iter().fold(Self::default(), Self::union)
     }
 
     /// Construct the union of a sequence of maps, using a function to
@@ -1934,7 +1934,7 @@ impl<K: Hash + Eq + Arbitrary + Sync, V: Arbitrary + Sync> Arbitrary for HashMap
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     use super::*;
-    use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
+    use ::proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
     use std::ops::Range;
 
     /// A strategy for a hash map of a given size.
@@ -1973,10 +1973,10 @@ pub mod proptest {
 #[cfg(test)]
 mod test {
     use super::*;
-    use proptest::collection;
-    use proptest::num::{i16, usize};
+    use crate::test::LolHasher;
+    use ::proptest::num::{i16, usize};
+    use ::proptest::{collection, proptest};
     use std::hash::BuildHasherDefault;
-    use test::LolHasher;
 
     #[test]
     fn safe_mutation() {

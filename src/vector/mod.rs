@@ -52,10 +52,12 @@ use std::iter::{Chain, FromIterator, FusedIterator};
 use std::mem::{replace, swap};
 use std::ops::{Add, Index, IndexMut, RangeBounds};
 
-use nodes::chunk::{Chunk, Iter as ChunkIter, CHUNK_SIZE};
-use nodes::rrb::{ConsumingIter as ConsumingNodeIter, Node, PopResult, PushResult, SplitResult};
-use sort;
-use util::{clone_ref, swap_indices, to_range, Ref, Side};
+use crate::nodes::chunk::{Chunk, Iter as ChunkIter, CHUNK_SIZE};
+use crate::nodes::rrb::{
+    ConsumingIter as ConsumingNodeIter, Node, PopResult, PushResult, SplitResult,
+};
+use crate::sort;
+use crate::util::{clone_ref, swap_indices, to_range, Ref, Side};
 
 use self::Vector::{Full, Single};
 
@@ -2150,8 +2152,10 @@ impl<'a, A: Clone> FusedIterator for ChunksMut<'a, A> {}
 pub mod rayon {
     use super::*;
 
-    use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, UnindexedConsumer};
-    use rayon::iter::{
+    use ::rayon::iter::plumbing::{
+        bridge, Consumer, Producer, ProducerCallback, UnindexedConsumer,
+    };
+    use ::rayon::iter::{
         IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator,
         ParallelIterator,
     };
@@ -2330,8 +2334,11 @@ pub mod rayon {
     mod test {
         use super::super::*;
         use super::proptest::vector;
-        use proptest::num::i32;
-        use rayon::iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
+        use ::proptest::num::i32;
+        use ::proptest::proptest;
+        use ::rayon::iter::{
+            IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
+        };
 
         proptest! {
             #[test]
@@ -2366,8 +2373,8 @@ impl<A: Arbitrary + Sync + Clone> Arbitrary for Vector<A> {
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     use super::*;
-    use proptest::collection::vec;
-    use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
+    use ::proptest::collection::vec;
+    use ::proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
     use std::ops::Range;
 
     /// A strategy for generating a vector of a certain size.
@@ -2400,8 +2407,9 @@ pub mod proptest {
 mod test {
     use super::proptest::vector;
     use super::*;
-    use proptest::collection::vec;
-    use proptest::num::{i32, usize};
+    use ::proptest::collection::vec;
+    use ::proptest::num::{i32, usize};
+    use ::proptest::proptest;
 
     // #[test]
     // fn push_and_pop_things() {

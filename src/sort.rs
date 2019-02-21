@@ -2,8 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use crate::vector::FocusMut;
 use std::cmp::Ordering;
-use vector::FocusMut;
 
 // Ported from the Java version at:
 //    http://www.cs.princeton.edu/~rs/talks/QuicksortIsOptimal.pdf
@@ -73,9 +73,10 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use proptest::num::i32;
-    use test::is_sorted;
-    use vector::proptest::vector;
+    use crate::test::is_sorted;
+    use crate::vector::proptest::vector;
+    use ::proptest::num::i32;
+    use ::proptest::proptest;
 
     proptest! {
         #[test]

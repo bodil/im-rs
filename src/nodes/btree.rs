@@ -9,9 +9,9 @@ use std::ops::{Bound, RangeBounds};
 
 use typenum::{Add1, Unsigned};
 
-use config::OrdChunkSize as NodeSize;
-use nodes::sized_chunk::Chunk;
-use util::{clone_ref, Ref};
+use crate::config::OrdChunkSize as NodeSize;
+use crate::nodes::sized_chunk::Chunk;
+use crate::util::{clone_ref, Ref};
 
 use self::Insert::*;
 use self::InsertAction::*;
@@ -437,7 +437,7 @@ impl<A: BTreeValue> Node<A> {
             }
             // Key is adjacent to some key in node
             Err(index) => {
-                let mut has_room = self.has_room();
+                let has_room = self.has_room();
                 let action = match self.children[index] {
                     // No child at location, this is the target node.
                     None => InsertAt,
@@ -564,7 +564,7 @@ impl<A: BTreeValue> Node<A> {
                 Remove::Removed(pair)
             }
             RemoveAction::PullUp(target_index, pull_to, child_index) => {
-                let mut children = &mut self.children;
+                let children = &mut self.children;
                 let mut update = None;
                 let mut value;
                 if let Some(&mut Some(ref mut child_ref)) = children.get_mut(child_index) {
@@ -618,8 +618,8 @@ impl<A: BTreeValue> Node<A> {
                                 unreachable!()
                             }
                         });
-                    let mut left = Ref::make_mut(children.next().unwrap());
-                    let mut child = Ref::make_mut(children.next().unwrap());
+                    let left = Ref::make_mut(children.next().unwrap());
+                    let child = Ref::make_mut(children.next().unwrap());
                     // Prepare the rebalanced node.
                     child.push_min(
                         left.children.last().unwrap().clone(),
@@ -664,8 +664,8 @@ impl<A: BTreeValue> Node<A> {
                                 unreachable!()
                             }
                         });
-                    let mut child = Ref::make_mut(children.next().unwrap());
-                    let mut right = Ref::make_mut(children.next().unwrap());
+                    let child = Ref::make_mut(children.next().unwrap());
+                    let right = Ref::make_mut(children.next().unwrap());
                     // Prepare the rebalanced node.
                     child.push_max(right.children[0].clone(), self.keys[index].clone());
                     match child.remove(key) {

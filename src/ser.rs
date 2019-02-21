@@ -9,11 +9,11 @@ use std::hash::{BuildHasher, Hash};
 use std::marker::PhantomData;
 use std::ops::Deref;
 
-use hashmap::HashMap;
-use hashset::HashSet;
-use ordmap::OrdMap;
-use ordset::OrdSet;
-use vector::Vector;
+use crate::hashmap::HashMap;
+use crate::hashset::HashSet;
+use crate::ordmap::OrdMap;
+use crate::ordset::OrdSet;
+use crate::vector::Vector;
 
 struct SeqVisitor<'de, S, A>
 where
@@ -259,13 +259,14 @@ impl<A: Clone + Serialize> Serialize for Vector<A> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use hashmap::proptest::hash_map;
-    use hashset::proptest::hash_set;
-    use ordmap::proptest::ord_map;
-    use ordset::proptest::ord_set;
-    use proptest::num::i32;
+    use crate::hashmap::proptest::hash_map;
+    use crate::hashset::proptest::hash_set;
+    use crate::ordmap::proptest::ord_map;
+    use crate::ordset::proptest::ord_set;
+    use crate::vector::proptest::vector;
+    use ::proptest::num::i32;
+    use ::proptest::proptest;
     use serde_json::{from_str, to_string};
-    use vector::proptest::vector;
 
     proptest! {
         #[test]

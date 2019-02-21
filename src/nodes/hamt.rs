@@ -11,10 +11,10 @@ use std::{mem, ptr};
 
 use typenum::{Pow, Unsigned, U2};
 
-use config::HashLevelSize;
-use nodes::sparse_chunk::{Iter as ChunkIter, IterMut as ChunkIterMut, SparseChunk};
-use nodes::types::Bits;
-use util::{clone_ref, Ref};
+use crate::config::HashLevelSize;
+use crate::nodes::sparse_chunk::{Iter as ChunkIter, IterMut as ChunkIterMut, SparseChunk};
+use crate::nodes::types::Bits;
+use crate::util::{clone_ref, Ref};
 
 pub type HashWidth = <U2 as Pow<HashLevelSize>>::Output;
 pub type HashBits = <HashWidth as Bits>::Store; // a uint of HASH_SIZE bits
@@ -293,7 +293,7 @@ impl<A: HashValue> Node<A> {
                     } // Otherwise, fall through to the removal.
                 }
                 Entry::Collision(ref mut coll_ref) => {
-                    let mut coll = Ref::make_mut(coll_ref);
+                    let coll = Ref::make_mut(coll_ref);
                     removed = coll.remove(key);
                     if coll.len() == 1 {
                         new_node = Some(coll.pop());

@@ -6,8 +6,8 @@ use std::iter::FusedIterator;
 use std::mem::replace;
 use std::ops::Range;
 
-use nodes::chunk::{Chunk, CHUNK_SIZE};
-use util::{
+use crate::nodes::chunk::{Chunk, CHUNK_SIZE};
+use crate::util::{
     clone_ref, Ref,
     Side::{self, Left, Right},
 };
@@ -292,7 +292,7 @@ impl<A: Clone> Node<A> {
         let size = if node.is_dense() {
             Size::Size(node.len())
         } else {
-            let mut size_table = Chunk::unit(node.len());
+            let size_table = Chunk::unit(node.len());
             Size::Table(Ref::from(size_table))
         };
         let children = Chunk::unit(node);
@@ -556,8 +556,7 @@ impl<A: Clone> Node<A> {
             match side {
                 Side::Right => {
                     if let Entry::Nodes(ref mut size, ref mut children) = self.children {
-                        let mut rightmost =
-                            Ref::make_mut(Ref::make_mut(children).last_mut().unwrap());
+                        let rightmost = Ref::make_mut(Ref::make_mut(children).last_mut().unwrap());
                         let old_size = rightmost.len();
                         let chunk = Ref::make_mut(&mut chunk);
                         let values = rightmost.children.unwrap_values_mut();
@@ -569,8 +568,7 @@ impl<A: Clone> Node<A> {
                 }
                 Side::Left => {
                     if let Entry::Nodes(ref mut size, ref mut children) = self.children {
-                        let mut leftmost =
-                            Ref::make_mut(Ref::make_mut(children).first_mut().unwrap());
+                        let leftmost = Ref::make_mut(Ref::make_mut(children).first_mut().unwrap());
                         let old_size = leftmost.len();
                         let chunk = Ref::make_mut(&mut chunk);
                         let values = leftmost.children.unwrap_values_mut();

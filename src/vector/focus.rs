@@ -7,10 +7,10 @@ use std::ops::{Range, RangeBounds};
 use std::ptr::null;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
-use nodes::chunk::Chunk;
-use sync::Lock;
-use util::{to_range, Ref};
-use vector::{Iter, IterMut, Vector, RRB};
+use crate::nodes::chunk::Chunk;
+use crate::sync::Lock;
+use crate::util::{to_range, Ref};
+use crate::vector::{Iter, IterMut, Vector, RRB};
 
 /// Focused indexing over a [`Vector`][Vector].
 ///
@@ -424,12 +424,16 @@ where
 /// # fn main() {
 /// let mut vec = Vector::from_iter(0..1000);
 /// let focus1 = vec.focus_mut();
-/// // Fails here because you already have a focus
+/// // Fails here in 2015 edition because you're creating
+/// // two mutable references to the same thing.
 /// let focus2 = vec.focus_mut();
+/// // Fails here in 2018 edition because creating focus2
+/// // made focus1's lifetime go out of scope.
+/// assert_eq!(Some(&0), focus1.get(0));
 /// # }
 /// ```
 ///
-/// On the other hand, you can split that one focus into multiple sub-foci,
+/// On the other hand, you can split that one focus into multiple sub-focuses,
 /// which is safe because they can't overlap:
 ///
 /// ```rust
@@ -439,7 +443,9 @@ where
 /// # fn main() {
 /// let mut vec = Vector::from_iter(0..1000);
 /// let focus = vec.focus_mut();
-/// let (left, right) = focus.split_at(500);
+/// let (mut left, mut right) = focus.split_at(500);
+/// assert_eq!(Some(&0), left.get(0));
+/// assert_eq!(Some(&500), right.get(0));
 /// # }
 /// ```
 ///
@@ -459,6 +465,7 @@ where
 /// // `left` and `right` are still in scope even if `focus` isn't, so we can't
 /// // create another focus:
 /// let focus2 = vec.focus_mut();
+/// assert_eq!(Some(&0), left.get(0));
 /// # }
 /// ```
 ///

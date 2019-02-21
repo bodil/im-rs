@@ -33,11 +33,11 @@ use std::iter::FusedIterator;
 use std::iter::{FromIterator, IntoIterator, Sum};
 use std::ops::{Add, Deref, Mul};
 
-use nodes::hamt::{
+use crate::nodes::hamt::{
     hash_key, Drain as NodeDrain, HashValue, Iter as NodeIter, IterMut as NodeIterMut, Node,
 };
-use ordset::OrdSet;
-use util::Ref;
+use crate::ordset::OrdSet;
+use crate::util::Ref;
 
 /// Construct a set from a sequence of values.
 ///
@@ -466,7 +466,7 @@ where
         I: IntoIterator<Item = Self>,
         S: Default,
     {
-        i.into_iter().fold(Self::default(), |a, b| a.union(b))
+        i.into_iter().fold(Self::default(), Self::union)
     }
 
     /// Construct the difference between two sets.
@@ -994,7 +994,7 @@ where
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     use super::*;
-    use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
+    use ::proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
     use std::ops::Range;
 
     /// A strategy for a hash set of a given size.
@@ -1030,9 +1030,10 @@ pub mod proptest {
 mod test {
     use super::proptest::*;
     use super::*;
-    use proptest::num::i16;
+    use crate::test::LolHasher;
+    use ::proptest::num::i16;
+    use ::proptest::proptest;
     use std::hash::BuildHasherDefault;
-    use test::LolHasher;
 
     #[test]
     fn insert_failing() {
@@ -1064,12 +1065,12 @@ mod test {
 
     #[test]
     fn issue_60_drain_iterator_memory_corruption() {
-        use test::MetroHashBuilder;
+        use crate::test::MetroHashBuilder;
         for i in 0..1000 {
             let mut lhs = vec![0, 1, 2];
             lhs.sort();
 
-            let mut hasher = Ref::from(MetroHashBuilder::new(i));
+            let hasher = Ref::from(MetroHashBuilder::new(i));
             let mut iset: HashSet<_, MetroHashBuilder> = HashSet::with_hasher(hasher.clone());
             for &i in &lhs {
                 iset.insert(i);

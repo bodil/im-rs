@@ -9,7 +9,7 @@ pub mod rrb;
 pub use sized_chunks::*;
 
 pub mod chunk {
-    use config::VectorChunkSize;
+    use crate::config::VectorChunkSize;
     use sized_chunks as sc;
     use typenum::Unsigned;
 
