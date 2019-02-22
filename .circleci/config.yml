@@ -1,0 +1,160 @@
+version: 2.1
+
+executors:
+  default:
+    description: Executor environment for building Rust crates.
+    docker:
+      - image: circleci/rust:1
+
+commands:
+  prepare_tree:
+    description: Prepare the separate distribution trees.
+    steps:
+      - run:
+          name: Cargo tooling version check
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y -q jq
+            curl -s https://crates.io/api/v1/crates/cargo-make | jq .crate.name,.crate.max_version > cargo-tools-version
+            curl -s https://crates.io/api/v1/crates/cargo-script | jq .crate.name,.crate.max_version >> cargo-tools-version
+            cat cargo-tools-version
+      - restore_cache:
+          keys:
+            - v2-cargo-bin-{{arch}}-{{checksum "cargo-tools-version"}}
+      - run:
+          name: Install cargo tooling
+          command: |
+            cargo install --root ~/.cargo cargo-make || true
+            cargo install --root ~/.cargo cargo-script || true
+      - run:
+          name: Prepare distribution folders
+          command: |
+            env PATH=~/.cargo/bin:$PATH cargo make prepare-release
+      - save_cache:
+          paths:
+            - ~/.cargo
+          key: v2-cargo-bin-{{arch}}-{{checksum "cargo-tools-version"}}
+
+  update_toolchain:
+    description: Update the Rust toolchain to use for building.
+    parameters:
+      toolchain:
+        description: Rust toolchain to use. Overrides the default toolchain (stable) or any toolchain specified in the project via `rust-toolchain`.
+        type: string
+        default: ""
+    steps:
+      - run:
+          name: Update toolchain
+          command: |
+            test -z "<<parameters.toolchain>>" || echo "<<parameters.toolchain>>" >rust-toolchain
+            rustup show active-toolchain
+      - run:
+          name: Version information
+          command: |
+            rustc --version > rust-version
+            rustup --version
+            rustc --version
+            cargo --version
+
+  build:
+    description: Build all targets of a Rust crate.
+    parameters:
+      release:
+        description: By default, the crate is build in debug mode without optimizations. Set this to true to compile in release mode.
+        type: boolean
+        default: false
+      flavour:
+        description: Whether to build im or im-rc.
+        type: string
+        default: "im"
+    steps:
+      - run:
+          name: Calculate dependencies
+          working_directory: "~/project/dist/<<parameters.flavour>>"
+          command: |
+            test -e Cargo.lock || cargo generate-lockfile
+      - restore_cache:
+          keys:
+            - v1-cargo-cache-{{arch}}-{{checksum "rust-version"}}-<<parameters.flavour>>-<<parameters.release>>-{{checksum "dist/<<parameters.flavour>>/Cargo.lock"}}
+      - run:
+          name: Build all targets
+          working_directory: "~/project/dist/<<parameters.flavour>>"
+          command: cargo build --all --all-targets<<#parameters.release>> --release<</parameters.release>>
+      - save_cache:
+          paths:
+            - target
+          key: v1-cargo-cache-{{arch}}-{{checksum "rust-version"}}-<<parameters.flavour>>-<<parameters.release>>-{{checksum "dist/<<parameters.flavour>>/Cargo.lock"}}
+
+  test:
+    description: Run all tests of a Rust crate. Make sure to build first.
+    parameters:
+      release:
+        description: By default, the crate is build in debug mode without optimizations. Set this to true to compile in release mode.
+        type: boolean
+        default: false
+      flavour:
+        description: Whether to build im or im-rc.
+        type: string
+        default: "im"
+    steps:
+      - run:
+          name: Run all tests
+          working_directory: "~/project/dist/<<parameters.flavour>>"
+          command: cargo test --all<<#parameters.release>> --release<</parameters.release>>
+
+jobs:
+  test:
+    description: Builds a Rust crate and runs all tests.
+    parameters:
+      toolchain:
+        description: Rust toolchain to use. Overrides the default toolchain (stable) or any toolchain specified in the project via `rust-toolchain`.
+        type: string
+        default: ""
+      release:
+        description: By default, the crate is build in debug mode without optimizations. Set this to true to compile in release mode.
+        type: boolean
+        default: false
+      flavour:
+        description: Whether to build im or im-rc.
+        type: string
+        default: "im"
+    executor: default
+    steps:
+      - checkout
+      - update_toolchain:
+          toolchain: <<parameters.toolchain>>
+      - prepare_tree
+      - build:
+          release: <<parameters.release>>
+          flavour: <<parameters.flavour>>
+      - test:
+          release: <<parameters.release>>
+          flavour: <<parameters.flavour>>
+
+workflows:
+  Project:
+    jobs:
+      - test:
+          name: im (stable)
+          toolchain: stable
+          flavour: im
+      - test:
+          name: im (beta)
+          toolchain: beta
+          flavour: im
+      - test:
+          name: im (nightly)
+          toolchain: nightly
+          flavour: im
+      - test:
+          name: im-rc (stable)
+          toolchain: stable
+          flavour: im-rc
+      - test:
+          name: im-rc (beta)
+          toolchain: beta
+          flavour: im-rc
+      - test:
+          name: im-rc (nightly)
+          toolchain: nightly
+          flavour: im-rc

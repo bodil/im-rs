@@ -18,7 +18,7 @@ exclude = ["dist/**", "rc/**", "release.toml", "Makefile.toml", "proptest-regres
 path = "./src/lib.rs"
 
 [badges]
-travis-ci = { repository = "bodil/im-rs" }
+circle-ci = { repository = "bodil/im-rs" }
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docs_rs_workaround"]

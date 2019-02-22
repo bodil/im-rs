@@ -1,15 +1,47 @@
 [tasks.prepare-release]
 dependencies = ["copy-release", "patch-release"]
 
-[tasks.install-amber]
-force = true
-command = "cargo"
-args = ["install", "-q", "amber"]
-
 [tasks.patch-release]
-dependencies = ["install-amber"]
-command = "ambr"
-args = ["--no-interactive", "extern crate im", "extern crate im_rc as im", "dist/im-rc"]
+script_runner = "@rust"
+script = [
+'''
+use std::fs;
+use std::io::Result;
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
+
+const FROM: &'static str = "extern crate im";
+const TO: &'static str = "extern crate im_rc as im";
+
+fn patch_file(path: &Path) -> Result<()> {
+  let orig = fs::read_to_string(path)?;
+  let mut bits: Vec<_> = orig.split(FROM).collect();
+  if bits.len() > 1 {
+    let out = bits.join(TO);
+    fs::write(path, &out)?;
+  }
+  Ok(())
+}
+
+fn fix_imports(path: &Path) -> Result<()> {
+  for entry in fs::read_dir(path)? {
+    let entry = entry?;
+    let path = entry.path();
+    if path.is_dir() {
+      fix_imports(&path)?;
+    } else if path.extension() == Some(OsStr::new("rs")) {
+      patch_file(&path)?;
+    }
+  }
+  Ok(())
+}
+
+fn main() {
+  let path = PathBuf::from("dist").join("im-rc");
+  fix_imports(&path);
+}
+'''
+]
 
 [tasks.copy-release]
 dependencies = ["sync"]
@@ -22,6 +54,7 @@ script = [
 //! fs_extra = "1.1"
 //! glob = "0.2"
 //! ```
+#![allow(non_snake_case)]
 extern crate toml_edit;
 extern crate fs_extra;
 extern crate glob;
