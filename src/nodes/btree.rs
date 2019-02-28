@@ -90,10 +90,7 @@ impl<A> Default for Node<A> {
     }
 }
 
-impl<A> Node<A>
-where
-    A: Clone,
-{
+impl<A> Node<A> {
     #[inline]
     fn has_room(&self) -> bool {
         self.keys.len() < NODE_SIZE

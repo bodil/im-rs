@@ -164,11 +164,7 @@ pub struct OrdMap<K, V> {
     root: Ref<Node<(K, V)>>,
 }
 
-impl<K, V> OrdMap<K, V>
-where
-    K: Ord + Clone,
-    V: Clone,
-{
+impl<K, V> OrdMap<K, V> {
     /// Construct an empty map.
     #[must_use]
     pub fn new() -> Self {
@@ -261,6 +257,37 @@ where
         self.size
     }
 
+    /// Discard all elements from the map.
+    ///
+    /// This leaves you with an empty map, and all elements that
+    /// were previously inside it are dropped.
+    ///
+    /// Time: O(n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::OrdMap;
+    /// # fn main() {
+    /// let mut map = ordmap![1=>1, 2=>2, 3=>3];
+    /// map.clear();
+    /// assert!(map.is_empty());
+    /// # }
+    /// ```
+    pub fn clear(&mut self) {
+        if !self.is_empty() {
+            self.root = Default::default();
+            self.size = 0;
+        }
+    }
+}
+
+impl<K, V> OrdMap<K, V>
+where
+    K: Ord + Clone,
+    V: Clone,
+{
     /// Get the largest key in a map, along with its value. If the map
     /// is empty, return `None`.
     ///
@@ -517,31 +544,6 @@ where
         self.size -= 1;
         self.root = new_root;
         removed_value
-    }
-
-    /// Discard all elements from the map.
-    ///
-    /// This leaves you with an empty map, and all elements that
-    /// were previously inside it are dropped.
-    ///
-    /// Time: O(n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::OrdMap;
-    /// # fn main() {
-    /// let mut map = ordmap![1=>1, 2=>2, 3=>3];
-    /// map.clear();
-    /// assert!(map.is_empty());
-    /// # }
-    /// ```
-    pub fn clear(&mut self) {
-        if !self.is_empty() {
-            self.root = Default::default();
-            self.size = 0;
-        }
     }
 
     /// Construct a new map by inserting a key/value mapping into a
@@ -1457,11 +1459,7 @@ where
     }
 }
 
-impl<K, V> Default for OrdMap<K, V>
-where
-    K: Ord + Clone,
-    V: Clone,
-{
+impl<K, V> Default for OrdMap<K, V> {
     fn default() -> Self {
         Self::new()
     }

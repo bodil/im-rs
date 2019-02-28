@@ -127,16 +127,18 @@ where
     }
 }
 
-impl<A> HashSet<A, RandomState>
-where
-    A: Hash + Eq + Clone,
-{
+impl<A> HashSet<A, RandomState> {
     /// Construct an empty set.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
+}
 
+impl<A> HashSet<A, RandomState>
+where
+    A: Hash + Eq + Clone,
+{
     /// Construct a set with a single value.
     ///
     /// This method has been deprecated; use [`unit`][unit] instead.
@@ -212,31 +214,6 @@ impl<A, S> HashSet<A, S> {
     pub fn len(&self) -> usize {
         self.size
     }
-}
-
-impl<A, S> HashSet<A, S>
-where
-    A: Hash + Eq + Clone,
-    S: BuildHasher,
-{
-    fn test_eq(&self, other: &Self) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
-        let mut seen = collections::HashSet::new();
-        for value in self.iter() {
-            if !other.contains(&value) {
-                return false;
-            }
-            seen.insert(value);
-        }
-        for value in other.iter() {
-            if !seen.contains(&value) {
-                return false;
-            }
-        }
-        true
-    }
 
     /// Construct an empty hash set using the provided hasher.
     #[inline]
@@ -274,6 +251,31 @@ where
         }
     }
 
+    /// Discard all elements from the set.
+    ///
+    /// This leaves you with an empty set, and all elements that
+    /// were previously inside it are dropped.
+    ///
+    /// Time: O(n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::HashSet;
+    /// # fn main() {
+    /// let mut set = hashset![1, 2, 3];
+    /// set.clear();
+    /// assert!(set.is_empty());
+    /// # }
+    /// ```
+    pub fn clear(&mut self) {
+        if !self.is_empty() {
+            self.root = Default::default();
+            self.size = 0;
+        }
+    }
+
     /// Get an iterator over the values in a hash set.
     ///
     /// Please note that the order is consistent between sets using
@@ -286,6 +288,42 @@ where
         Iter {
             it: NodeIter::new(&self.root, self.size),
         }
+    }
+}
+
+impl<A, S> HashSet<A, S>
+where
+    A: Hash + Eq + Clone,
+    S: BuildHasher,
+{
+    fn test_eq(&self, other: &Self) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+        let mut seen = collections::HashSet::new();
+        for value in self.iter() {
+            if !other.contains(&value) {
+                return false;
+            }
+            seen.insert(value);
+        }
+        for value in other.iter() {
+            if !seen.contains(&value) {
+                return false;
+            }
+        }
+        true
+    }
+    /// Test if a value is part of a set.
+    ///
+    /// Time: O(log n)
+    #[must_use]
+    pub fn contains<BA>(&self, a: &BA) -> bool
+    where
+        BA: Hash + Eq + ?Sized,
+        A: Borrow<BA>,
+    {
+        self.root.get(hash_key(&*self.hasher, a), 0, a).is_some()
     }
 
     /// Get a mutable iterator over the values in a hash set.
@@ -300,18 +338,6 @@ where
         IterMut {
             it: NodeIterMut::new(root, self.size),
         }
-    }
-
-    /// Test if a value is part of a set.
-    ///
-    /// Time: O(log n)
-    #[must_use]
-    pub fn contains<BA>(&self, a: &BA) -> bool
-    where
-        BA: Hash + Eq + ?Sized,
-        A: Borrow<BA>,
-    {
-        self.root.get(hash_key(&*self.hasher, a), 0, a).is_some()
     }
 
     /// Insert a value into a set.
@@ -344,31 +370,6 @@ where
             self.size -= 1;
         }
         result.map(|v| v.0)
-    }
-
-    /// Discard all elements from the set.
-    ///
-    /// This leaves you with an empty set, and all elements that
-    /// were previously inside it are dropped.
-    ///
-    /// Time: O(n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::HashSet;
-    /// # fn main() {
-    /// let mut set = hashset![1, 2, 3];
-    /// set.clear();
-    /// assert!(set.is_empty());
-    /// # }
-    /// ```
-    pub fn clear(&mut self) {
-        if !self.is_empty() {
-            self.root = Default::default();
-            self.size = 0;
-        }
     }
 
     /// Construct a new set from the current set with the given value
@@ -628,7 +629,6 @@ where
 
 impl<A, S> Default for HashSet<A, S>
 where
-    A: Hash + Eq + Clone,
     S: BuildHasher + Default,
 {
     fn default() -> Self {

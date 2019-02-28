@@ -95,18 +95,23 @@ impl<A> From<CollisionNode<A>> for Entry<A> {
     }
 }
 
-impl<A: HashValue> Default for Node<A> {
+impl<A> Default for Node<A> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<A: HashValue> Node<A> {
+impl<A> Node<A> {
     #[inline]
     pub fn new() -> Self {
         Node {
             data: SparseChunk::new(),
         }
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.data.len()
     }
 
     #[inline]
@@ -130,15 +135,12 @@ impl<A: HashValue> Node<A> {
         }
     }
 
-    #[inline]
-    fn len(&self) -> usize {
-        self.data.len()
-    }
-
     fn pop(&mut self) -> Entry<A> {
         self.data.pop().unwrap()
     }
+}
 
+impl<A: HashValue> Node<A> {
     fn merge_values(value1: A, hash1: HashBits, value2: A, hash2: HashBits, shift: usize) -> Self {
         let index1 = mask(hash1, shift) as usize;
         let index2 = mask(hash2, shift) as usize;

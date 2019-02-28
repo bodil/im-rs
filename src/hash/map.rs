@@ -100,11 +100,7 @@ macro_rules! hashmap {
 /// [std::hash::Hash]: https://doc.rust-lang.org/std/hash/trait.Hash.html
 /// [std::collections::hash_map::RandomState]: https://doc.rust-lang.org/std/collections/hash_map/struct.RandomState.html
 
-pub struct HashMap<K, V, S = RandomState>
-where
-    K: Clone,
-    V: Clone,
-{
+pub struct HashMap<K, V, S = RandomState> {
     size: usize,
     root: Ref<Node<(K, V)>>,
     hasher: Ref<S>,
@@ -126,18 +122,20 @@ where
     }
 }
 
-impl<K, V> HashMap<K, V, RandomState>
-where
-    K: Hash + Eq + Clone,
-    V: Clone,
-{
+impl<K, V> HashMap<K, V, RandomState> {
     /// Construct an empty hash map.
     #[inline]
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
+}
 
+impl<K, V> HashMap<K, V, RandomState>
+where
+    K: Hash + Eq + Clone,
+    V: Clone,
+{
     /// Construct a hash map with a single mapping.
     ///
     /// This method has been deprecated; use [`unit`][unit] instead.
@@ -172,11 +170,7 @@ where
     }
 }
 
-impl<K, V, S> HashMap<K, V, S>
-where
-    K: Clone,
-    V: Clone,
-{
+impl<K, V, S> HashMap<K, V, S> {
     /// Test whether a hash map is empty.
     ///
     /// Time: O(1)
@@ -222,35 +216,6 @@ where
     #[must_use]
     pub fn len(&self) -> usize {
         self.size
-    }
-}
-
-impl<K, V, S> HashMap<K, V, S>
-where
-    K: Hash + Eq + Clone,
-    V: Clone,
-    S: BuildHasher,
-{
-    fn test_eq(&self, other: &Self) -> bool
-    where
-        V: PartialEq,
-    {
-        if self.len() != other.len() {
-            return false;
-        }
-        let mut seen = collections::HashSet::new();
-        for (key, value) in self.iter() {
-            if Some(value) != other.get(&key) {
-                return false;
-            }
-            seen.insert(key);
-        }
-        for key in other.keys() {
-            if !seen.contains(&key) {
-                return false;
-            }
-        }
-        true
     }
 
     /// Construct an empty hash map using the provided hasher.
@@ -306,22 +271,6 @@ where
         }
     }
 
-    /// Get a mutable iterator over the values of a hash map.
-    ///
-    /// Please note that the order is consistent between maps using
-    /// the same hasher, but no other ordering guarantee is offered.
-    /// Items will not come out in insertion order or sort order.
-    /// They will, however, come out in the same order every time for
-    /// the same map.
-    #[inline]
-    #[must_use]
-    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
-        let root = Ref::make_mut(&mut self.root);
-        IterMut {
-            it: NodeIterMut::new(root, self.size),
-        }
-    }
-
     /// Get an iterator over a hash map's keys.
     ///
     /// Please note that the order is consistent between maps using
@@ -349,6 +298,76 @@ where
     pub fn values(&self) -> Values<K, V> {
         Values {
             it: NodeIter::new(&self.root, self.size),
+        }
+    }
+
+    /// Discard all elements from the map.
+    ///
+    /// This leaves you with an empty map, and all elements that
+    /// were previously inside it are dropped.
+    ///
+    /// Time: O(n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::HashMap;
+    /// # fn main() {
+    /// let mut map = hashmap![1=>1, 2=>2, 3=>3];
+    /// map.clear();
+    /// assert!(map.is_empty());
+    /// # }
+    /// ```
+    pub fn clear(&mut self) {
+        if !self.is_empty() {
+            self.root = Default::default();
+            self.size = 0;
+        }
+    }
+}
+
+impl<K, V, S> HashMap<K, V, S>
+where
+    K: Hash + Eq + Clone,
+    V: Clone,
+    S: BuildHasher,
+{
+    fn test_eq(&self, other: &Self) -> bool
+    where
+        V: PartialEq,
+    {
+        if self.len() != other.len() {
+            return false;
+        }
+        let mut seen = collections::HashSet::new();
+        for (key, value) in self.iter() {
+            if Some(value) != other.get(&key) {
+                return false;
+            }
+            seen.insert(key);
+        }
+        for key in other.keys() {
+            if !seen.contains(&key) {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Get a mutable iterator over the values of a hash map.
+    ///
+    /// Please note that the order is consistent between maps using
+    /// the same hasher, but no other ordering guarantee is offered.
+    /// Items will not come out in insertion order or sort order.
+    /// They will, however, come out in the same order every time for
+    /// the same map.
+    #[inline]
+    #[must_use]
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
+        let root = Ref::make_mut(&mut self.root);
+        IterMut {
+            it: NodeIterMut::new(root, self.size),
         }
     }
 
@@ -532,31 +551,6 @@ where
             self.size -= 1;
         }
         result
-    }
-
-    /// Discard all elements from the map.
-    ///
-    /// This leaves you with an empty map, and all elements that
-    /// were previously inside it are dropped.
-    ///
-    /// Time: O(n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::HashMap;
-    /// # fn main() {
-    /// let mut map = hashmap![1=>1, 2=>2, 3=>3];
-    /// map.clear();
-    /// assert!(map.is_empty());
-    /// # }
-    /// ```
-    pub fn clear(&mut self) {
-        if !self.is_empty() {
-            self.root = Default::default();
-            self.size = 0;
-        }
     }
 
     /// Get the [`Entry`][Entry] for a key in the map for in-place manipulation.
@@ -1462,8 +1456,6 @@ where
 
 impl<K, V, S> Default for HashMap<K, V, S>
 where
-    K: Hash + Eq + Clone,
-    V: Clone,
     S: BuildHasher + Default,
 {
     #[inline]

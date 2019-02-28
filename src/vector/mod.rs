@@ -218,40 +218,6 @@ impl<A: Clone> Vector<A> {
         Single(Ref::new(Chunk::new()))
     }
 
-    /// Construct a vector with a single value.
-    ///
-    /// This method has been deprecated; use [`unit`][unit] instead.
-    ///
-    /// [unit]: #method.unit
-    #[inline]
-    #[must_use]
-    #[deprecated(since = "12.3.0", note = "renamed to `unit` for consistency")]
-    pub fn singleton(a: A) -> Self {
-        Self::unit(a)
-    }
-
-    /// Construct a vector with a single value.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::vector::Vector;
-    /// # fn main() {
-    /// let vec = Vector::unit(1337);
-    /// assert_eq!(1, vec.len());
-    /// assert_eq!(
-    ///   vec.get(0),
-    ///   Some(&1337)
-    /// );
-    /// # }
-    /// ```
-    #[inline]
-    #[must_use]
-    pub fn unit(a: A) -> Self {
-        Single(Ref::new(Chunk::unit(a)))
-    }
-
     /// Get the length of a vector.
     ///
     /// Time: O(1)
@@ -653,6 +619,133 @@ impl<A: Clone> Vector<A> {
         A: PartialEq,
     {
         self.index_of(value).is_some()
+    }
+
+    /// Discard all elements from the vector.
+    ///
+    /// This leaves you with an empty vector, and all elements that
+    /// were previously inside it are dropped.
+    ///
+    /// Time: O(n)
+    pub fn clear(&mut self) {
+        if !self.is_empty() {
+            *self = Single(Ref::new(Chunk::new()));
+        }
+    }
+
+    /// Binary search a sorted vector for a given element using a comparator
+    /// function.
+    ///
+    /// Assumes the vector has already been sorted using the same comparator
+    /// function, eg. by using [`sort_by`][sort_by].
+    ///
+    /// If the value is found, it returns `Ok(index)` where `index` is the index
+    /// of the element. If the value isn't found, it returns `Err(index)` where
+    /// `index` is the index at which the element would need to be inserted to
+    /// maintain sorted order.
+    ///
+    /// Time: O(log n)
+    ///
+    /// [sort_by]: #method.sort_by
+    #[must_use]
+    pub fn binary_search_by<F>(&self, mut f: F) -> Result<usize, usize>
+    where
+        F: FnMut(&A) -> Ordering,
+    {
+        let mut size = self.len();
+        if size == 0 {
+            return Err(0);
+        }
+        let mut base = 0;
+        while size > 1 {
+            let half = size / 2;
+            let mid = base + half;
+            base = match f(&self[mid]) {
+                Ordering::Greater => base,
+                _ => mid,
+            };
+            size -= half;
+        }
+        match f(&self[base]) {
+            Ordering::Equal => Ok(base),
+            Ordering::Greater => Err(base),
+            Ordering::Less => Err(base + 1),
+        }
+    }
+
+    /// Binary search a sorted vector for a given element.
+    ///
+    /// If the value is found, it returns `Ok(index)` where `index` is the index
+    /// of the element. If the value isn't found, it returns `Err(index)` where
+    /// `index` is the index at which the element would need to be inserted to
+    /// maintain sorted order.
+    ///
+    /// Time: O(log n)
+    #[must_use]
+    pub fn binary_search(&self, value: &A) -> Result<usize, usize>
+    where
+        A: Ord,
+    {
+        self.binary_search_by(|e| e.cmp(value))
+    }
+
+    /// Binary search a sorted vector for a given element with a key extract
+    /// function.
+    ///
+    /// Assumes the vector has already been sorted using the same key extract
+    /// function, eg. by using [`sort_by_key`][sort_by_key].
+    ///
+    /// If the value is found, it returns `Ok(index)` where `index` is the index
+    /// of the element. If the value isn't found, it returns `Err(index)` where
+    /// `index` is the index at which the element would need to be inserted to
+    /// maintain sorted order.
+    ///
+    /// Time: O(log n)
+    ///
+    /// [sort_by_key]: #method.sort_by_key
+    #[must_use]
+    pub fn binary_search_by_key<B, F>(&self, b: &B, mut f: F) -> Result<usize, usize>
+    where
+        F: FnMut(&A) -> B,
+        B: Ord,
+    {
+        self.binary_search_by(|k| f(k).cmp(b))
+    }
+}
+
+impl<A: Clone> Vector<A> {
+    /// Construct a vector with a single value.
+    ///
+    /// This method has been deprecated; use [`unit`][unit] instead.
+    ///
+    /// [unit]: #method.unit
+    #[inline]
+    #[must_use]
+    #[deprecated(since = "12.3.0", note = "renamed to `unit` for consistency")]
+    pub fn singleton(a: A) -> Self {
+        Self::unit(a)
+    }
+
+    /// Construct a vector with a single value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::vector::Vector;
+    /// # fn main() {
+    /// let vec = Vector::unit(1337);
+    /// assert_eq!(1, vec.len());
+    /// assert_eq!(
+    ///   vec.get(0),
+    ///   Some(&1337)
+    /// );
+    /// # }
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn unit(a: A) -> Self {
+        Single(Ref::new(Chunk::unit(a)))
     }
 
     /// Create a new vector with the value at index `index` updated.
@@ -1232,97 +1325,6 @@ impl<A: Clone> Vector<A> {
                 value
             }
         }
-    }
-
-    /// Discard all elements from the vector.
-    ///
-    /// This leaves you with an empty vector, and all elements that
-    /// were previously inside it are dropped.
-    ///
-    /// Time: O(n)
-    pub fn clear(&mut self) {
-        if !self.is_empty() {
-            *self = Single(Ref::new(Chunk::new()));
-        }
-    }
-
-    /// Binary search a sorted vector for a given element using a comparator
-    /// function.
-    ///
-    /// Assumes the vector has already been sorted using the same comparator
-    /// function, eg. by using [`sort_by`][sort_by].
-    ///
-    /// If the value is found, it returns `Ok(index)` where `index` is the index
-    /// of the element. If the value isn't found, it returns `Err(index)` where
-    /// `index` is the index at which the element would need to be inserted to
-    /// maintain sorted order.
-    ///
-    /// Time: O(log n)
-    ///
-    /// [sort_by]: #method.sort_by
-    #[must_use]
-    pub fn binary_search_by<F>(&self, mut f: F) -> Result<usize, usize>
-    where
-        F: FnMut(&A) -> Ordering,
-    {
-        let mut size = self.len();
-        if size == 0 {
-            return Err(0);
-        }
-        let mut base = 0;
-        while size > 1 {
-            let half = size / 2;
-            let mid = base + half;
-            base = match f(&self[mid]) {
-                Ordering::Greater => base,
-                _ => mid,
-            };
-            size -= half;
-        }
-        match f(&self[base]) {
-            Ordering::Equal => Ok(base),
-            Ordering::Greater => Err(base),
-            Ordering::Less => Err(base + 1),
-        }
-    }
-
-    /// Binary search a sorted vector for a given element.
-    ///
-    /// If the value is found, it returns `Ok(index)` where `index` is the index
-    /// of the element. If the value isn't found, it returns `Err(index)` where
-    /// `index` is the index at which the element would need to be inserted to
-    /// maintain sorted order.
-    ///
-    /// Time: O(log n)
-    #[must_use]
-    pub fn binary_search(&self, value: &A) -> Result<usize, usize>
-    where
-        A: Ord,
-    {
-        self.binary_search_by(|e| e.cmp(value))
-    }
-
-    /// Binary search a sorted vector for a given element with a key extract
-    /// function.
-    ///
-    /// Assumes the vector has already been sorted using the same key extract
-    /// function, eg. by using [`sort_by_key`][sort_by_key].
-    ///
-    /// If the value is found, it returns `Ok(index)` where `index` is the index
-    /// of the element. If the value isn't found, it returns `Err(index)` where
-    /// `index` is the index at which the element would need to be inserted to
-    /// maintain sorted order.
-    ///
-    /// Time: O(log n)
-    ///
-    /// [sort_by_key]: #method.sort_by_key
-    #[must_use]
-    pub fn binary_search_by_key<B, F>(&self, b: &B, mut f: F) -> Result<usize, usize>
-    where
-        F: FnMut(&A) -> B,
-        B: Ord,
-    {
-        self.binary_search_by(|k| f(k).cmp(b))
     }
 
     /// Insert an element into a sorted vector.

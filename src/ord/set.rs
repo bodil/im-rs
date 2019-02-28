@@ -175,10 +175,7 @@ pub struct OrdSet<A> {
     root: Ref<Node<Value<A>>>,
 }
 
-impl<A> OrdSet<A>
-where
-    A: Ord + Clone,
-{
+impl<A> OrdSet<A> {
     /// Construct an empty set.
     #[must_use]
     pub fn new() -> Self {
@@ -264,6 +261,36 @@ where
         self.size
     }
 
+    /// Discard all elements from the set.
+    ///
+    /// This leaves you with an empty set, and all elements that
+    /// were previously inside it are dropped.
+    ///
+    /// Time: O(n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::OrdSet;
+    /// # fn main() {
+    /// let mut set = ordset![1, 2, 3];
+    /// set.clear();
+    /// assert!(set.is_empty());
+    /// # }
+    /// ```
+    pub fn clear(&mut self) {
+        if !self.is_empty() {
+            self.root = Default::default();
+            self.size = 0;
+        }
+    }
+}
+
+impl<A> OrdSet<A>
+where
+    A: Ord + Clone,
+{
     /// Get the smallest value in a set.
     ///
     /// If the set is empty, returns `None`.
@@ -433,31 +460,6 @@ where
         }
         .clone();
         self.remove(&key)
-    }
-
-    /// Discard all elements from the set.
-    ///
-    /// This leaves you with an empty set, and all elements that
-    /// were previously inside it are dropped.
-    ///
-    /// Time: O(n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::OrdSet;
-    /// # fn main() {
-    /// let mut set = ordset![1, 2, 3];
-    /// set.clear();
-    /// assert!(set.is_empty());
-    /// # }
-    /// ```
-    pub fn clear(&mut self) {
-        if !self.is_empty() {
-            self.root = Default::default();
-            self.size = 0;
-        }
     }
 
     /// Construct a new set from the current set with the given value
