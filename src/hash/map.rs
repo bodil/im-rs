@@ -13,10 +13,8 @@
 //! [`Hash`][std::hash::Hash] and [`Eq`][std::cmp::Eq].
 //!
 //! Map entries will have a predictable order based on the hasher
-//! being used. Unless otherwise specified, all maps will use the
-//! default [`RandomState`][std::collections::hash_map::RandomState]
-//! hasher, which will produce consistent hashes for the duration of
-//! its lifetime, but not between restarts of your program.
+//! being used. Unless otherwise specified, this will be the standard
+//! [`RandomState`][std::collections::hash_map::RandomState] hasher.
 //!
 //! [1]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
 //! [std::cmp::Eq]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
@@ -89,11 +87,8 @@ macro_rules! hashmap {
 /// [`Hash`][std::hash::Hash] and [`Eq`][std::cmp::Eq].
 ///
 /// Map entries will have a predictable order based on the hasher
-/// being used. Unless otherwise specified, all maps will share an
-/// instance of the default
-/// [`RandomState`][std::collections::hash_map::RandomState] hasher,
-/// which will produce consistent hashes for the duration of its
-/// lifetime, but not between restarts of your program.
+/// being used. Unless otherwise specified, this will be the standard
+/// [`RandomState`][std::collections::hash_map::RandomState] hasher.
 ///
 /// [1]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
 /// [std::cmp::Eq]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
