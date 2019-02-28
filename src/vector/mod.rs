@@ -59,7 +59,7 @@ use crate::nodes::rrb::{
 use crate::sort;
 use crate::util::{clone_ref, swap_indices, to_range, Ref, Side};
 
-use self::Vector::{Full, Single};
+use self::Vector::{Empty, Full, Single};
 
 mod focus;
 
@@ -138,6 +138,8 @@ macro_rules! vector {
 /// [VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
 pub enum Vector<A> {
     #[doc(hidden)]
+    Empty,
+    #[doc(hidden)]
     Single(Ref<Chunk<A>>),
     #[doc(hidden)]
     Full(RRB<A>),
@@ -169,18 +171,28 @@ impl<A> Clone for RRB<A> {
 }
 
 impl<A: Clone> Vector<A> {
-    /// True if a vector is a full single chunk, ie. must be promoted to grow
-    /// further.
+    /// True if a vector is empty or a full single chunk, ie. must be promoted
+    /// to grow further.
     fn needs_promotion(&self) -> bool {
         match self {
+            Empty => true,
             Single(chunk) if chunk.is_full() => true,
             _ => false,
         }
     }
 
-    /// Promote a single to a full, with the single chunk becomming inner_f.
+    /// Promote an empty to a single.
+    fn promote_empty(&mut self) {
+        if let Empty = self {
+            *self = Single(Ref::new(Chunk::new()))
+        }
+    }
+
+    /// Promote a single to a full, with the single chunk becomming inner_f, or
+    /// promote an empty to a single.
     fn promote_front(&mut self) {
         let chunk = match self {
+            Empty => return self.promote_empty(),
             Single(chunk) => chunk.clone(),
             _ => return,
         };
@@ -195,9 +207,11 @@ impl<A: Clone> Vector<A> {
         })
     }
 
-    /// Promote a single to a full, with the single chunk becomming inner_b.
+    /// Promote a single to a full, with the single chunk becomming inner_b, or
+    /// promote an empty to a single.
     fn promote_back(&mut self) {
         let chunk = match self {
+            Empty => return self.promote_empty(),
             Single(chunk) => chunk.clone(),
             _ => return,
         };
@@ -215,7 +229,7 @@ impl<A: Clone> Vector<A> {
     /// Construct an empty vector.
     #[must_use]
     pub fn new() -> Self {
-        Single(Ref::new(Chunk::new()))
+        Empty
     }
 
     /// Get the length of a vector.
@@ -234,6 +248,7 @@ impl<A: Clone> Vector<A> {
     #[must_use]
     pub fn len(&self) -> usize {
         match self {
+            Empty => 0,
             Single(chunk) => chunk.len(),
             Full(tree) => tree.length,
         }
@@ -388,6 +403,7 @@ impl<A: Clone> Vector<A> {
         }
 
         match self {
+            Empty => None,
             Single(chunk) => chunk.get(index),
             Full(tree) => {
                 let mut local_index = index;
@@ -446,6 +462,7 @@ impl<A: Clone> Vector<A> {
         }
 
         match self {
+            Empty => None,
             Single(chunk) => Ref::make_mut(chunk).get_mut(index),
             Full(tree) => {
                 let mut local_index = index;
@@ -810,6 +827,7 @@ impl<A: Clone> Vector<A> {
             self.promote_back();
         }
         match self {
+            Empty => unreachable!("promote should have promoted the Empty"),
             Single(chunk) => Ref::make_mut(chunk).push_front(value),
             Full(tree) => tree.push_front(value),
         }
@@ -835,6 +853,7 @@ impl<A: Clone> Vector<A> {
             self.promote_front();
         }
         match self {
+            Empty => unreachable!("promote should have promoted the Empty"),
             Single(chunk) => Ref::make_mut(chunk).push_back(value),
             Full(tree) => tree.push_back(value),
         }
@@ -860,6 +879,7 @@ impl<A: Clone> Vector<A> {
             None
         } else {
             match self {
+                Empty => None,
                 Single(chunk) => Some(Ref::make_mut(chunk).pop_front()),
                 Full(tree) => tree.pop_front(),
             }
@@ -886,6 +906,7 @@ impl<A: Clone> Vector<A> {
             None
         } else {
             match self {
+                Empty => None,
                 Single(chunk) => Some(Ref::make_mut(chunk).pop_back()),
                 Full(tree) => tree.pop_back(),
             }
@@ -923,6 +944,7 @@ impl<A: Clone> Vector<A> {
             .expect("Vector length overflow");
 
         match self {
+            Empty => unreachable!("empty vecs are handled before this"),
             Single(left) => {
                 match other {
                     // If both are single chunks and left has room for right: directly
@@ -1089,6 +1111,7 @@ impl<A: Clone> Vector<A> {
         assert!(index <= self.len());
 
         match self {
+            Empty => Empty,
             Single(chunk) => Single(Ref::new(Ref::make_mut(chunk).split_off(index))),
             Full(tree) => {
                 let mut local_index = index;
@@ -1581,6 +1604,7 @@ impl<A: Clone> Default for Vector<A> {
 impl<A: Clone> Clone for Vector<A> {
     fn clone(&self) -> Self {
         match self {
+            Empty => Empty,
             Single(chunk) => Single(chunk.clone()),
             Full(tree) => Full(tree.clone()),
         }
@@ -1976,6 +2000,7 @@ impl<'a, A: Clone> FusedIterator for IterMut<'a, A> {}
 
 /// A consuming iterator over vectors with values of type `A`.
 pub enum ConsumingIter<A> {
+    Empty,
     Single(ChunkIter<A>),
     Full(
         Chain<
@@ -1988,6 +2013,7 @@ pub enum ConsumingIter<A> {
 impl<A: Clone> ConsumingIter<A> {
     fn new(seq: Vector<A>) -> Self {
         match seq {
+            Empty => ConsumingIter::Empty,
             Single(chunk) => ConsumingIter::Single(clone_ref(chunk).into_iter()),
             Full(tree) => ConsumingIter::Full(tree.into_iter()),
         }
@@ -2002,6 +2028,7 @@ impl<A: Clone> Iterator for ConsumingIter<A> {
     /// Time: O(1)*
     fn next(&mut self) -> Option<Self::Item> {
         match self {
+            ConsumingIter::Empty => None,
             ConsumingIter::Single(iter) => iter.next(),
             ConsumingIter::Full(iter) => iter.next(),
         }
@@ -2009,6 +2036,7 @@ impl<A: Clone> Iterator for ConsumingIter<A> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         match self {
+            ConsumingIter::Empty => (0, Some(0)),
             ConsumingIter::Single(iter) => iter.size_hint(),
             ConsumingIter::Full(iter) => iter.size_hint(),
         }
@@ -2021,6 +2049,7 @@ impl<A: Clone> DoubleEndedIterator for ConsumingIter<A> {
     /// Time: O(1)*
     fn next_back(&mut self) -> Option<Self::Item> {
         match self {
+            ConsumingIter::Empty => None,
             ConsumingIter::Single(iter) => iter.next_back(),
             ConsumingIter::Full(iter) => iter.next_back(),
         }
