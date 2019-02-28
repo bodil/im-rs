@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic
 Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- `Clone` constraints on all data structures, as well as relevant constraints on
+  maps and sets, have been relaxed where possible, so that you can now construct
+  empty instances and call most query methods without requiring values implement
+  `Clone` etc. (#63)
+
+### Fixed
+
+- Constructing an empty `Vector` will not allocate any heap memory, instead
+  deferring allocation until you perform an operation that would increase its
+  length. (#65)
+
 ## [12.3.1] - 2019-02-19
 
 ### Changed
