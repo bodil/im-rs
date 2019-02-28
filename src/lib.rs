@@ -335,7 +335,6 @@
 
 #![deny(unsafe_code)]
 #![cfg_attr(has_specialisation, feature(specialization))]
-#![cfg_attr(docs_rs_workaround, feature(slice_get_slice))]
 
 #[cfg(test)]
 #[macro_use]

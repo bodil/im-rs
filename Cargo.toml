@@ -20,9 +20,6 @@ path = "./src/lib.rs"
 [badges]
 circle-ci = { repository = "bodil/im-rs" }
 
-[package.metadata.docs.rs]
-rustdoc-args = ["--cfg", "docs_rs_workaround"]
-
 [build-dependencies]
 rustc_version = "0.2"
 
