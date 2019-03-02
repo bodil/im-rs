@@ -2537,6 +2537,23 @@ mod test {
         vec1.append(vec2);
     }
 
+    #[test]
+    fn issue_67() {
+        let mut l = Vector::unit(4100);
+        for i in (0..4099).rev() {
+            let mut tmp = Vector::unit(i);
+            tmp.append(l);
+            l = tmp;
+        }
+        assert_eq!(4100, l.len());
+        let len = l.len();
+        let tail = l.slice(1..len);
+        assert_eq!(1, l.len());
+        assert_eq!(4099, tail.len());
+        assert_eq!(Some(&0), l.get(0));
+        assert_eq!(Some(&1), tail.get(0));
+    }
+
     proptest! {
         #[test]
         fn iter(ref vec in vec(i32::ANY, 0..1000)) {
