@@ -340,7 +340,7 @@ impl<A: Clone> Node<A> {
     pub fn len(&self) -> usize {
         match self.children {
             Entry::Nodes(Size::Size(size), _) => size,
-            Entry::Nodes(Size::Table(ref size_table), _) => *(size_table.last().unwrap()),
+            Entry::Nodes(Size::Table(ref size_table), _) => *(size_table.last().unwrap_or(&0)),
             Entry::Values(ref values) => values.len(),
             Entry::Empty => 0,
         }
