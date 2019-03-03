@@ -358,6 +358,10 @@ impl<A: Clone> Node<A> {
         self.children.is_full()
     }
 
+    pub fn number_of_children(&self) -> usize {
+        self.children.len()
+    }
+
     pub fn first_child(&self) -> &Ref<Self> {
         self.children.unwrap_nodes().first().unwrap()
     }
@@ -583,7 +587,12 @@ impl<A: Clone> Node<A> {
                 PushResult::Full(chunk)
             } else {
                 self.push_size(side, chunk.len());
-                self.push_child_node(side, Ref::new(Node::from_chunk(0, chunk)));
+                // If the chunk is empty after being drained, there might be
+                // more space in existing chunks. To keep the middle dense, we
+                // do not add it here.
+                if !chunk.is_empty() {
+                    self.push_child_node(side, Ref::new(Node::from_chunk(0, chunk)));
+                }
                 PushResult::Done
             }
         } else {
