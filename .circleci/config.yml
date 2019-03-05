@@ -102,6 +102,16 @@ commands:
           working_directory: "~/project/dist/<<parameters.flavour>>"
           command: cargo test --all<<#parameters.release>> --release<</parameters.release>>
 
+  clippy:
+    description: Run Clippy on a Rust crate.
+    steps:
+      - run:
+          name: Install Clippy
+          command: rustup component add clippy
+      - run:
+          name: Run Clippy
+          command: cargo clippy
+
 jobs:
   test:
     description: Builds a Rust crate and runs all tests.
@@ -131,6 +141,21 @@ jobs:
           release: <<parameters.release>>
           flavour: <<parameters.flavour>>
 
+  clippy:
+    description: Run Clippy on a Rust crate.
+    parameters:
+      toolchain:
+        description: Rust toolchain to use. Overrides the default toolchain (stable) or any toolchain specified in the project via `rust-toolchain`.
+        type: string
+        default: ""
+    executor: default
+    steps:
+      - checkout
+      - update_toolchain:
+          toolchain: <<parameters.toolchain>>
+      - prepare_tree
+      - clippy
+
 workflows:
   Project:
     jobs:
@@ -158,3 +183,6 @@ workflows:
           name: im-rc (nightly)
           toolchain: nightly
           flavour: im-rc
+      - clippy:
+          name: Clippy (stable)
+          toolchain: stable
