@@ -27,14 +27,14 @@ use std::ops::{Add, Deref, Mul, RangeBounds};
 
 use crate::hashset::HashSet;
 use crate::nodes::btree::{
-    BTreeValue, ConsumingIter as ConsumingNodeIter, DiffItem as NodeDiffItem,
-    DiffIter as NodeDiffIter, Insert, Iter as NodeIter, Node, Remove,
+    BTreeValue, ConsumingIter as ConsumingNodeIter, DiffIter as NodeDiffIter, Insert,
+    Iter as NodeIter, Node, Remove,
 };
 #[cfg(has_specialisation)]
 use crate::util::linear_search_by;
 use crate::util::Ref;
 
-pub type DiffItem<'a, A> = NodeDiffItem<'a, A>;
+pub use crate::nodes::btree::DiffItem;
 
 /// Construct a set from a sequence of values.
 ///
@@ -924,12 +924,12 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         self.it.next().map(|item| match item {
-            NodeDiffItem::Add(v) => NodeDiffItem::Add(v.deref()),
-            NodeDiffItem::Update { old, new } => NodeDiffItem::Update {
+            DiffItem::Add(v) => DiffItem::Add(v.deref()),
+            DiffItem::Update { old, new } => DiffItem::Update {
                 old: old.deref(),
                 new: new.deref(),
             },
-            NodeDiffItem::Remove(v) => NodeDiffItem::Remove(v.deref()),
+            DiffItem::Remove(v) => DiffItem::Remove(v.deref()),
         })
     }
 }
