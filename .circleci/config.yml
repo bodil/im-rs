@@ -105,6 +105,9 @@ commands:
           name: Run all tests
           working_directory: "~/project/dist/<<parameters.flavour>>"
           command: cargo test --all<<#parameters.release>> --release<</parameters.release>>
+      - store_artifacts:
+          name: Store Proptest regressions
+          path: ~/project/dist/<<parameters.flavour>>/proptest-regressions
 
   clippy:
     description: Run Clippy on a Rust crate.
