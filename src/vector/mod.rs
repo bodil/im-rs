@@ -2559,7 +2559,7 @@ mod test {
             Vector::Full(ref tree) => {
                 assert_eq!(129, tree.middle.len());
                 assert_eq!(3, tree.middle.number_of_children());
-            },
+            }
             _ => unreachable!(),
         }
         x.push_back(0);
@@ -2567,14 +2567,16 @@ mod test {
             Vector::Full(ref tree) => {
                 assert_eq!(131, tree.middle.len());
                 assert_eq!(3, tree.middle.number_of_children())
-            },
+            }
             _ => unreachable!(),
         }
         for _ in 0..64 {
             x.push_back(0);
         }
         for _ in x.iter() {}
+    }
 
+    #[test]
     fn issue_67() {
         let mut l = Vector::unit(4100);
         for i in (0..4099).rev() {
