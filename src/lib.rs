@@ -377,6 +377,9 @@ pub use crate::vector::Vector;
 #[cfg(test)]
 mod test;
 
+#[cfg(test)]
+mod tests;
+
 /// Update a value inside multiple levels of data structures.
 ///
 /// This macro takes a [`Vector`][Vector], [`OrdMap`][OrdMap] or [`HashMap`][HashMap],
