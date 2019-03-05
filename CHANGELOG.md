@@ -20,6 +20,8 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 - Constructing an empty `Vector` will not allocate any heap memory, instead
   deferring allocation until you perform an operation that would increase its
   length. (#65)
+- Some bugs arising when using `Vector::append` repeatedly were fixed. (#67,
+  #70)
 
 ## [12.3.1] - 2019-02-19
 
