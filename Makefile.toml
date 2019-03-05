@@ -87,7 +87,7 @@ fn make_dist(root: &Path, target: &str, manifest: &str) -> PathBuf {
 
 fn main() {
   // Prepare target folder
-  fs::remove_dir_all("dist").unwrap();
+  fs::remove_dir_all("dist");
   let path = PathBuf::from("dist");
 
   // Copy files into im and im-rc subfolders
