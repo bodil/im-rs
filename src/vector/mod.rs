@@ -2380,8 +2380,8 @@ pub mod rayon {
             #[test]
             fn par_mut_iter(ref mut input in vector(i32::ANY, 0..10000)) {
                 let mut vec = input.clone();
-                vec.par_iter_mut().for_each(|i| *i += 1);
-                let expected: Vector<i32> = input.clone().into_iter().map(|i| i + 1).collect();
+                vec.par_iter_mut().for_each(|i| *i = i.overflowing_add(1).0);
+                let expected: Vector<i32> = input.clone().into_iter().map(|i| i.overflowing_add(1).0).collect();
                 assert_eq!(expected, vec);
             }
         }
@@ -2713,10 +2713,10 @@ mod test {
             let mut vec = input.clone();
             {
                 for p in vec.iter_mut() {
-                    *p += 1;
+                    *p = p.overflowing_add(1).0;
                 }
             }
-            let expected: Vector<i32> = input.clone().into_iter().map(|i| i+1).collect();
+            let expected: Vector<i32> = input.clone().into_iter().map(|i| i.overflowing_add(1).0).collect();
             assert_eq!(expected, vec);
         }
 
@@ -2727,10 +2727,10 @@ mod test {
                 let mut focus = vec.focus_mut();
                 for i in 0..input.len() {
                     let p = focus.index_mut(i);
-                    *p += 1;
+                    *p = p.overflowing_add(1).0;
                 }
             }
-            let expected: Vector<i32> = input.clone().into_iter().map(|i| i+1).collect();
+            let expected: Vector<i32> = input.clone().into_iter().map(|i| i.overflowing_add(1).0).collect();
             assert_eq!(expected, vec);
         }
 
@@ -2742,7 +2742,7 @@ mod test {
                 let len = focus.len();
                 if len < 8 {
                     for p in focus {
-                        *p += 1;
+                        *p = p.overflowing_add(1).0;
                     }
                 } else {
                     let (left, right) = focus.split_at(len / 2);
@@ -2753,7 +2753,7 @@ mod test {
 
             split_down(vec.focus_mut());
 
-            let expected: Vector<i32> = input.clone().into_iter().map(|i| i+1).collect();
+            let expected: Vector<i32> = input.clone().into_iter().map(|i| i.overflowing_add(1).0).collect();
             assert_eq!(expected, vec);
         }
 
