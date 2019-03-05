@@ -59,6 +59,10 @@ commands:
   build:
     description: Build all targets of a Rust crate.
     parameters:
+      all:
+        description: Whether to build all targets including tests.
+        type: boolean
+        default: true
       release:
         description: By default, the crate is build in debug mode without optimizations. Set this to true to compile in release mode.
         type: boolean
@@ -79,7 +83,7 @@ commands:
       - run:
           name: Build all targets
           working_directory: "~/project/dist/<<parameters.flavour>>"
-          command: cargo build --all --all-targets<<#parameters.release>> --release<</parameters.release>>
+          command: cargo build <<#parameters.all>>--all --all-targets<<#parameters.release>> --release<</parameters.release>> <</parameters.all>>
       - save_cache:
           paths:
             - target
@@ -153,6 +157,8 @@ jobs:
       - checkout
       - update_toolchain:
           toolchain: <<parameters.toolchain>>
+      - build:
+          all: false
       - clippy
 
 workflows:
