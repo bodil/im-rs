@@ -110,7 +110,7 @@ commands:
           command: rustup component add clippy
       - run:
           name: Run Clippy
-          command: cargo clippy
+          command: cargo clippy -- -D warnings
 
 jobs:
   test:
