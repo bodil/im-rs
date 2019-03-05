@@ -586,11 +586,11 @@ impl<A: Clone> Node<A> {
             if is_full {
                 PushResult::Full(chunk)
             } else {
-                self.push_size(side, chunk.len());
                 // If the chunk is empty after being drained, there might be
                 // more space in existing chunks. To keep the middle dense, we
                 // do not add it here.
                 if !chunk.is_empty() {
+                    self.push_size(side, chunk.len());
                     self.push_child_node(side, Ref::new(Node::from_chunk(0, chunk)));
                 }
                 PushResult::Done
