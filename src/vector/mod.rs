@@ -2538,6 +2538,43 @@ mod test {
     }
 
     #[test]
+    fn issue_70() {
+        let mut x = Vector::new();
+        for _ in 0..262 {
+            x.push_back(0);
+        }
+        for _ in 0..97 {
+            x.pop_front();
+        }
+        for &offset in &[160, 163, 160] {
+            x.remove(offset);
+        }
+        for _ in 0..64 {
+            x.push_back(0);
+        }
+        // At this point middle contains three chunks of size 64, 64 and 1
+        // respectively. Previously the next `push_back()` would append another
+        // zero-sized chunk to middle even though there is enough space left.
+        match x {
+            Vector::Full(ref tree) => {
+                assert_eq!(129, tree.middle.len());
+                assert_eq!(3, tree.middle.number_of_children());
+            },
+            _ => unreachable!(),
+        }
+        x.push_back(0);
+        match x {
+            Vector::Full(ref tree) => {
+                assert_eq!(131, tree.middle.len());
+                assert_eq!(3, tree.middle.number_of_children())
+            },
+            _ => unreachable!(),
+        }
+        for _ in 0..64 {
+            x.push_back(0);
+        }
+        for _ in x.iter() {}
+
     fn issue_67() {
         let mut l = Vector::unit(4100);
         for i in (0..4099).rev() {
