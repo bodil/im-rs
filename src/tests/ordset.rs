@@ -1,7 +1,7 @@
 #![allow(clippy::unit_arg)]
 
 use std::collections::BTreeSet;
-use std::fmt::{Debug, Error, Formatter};
+use std::fmt::{Debug, Error, Formatter, Write};
 
 use crate::OrdSet;
 
@@ -24,26 +24,28 @@ where
     A: Ord + Debug + Clone,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        let mut out = String::new();
         let mut expected = BTreeSet::new();
-        writeln!(f, "let mut set = OrdSet::new();")?;
+        writeln!(out, "let mut set = OrdSet::new();")?;
         for action in &self.0 {
             match action {
                 Action::Insert(ref value) => {
                     expected.insert(value.clone());
-                    writeln!(f, "set.insert({:?});", value)?;
+                    writeln!(out, "set.insert({:?});", value)?;
                 }
                 Action::Remove(ref value) => {
                     expected.remove(value);
-                    writeln!(f, "set.remove({:?});", value)?;
+                    writeln!(out, "set.remove({:?});", value)?;
                 }
             }
         }
         writeln!(
-            f,
+            out,
             "let expected = vec!{:?};",
             expected.into_iter().collect::<Vec<_>>()
         )?;
-        writeln!(f, "assert_eq!(OrdSet::from(expected), set);")
+        writeln!(out, "assert_eq!(OrdSet::from(expected), set);")?;
+        write!(f, "{}", super::code_fmt(&out))
     }
 }
 
