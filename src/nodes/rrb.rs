@@ -434,7 +434,7 @@ impl<A: Clone> Node<A> {
             return None;
         }
         if let Entry::Nodes(Size::Table(ref size_table), _) = self.children {
-            if size_table[target_idx] <= index {
+            while size_table[target_idx] <= index {
                 target_idx += 1;
                 if target_idx >= size_table.len() {
                     return None;
