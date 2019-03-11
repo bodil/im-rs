@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic
 Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A number of issues were fixed where `Vector`'s size table would get out of
+  sync with the node structure if exercised too much and cause erroneous
+  behaviour. (#72, #74)
+- Comprehensive generative tests were added to test all data structures through
+  more unexpected code paths.
+
 ## [12.3.2] - 2019-03-05
 
 ### Changed
