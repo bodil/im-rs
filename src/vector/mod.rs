@@ -1424,6 +1424,13 @@ impl<A: Clone> Vector<A> {
             sort::quicksort(&mut self.focus_mut(), 0, len - 1, &cmp);
         }
     }
+
+    #[allow(dead_code)]
+    pub(crate) fn assert_invariants(&self) {
+        if let Vector::Full(ref tree) = self {
+            tree.middle.assert_invariants();
+        }
+    }
 }
 
 // Implementation details

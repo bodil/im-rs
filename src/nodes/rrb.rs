@@ -952,6 +952,39 @@ impl<A: Clone> Node<A> {
         }
     }
 
+    pub fn assert_invariants(&self) -> usize {
+        // Verifies that the size table matches reality.
+        match self.children {
+            Entry::Empty => 0,
+            Entry::Values(ref values) => {
+                // An empty value node is pointless and should never occur.
+                assert_ne!(0, values.len());
+                values.len()
+            }
+            Entry::Nodes(ref size, ref children) => {
+                // A parent node with no children should never occur.
+                assert_ne!(0, children.len());
+                let mut lengths = Vec::new();
+                for child in &**children {
+                    lengths.push(child.assert_invariants());
+                }
+                match size {
+                    Size::Size(size) => {
+                        let total: usize = lengths.iter().sum();
+                        assert_eq!(*size, total);
+                    }
+                    Size::Table(ref table) => {
+                        for (index, current) in table.iter().enumerate() {
+                            let expected: usize = lengths.iter().take(index + 1).sum();
+                            assert_eq!(expected, *current);
+                        }
+                    }
+                }
+                lengths.iter().sum()
+            }
+        }
+    }
+
     // pub fn print<W>(&self, f: &mut W, indent: usize, level: usize) -> Result<(), fmt::Error>
     // where
     //     W: fmt::Write,

@@ -123,6 +123,7 @@ proptest! {
     fn comprehensive(actions: Actions<u8>) {
         let mut vec = Vector::new();
         let mut nat = Vec::new();
+        vec.assert_invariants();
         for action in actions.0 {
             match action {
                 Action::PushFront(value) => {
@@ -210,6 +211,7 @@ proptest! {
                     nat = nat_right;
                 }
             }
+            vec.assert_invariants();
             assert_eq!(nat.len(),vec.len());
             assert_eq!(Vector::from_iter(nat.iter().cloned()), vec);
         }
