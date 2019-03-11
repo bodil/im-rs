@@ -180,6 +180,21 @@ workflows:
           toolchain: nightly
           flavour: im
       - test:
+          name: im (stable release)
+          toolchain: stable
+          release: true
+          flavour: im
+      - test:
+          name: im (beta release)
+          toolchain: beta
+          release: true
+          flavour: im
+      - test:
+          name: im (nightly release)
+          toolchain: nightly
+          release: true
+          flavour: im
+      - test:
           name: im-rc (stable)
           toolchain: stable
           flavour: im-rc
