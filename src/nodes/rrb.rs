@@ -120,7 +120,7 @@ impl Size {
 }
 
 pub enum PushResult<A> {
-    Full(A),
+    Full(A, usize),
     Done,
 }
 
@@ -551,13 +551,13 @@ impl<A: Clone> Node<A> {
                     }
                     PushResult::Done
                 } else {
-                    PushResult::Full(chunk)
+                    PushResult::Full(chunk, 0)
                 }
             }
         } else if level == 1 {
             // If rightmost existing node has any room, merge as much as
             // possible over from the new node.
-            match side {
+            let num_drained = match side {
                 Side::Right => {
                     if let Entry::Nodes(ref mut size, ref mut children) = self.children {
                         let rightmost = Ref::make_mut(Ref::make_mut(children).last_mut().unwrap());
@@ -568,6 +568,9 @@ impl<A: Clone> Node<A> {
                         values.drain_from_front(chunk, to_drain);
                         size.pop(Side::Right, old_size);
                         size.push(Side::Right, values.len());
+                        to_drain
+                    } else {
+                        0
                     }
                 }
                 Side::Left => {
@@ -580,11 +583,14 @@ impl<A: Clone> Node<A> {
                         values.drain_from_back(chunk, to_drain);
                         size.pop(Side::Left, old_size);
                         size.push(Side::Left, values.len());
+                        to_drain
+                    } else {
+                        0
                     }
                 }
-            }
+            };
             if is_full {
-                PushResult::Full(chunk)
+                PushResult::Full(chunk, num_drained)
             } else {
                 // If the chunk is empty after being drained, there might be
                 // more space in existing chunks. To keep the middle dense, we
@@ -606,9 +612,28 @@ impl<A: Clone> Node<A> {
                 let child = Ref::make_mut(&mut children[index]);
                 match child.push_chunk(level - 1, side, chunk) {
                     PushResult::Done => None,
-                    PushResult::Full(chunk) => {
+                    PushResult::Full(chunk, num_drained) => {
+                        // Our chunk was too large for `child`, so it could not
+                        // be pushed there. However, exactly `num_drained`
+                        // elements were added to the child. We need to reflect
+                        // that change in the size field of the node.
+                        match side {
+                            Right => match self.children {
+                                Entry::Nodes(Size::Table(ref mut sizes), _) => {
+                                    let sizes = Ref::make_mut(sizes);
+                                    sizes[index] += num_drained;
+                                }
+                                Entry::Nodes(Size::Size(ref mut size), _) => {
+                                    *size += num_drained;
+                                }
+                                Entry::Values(_) | Entry::Empty => (),
+                            },
+                            Left => {
+                                self.update_size(0, num_drained as isize);
+                            }
+                        }
                         if is_full {
-                            return PushResult::Full(chunk);
+                            return PushResult::Full(chunk, 0);
                         } else {
                             Some(Node::from_chunk(level - 1, chunk))
                         }

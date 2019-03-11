@@ -1555,7 +1555,7 @@ impl<A: Clone> RRB<A> {
             let middle = Ref::make_mut(&mut self.middle);
             match middle.push_chunk(self.middle_level, side, chunk) {
                 PushResult::Done => return,
-                PushResult::Full(chunk) => Ref::from({
+                PushResult::Full(chunk, _num_drained) => Ref::from({
                     match side {
                         Side::Left => Node::from_chunk(self.middle_level, chunk)
                             .join_branches(middle.clone(), self.middle_level),
@@ -2591,6 +2591,40 @@ mod test {
         assert_eq!(4099, tail.len());
         assert_eq!(Some(&0), l.get(0));
         assert_eq!(Some(&1), tail.get(0));
+    }
+
+    #[test]
+    fn issue_74_simple_size() {
+        use crate::nodes::rrb::NODE_SIZE;
+        let mut x = Vector::new();
+        #[rustfmt::skip]
+        for _ in 0..(CHUNK_SIZE *
+            ( 1 // inner_f
+            + (2 * NODE_SIZE) // middle: two full Entry::Nodes (4096 elements each)
+            + 1 // inner_b
+            + 1 // outer_b
+            ))
+        {
+            x.push_back(0u32);
+        }
+        let middle_first_node_start = CHUNK_SIZE;
+        let middle_second_node_start = middle_first_node_start + NODE_SIZE * CHUNK_SIZE;
+        // This reduces the size of the second node to 4095.
+        x.remove(middle_second_node_start);
+        // As outer_b is full, this will cause inner_b (length 64) to be pushed
+        // to middle. The first element will be merged into the second node, the
+        // remaining 63 elements will end up in a new node.
+        x.push_back(0u32);
+        match x {
+            Vector::Full(tree) => {
+                assert_eq!(3, tree.middle.number_of_children());
+                assert_eq!(
+                    2 * NODE_SIZE * CHUNK_SIZE + CHUNK_SIZE - 1,
+                    tree.middle.len()
+                );
+            }
+            _ => unreachable!(),
+        }
     }
 
     proptest! {
