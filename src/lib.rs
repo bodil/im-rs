@@ -335,7 +335,6 @@
 
 #![deny(unsafe_code)]
 #![cfg_attr(has_specialisation, feature(specialization))]
-#![feature(stmt_expr_attributes)]
 
 #[cfg(test)]
 #[macro_use]

@@ -2442,25 +2442,6 @@ mod test {
     use ::proptest::num::{i32, usize};
     use ::proptest::proptest;
 
-    // #[test]
-    // fn push_and_pop_things() {
-    //     let mut seq = Vector::new();
-    //     for i in 0..1000 {
-    //         seq.push_back(i);
-    //     }
-    //     for i in 0..1000 {
-    //         assert_eq!(Some(i), seq.pop_front());
-    //     }
-    //     assert!(seq.is_empty());
-    //     for i in 0..1000 {
-    //         seq.push_front(i);
-    //     }
-    //     for i in 0..1000 {
-    //         assert_eq!(Some(i), seq.pop_back());
-    //     }
-    //     assert!(seq.is_empty());
-    // }
-
     #[test]
     fn macro_allows_trailing_comma() {
         let vec1 = vector![1, 2, 3];
@@ -2597,12 +2578,13 @@ mod test {
     fn issue_74_simple_size() {
         use crate::nodes::rrb::NODE_SIZE;
         let mut x = Vector::new();
-        #[rustfmt::skip]
-        for _ in 0..(CHUNK_SIZE *
-            ( 1 // inner_f
-            + (2 * NODE_SIZE) // middle: two full Entry::Nodes (4096 elements each)
-            + 1 // inner_b
-            + 1 // outer_b
+        for _ in 0..(CHUNK_SIZE
+            * (
+                1 // inner_f
+                + (2 * NODE_SIZE) // middle: two full Entry::Nodes (4096 elements each)
+                + 1 // inner_b
+                + 1
+                // outer_b
             ))
         {
             x.push_back(0u32);
