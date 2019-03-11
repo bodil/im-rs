@@ -91,7 +91,8 @@ impl Size {
                 let size_table = Ref::make_mut(size_ref);
                 match side {
                     Left => {
-                        debug_assert_eq!(value, size_table.pop_front());
+                        let first = size_table.pop_front();
+                        debug_assert_eq!(value, first);
                         for entry in size_table.iter_mut() {
                             *entry -= value;
                         }
