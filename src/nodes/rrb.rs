@@ -597,6 +597,13 @@ impl<A: Clone> Node<A> {
                 // more space in existing chunks. To keep the middle dense, we
                 // do not add it here.
                 if !chunk.is_empty() {
+                    if side == Left && chunk.len() < NODE_SIZE {
+                        if let Entry::Nodes(ref mut size, _) = self.children {
+                            if let Size::Size(value) = *size {
+                                *size = Size::table_from_size(level, value);
+                            }
+                        }
+                    }
                     self.push_size(side, chunk.len());
                     self.push_child_node(side, Ref::new(Node::from_chunk(0, chunk)));
                 }
