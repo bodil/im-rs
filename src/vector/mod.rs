@@ -2616,6 +2616,20 @@ mod test {
         }
     }
 
+    #[test]
+    fn issue_77() {
+        let mut x = Vector::new();
+        for _ in 0..44 { x.push_back(0); }
+        for _ in 0..20 { x.insert(0, 0); }
+        x.insert(1, 0);
+        for _ in 0..441 { x.push_back(0); }
+        for _ in 0..58 { x.insert(0, 0); }
+        x.insert(514, 0);
+        for _ in 0..73 { x.push_back(0); }
+        for _ in 0..10 { x.insert(0, 0); }
+        x.insert(514, 0);
+    }
+
     proptest! {
         #[test]
         fn iter(ref vec in vec(i32::ANY, 0..1000)) {
