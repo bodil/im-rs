@@ -11,6 +11,7 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - Enforces the latest bugfix release of sized-chunks. (#78)
+- Another edge case bugfix to `Vector`'s size table handling. (#79)
 
 ## [12.3.3] - 2019-03-11
 
