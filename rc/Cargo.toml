@@ -1,6 +1,6 @@
 [package]
 name = "im-rc"
-version = "12.3.3"
+version = "12.3.4"
 edition = "2018"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 license = "MPL-2.0+"
@@ -24,7 +24,7 @@ rustc_version = "0.2"
 
 [dependencies]
 typenum = "1.10"
-sized-chunks = "0.1.1"
+sized-chunks = "0.1.2"
 quickcheck = { version = "0.8", optional = true }
 proptest = { version = "0.9", optional = true }
 serde = { version = "1.0", optional = true }
