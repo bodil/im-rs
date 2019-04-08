@@ -76,7 +76,7 @@ impl<A> Deref for Value<A> {
 // FIXME lacking specialisation, we can't simply implement `BTreeValue`
 // for `A`, we have to use the `Value<A>` indirection.
 #[cfg(not(has_specialisation))]
-impl<A: Ord + Clone> BTreeValue for Value<A> {
+impl<A: Ord> BTreeValue for Value<A> {
     type Key = A;
 
     fn ptr_eq(&self, _other: &Self) -> bool {
@@ -109,7 +109,7 @@ impl<A: Ord + Clone> BTreeValue for Value<A> {
 }
 
 #[cfg(has_specialisation)]
-impl<A: Ord + Clone> BTreeValue for Value<A> {
+impl<A: Ord> BTreeValue for Value<A> {
     type Key = A;
 
     fn ptr_eq(&self, _other: &Self) -> bool {
@@ -142,7 +142,7 @@ impl<A: Ord + Clone> BTreeValue for Value<A> {
 }
 
 #[cfg(has_specialisation)]
-impl<A: Ord + Clone + Copy> BTreeValue for Value<A> {
+impl<A: Ord + Copy> BTreeValue for Value<A> {
     fn search_key<BK>(slice: &[Self], key: &BK) -> Result<usize, usize>
     where
         BK: Ord + ?Sized,
@@ -289,7 +289,7 @@ impl<A> OrdSet<A> {
 
 impl<A> OrdSet<A>
 where
-    A: Ord + Clone,
+    A: Ord,
 {
     /// Get the smallest value in a set.
     ///
@@ -371,6 +371,37 @@ where
         self.root.lookup(a).is_some()
     }
 
+    /// Test whether a set is a subset of another set, meaning that
+    /// all values in our set must also be in the other set.
+    ///
+    /// Time: O(n log n)
+    #[must_use]
+    pub fn is_subset<RS>(&self, other: RS) -> bool
+    where
+        RS: Borrow<Self>,
+    {
+        let o = other.borrow();
+        self.iter().all(|a| o.contains(&a))
+    }
+
+    /// Test whether a set is a proper subset of another set, meaning
+    /// that all values in our set must also be in the other set. A
+    /// proper subset must also be smaller than the other set.
+    ///
+    /// Time: O(n log n)
+    #[must_use]
+    pub fn is_proper_subset<RS>(&self, other: RS) -> bool
+    where
+        RS: Borrow<Self>,
+    {
+        self.len() != other.borrow().len() && self.is_subset(other)
+    }
+}
+
+impl<A> OrdSet<A>
+where
+    A: Ord + Clone,
+{
     /// Insert a value into a set.
     ///
     /// Time: O(log n)
@@ -614,32 +645,6 @@ where
         out
     }
 
-    /// Test whether a set is a subset of another set, meaning that
-    /// all values in our set must also be in the other set.
-    ///
-    /// Time: O(n log n)
-    #[must_use]
-    pub fn is_subset<RS>(&self, other: RS) -> bool
-    where
-        RS: Borrow<Self>,
-    {
-        let o = other.borrow();
-        self.iter().all(|a| o.contains(&a))
-    }
-
-    /// Test whether a set is a proper subset of another set, meaning
-    /// that all values in our set must also be in the other set. A
-    /// proper subset must also be smaller than the other set.
-    ///
-    /// Time: O(n log n)
-    #[must_use]
-    pub fn is_proper_subset<RS>(&self, other: RS) -> bool
-    where
-        RS: Borrow<Self>,
-    {
-        self.len() != other.borrow().len() && self.is_subset(other)
-    }
-
     /// Split a set into two, with the left hand set containing values
     /// which are smaller than `split`, and the right hand set
     /// containing values which are larger than `split`.
@@ -721,28 +726,28 @@ impl<A> Clone for OrdSet<A> {
     }
 }
 
-impl<A: Ord + Clone> PartialEq for OrdSet<A> {
+impl<A: Ord> PartialEq for OrdSet<A> {
     fn eq(&self, other: &Self) -> bool {
         Ref::ptr_eq(&self.root, &other.root)
             || (self.len() == other.len() && self.diff(other).next().is_none())
     }
 }
 
-impl<A: Ord + Eq + Clone> Eq for OrdSet<A> {}
+impl<A: Ord + Eq> Eq for OrdSet<A> {}
 
-impl<A: Ord + Clone> PartialOrd for OrdSet<A> {
+impl<A: Ord> PartialOrd for OrdSet<A> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.iter().partial_cmp(other.iter())
     }
 }
 
-impl<A: Ord + Clone> Ord for OrdSet<A> {
+impl<A: Ord> Ord for OrdSet<A> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.iter().cmp(other.iter())
     }
 }
 
-impl<A: Ord + Clone + Hash> Hash for OrdSet<A> {
+impl<A: Ord + Hash> Hash for OrdSet<A> {
     fn hash<H>(&self, state: &mut H)
     where
         H: Hasher,
@@ -753,10 +758,7 @@ impl<A: Ord + Clone + Hash> Hash for OrdSet<A> {
     }
 }
 
-impl<A> Default for OrdSet<A>
-where
-    A: Ord + Clone,
-{
+impl<A> Default for OrdSet<A> {
     fn default() -> Self {
         OrdSet::new()
     }
@@ -817,7 +819,7 @@ where
     }
 }
 
-impl<A: Ord + Clone + Debug> Debug for OrdSet<A> {
+impl<A: Ord + Debug> Debug for OrdSet<A> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         f.debug_set().entries(self.iter()).finish()
     }
@@ -835,7 +837,7 @@ where
 
 impl<'a, A> Iterator for Iter<'a, A>
 where
-    A: 'a + Ord + Clone,
+    A: 'a + Ord,
 {
     type Item = &'a A;
 
@@ -850,14 +852,14 @@ where
 
 impl<'a, A> DoubleEndedIterator for Iter<'a, A>
 where
-    A: 'a + Ord + Clone,
+    A: 'a + Ord,
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.it.next_back().map(Deref::deref)
     }
 }
 
-impl<'a, A> ExactSizeIterator for Iter<'a, A> where A: 'a + Ord + Clone {}
+impl<'a, A> ExactSizeIterator for Iter<'a, A> where A: 'a + Ord {}
 
 // A ranged iterator over the elements of a set.
 //
@@ -873,7 +875,7 @@ where
 
 impl<'a, A> Iterator for RangedIter<'a, A>
 where
-    A: 'a + Ord + Clone,
+    A: 'a + Ord,
 {
     type Item = &'a A;
 
@@ -888,7 +890,7 @@ where
 
 impl<'a, A> DoubleEndedIterator for RangedIter<'a, A>
 where
-    A: 'a + Ord + Clone,
+    A: 'a + Ord,
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.it.next_back().map(Deref::deref)
@@ -918,7 +920,7 @@ pub struct DiffIter<'a, A: 'a> {
 
 impl<'a, A> Iterator for DiffIter<'a, A>
 where
-    A: 'a + Ord + Clone + PartialEq,
+    A: 'a + Ord + PartialEq,
 {
     type Item = DiffItem<'a, A>;
 
@@ -952,7 +954,7 @@ where
 
 impl<'a, A> IntoIterator for &'a OrdSet<A>
 where
-    A: 'a + Ord + Clone,
+    A: 'a + Ord,
 {
     type Item = &'a A;
     type IntoIter = Iter<'a, A>;

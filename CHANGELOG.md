@@ -8,6 +8,13 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `Clone` constraints have been further relaxed on maps and sets, so that you
+  can now lookup and iterate over them without requiring a `Clone` constraint
+  (though you do still need `Clone` to actually insert data into them to lookup
+  or iterate over). (#81)
+
 ### Fixed
 
 - Enforces the latest bugfix release of sized-chunks. (#78)

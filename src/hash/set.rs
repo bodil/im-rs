@@ -110,7 +110,7 @@ impl<A> Deref for Value<A> {
 // for `A`, we have to use the `Value<A>` indirection.
 impl<A> HashValue for Value<A>
 where
-    A: Hash + Eq + Clone,
+    A: Hash + Eq,
 {
     type Key = A;
 
@@ -289,7 +289,7 @@ impl<A, S> HashSet<A, S> {
 
 impl<A, S> HashSet<A, S>
 where
-    A: Hash + Eq + Clone,
+    A: Hash + Eq,
     S: BuildHasher,
 {
     fn test_eq(&self, other: &Self) -> bool {
@@ -310,6 +310,7 @@ where
         }
         true
     }
+
     /// Test if a value is part of a set.
     ///
     /// Time: O(log n)
@@ -322,6 +323,38 @@ where
         self.root.get(hash_key(&*self.hasher, a), 0, a).is_some()
     }
 
+    /// Test whether a set is a subset of another set, meaning that
+    /// all values in our set must also be in the other set.
+    ///
+    /// Time: O(n log n)
+    #[must_use]
+    pub fn is_subset<RS>(&self, other: RS) -> bool
+    where
+        RS: Borrow<Self>,
+    {
+        let o = other.borrow();
+        self.iter().all(|a| o.contains(&a))
+    }
+
+    /// Test whether a set is a proper subset of another set, meaning
+    /// that all values in our set must also be in the other set. A
+    /// proper subset must also be smaller than the other set.
+    ///
+    /// Time: O(n log n)
+    #[must_use]
+    pub fn is_proper_subset<RS>(&self, other: RS) -> bool
+    where
+        RS: Borrow<Self>,
+    {
+        self.len() != other.borrow().len() && self.is_subset(other)
+    }
+}
+
+impl<A, S> HashSet<A, S>
+where
+    A: Hash + Eq + Clone,
+    S: BuildHasher,
+{
     /// Get a mutable iterator over the values in a hash set.
     ///
     /// Please note that the order is consistent between sets using the same
@@ -518,32 +551,6 @@ where
         }
         out
     }
-
-    /// Test whether a set is a subset of another set, meaning that
-    /// all values in our set must also be in the other set.
-    ///
-    /// Time: O(n log n)
-    #[must_use]
-    pub fn is_subset<RS>(&self, other: RS) -> bool
-    where
-        RS: Borrow<Self>,
-    {
-        let o = other.borrow();
-        self.iter().all(|a| o.contains(&a))
-    }
-
-    /// Test whether a set is a proper subset of another set, meaning
-    /// that all values in our set must also be in the other set. A
-    /// proper subset must also be smaller than the other set.
-    ///
-    /// Time: O(n log n)
-    #[must_use]
-    pub fn is_proper_subset<RS>(&self, other: RS) -> bool
-    where
-        RS: Borrow<Self>,
-    {
-        self.len() != other.borrow().len() && self.is_subset(other)
-    }
 }
 
 // Core traits
@@ -563,7 +570,7 @@ where
 
 impl<A, S> PartialEq for HashSet<A, S>
 where
-    A: Hash + Eq + Clone,
+    A: Hash + Eq,
     S: BuildHasher + Default,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -573,7 +580,7 @@ where
 
 impl<A, S> Eq for HashSet<A, S>
 where
-    A: Hash + Eq + Clone,
+    A: Hash + Eq,
     S: BuildHasher + Default,
 {
 }
@@ -610,7 +617,7 @@ where
 
 impl<A, S> Hash for HashSet<A, S>
 where
-    A: Hash + Eq + Clone,
+    A: Hash + Eq,
     S: BuildHasher + Default,
 {
     fn hash<H>(&self, state: &mut H)
@@ -715,7 +722,7 @@ where
 #[cfg(not(has_specialisation))]
 impl<A, S> Debug for HashSet<A, S>
 where
-    A: Hash + Eq + Clone + Debug,
+    A: Hash + Eq + Debug,
     S: BuildHasher,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
@@ -726,7 +733,7 @@ where
 #[cfg(has_specialisation)]
 impl<A, S> Debug for HashSet<A, S>
 where
-    A: Hash + Eq + Clone + Debug,
+    A: Hash + Eq + Debug,
     S: BuildHasher,
 {
     default fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
@@ -737,7 +744,7 @@ where
 #[cfg(has_specialisation)]
 impl<A, S> Debug for HashSet<A, S>
 where
-    A: Hash + Eq + Clone + Debug + Ord,
+    A: Hash + Eq + Debug + Ord,
     S: BuildHasher,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
@@ -757,7 +764,7 @@ where
 
 impl<'a, A> Iterator for Iter<'a, A>
 where
-    A: 'a + Clone,
+    A: 'a,
 {
     type Item = &'a A;
 
@@ -770,9 +777,9 @@ where
     }
 }
 
-impl<'a, A> ExactSizeIterator for Iter<'a, A> where A: Clone {}
+impl<'a, A> ExactSizeIterator for Iter<'a, A> {}
 
-impl<'a, A> FusedIterator for Iter<'a, A> where A: Clone {}
+impl<'a, A> FusedIterator for Iter<'a, A> {}
 
 // A mutable iterator over the elements of a set.
 pub struct IterMut<'a, A>
@@ -849,7 +856,7 @@ where
 
 impl<'a, A, S> IntoIterator for &'a HashSet<A, S>
 where
-    A: Hash + Eq + Clone,
+    A: Hash + Eq,
     S: BuildHasher,
 {
     type Item = &'a A;

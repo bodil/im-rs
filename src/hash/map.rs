@@ -103,8 +103,7 @@ pub struct HashMap<K, V, S = RandomState> {
 
 impl<K, V> HashValue for (K, V)
 where
-    K: Eq + Clone,
-    V: Clone,
+    K: Eq,
 {
     type Key = K;
 
@@ -324,12 +323,12 @@ impl<K, V, S> HashMap<K, V, S> {
 
 impl<K, V, S> HashMap<K, V, S>
 where
-    K: Hash + Eq + Clone,
-    V: Clone,
+    K: Hash + Eq,
     S: BuildHasher,
 {
     fn test_eq(&self, other: &Self) -> bool
     where
+        K: Hash + Eq,
         V: PartialEq,
     {
         if self.len() != other.len() {
@@ -348,22 +347,6 @@ where
             }
         }
         true
-    }
-
-    /// Get a mutable iterator over the values of a hash map.
-    ///
-    /// Please note that the order is consistent between maps using
-    /// the same hasher, but no other ordering guarantee is offered.
-    /// Items will not come out in insertion order or sort order.
-    /// They will, however, come out in the same order every time for
-    /// the same map.
-    #[inline]
-    #[must_use]
-    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
-        let root = Ref::make_mut(&mut self.root);
-        IterMut {
-            it: NodeIterMut::new(root, self.size),
-        }
     }
 
     /// Get the value for a key from a hash map.
@@ -392,6 +375,151 @@ where
         self.root
             .get(hash_key(&*self.hasher, key), 0, key)
             .map(|&(_, ref v)| v)
+    }
+
+    /// Test for the presence of a key in a hash map.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map = hashmap!{123 => "lol"};
+    /// assert!(
+    ///   map.contains_key(&123)
+    /// );
+    /// assert!(
+    ///   !map.contains_key(&321)
+    /// );
+    /// # }
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn contains_key<BK>(&self, k: &BK) -> bool
+    where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
+    {
+        self.get(k).is_some()
+    }
+
+    /// Test whether a map is a submap of another map, meaning that
+    /// all keys in our map must also be in the other map, with the
+    /// same values.
+    ///
+    /// Use the provided function to decide whether values are equal.
+    ///
+    /// Time: O(n log n)
+    #[must_use]
+    pub fn is_submap_by<B, RM, F>(&self, other: RM, mut cmp: F) -> bool
+    where
+        F: FnMut(&V, &B) -> bool,
+        RM: Borrow<HashMap<K, B, S>>,
+    {
+        self.iter()
+            .all(|(k, v)| other.borrow().get(k).map(|ov| cmp(v, ov)).unwrap_or(false))
+    }
+
+    /// Test whether a map is a proper submap of another map, meaning
+    /// that all keys in our map must also be in the other map, with
+    /// the same values. To be a proper submap, ours must also contain
+    /// fewer keys than the other map.
+    ///
+    /// Use the provided function to decide whether values are equal.
+    ///
+    /// Time: O(n log n)
+    #[must_use]
+    pub fn is_proper_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
+    where
+        F: FnMut(&V, &B) -> bool,
+        RM: Borrow<HashMap<K, B, S>>,
+    {
+        self.len() != other.borrow().len() && self.is_submap_by(other, cmp)
+    }
+
+    /// Test whether a map is a submap of another map, meaning that
+    /// all keys in our map must also be in the other map, with the
+    /// same values.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map1 = hashmap!{1 => 1, 2 => 2};
+    /// let map2 = hashmap!{1 => 1, 2 => 2, 3 => 3};
+    /// assert!(map1.is_submap(map2));
+    /// # }
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn is_submap<RM>(&self, other: RM) -> bool
+    where
+        V: PartialEq,
+        RM: Borrow<Self>,
+    {
+        self.is_submap_by(other.borrow(), PartialEq::eq)
+    }
+
+    /// Test whether a map is a proper submap of another map, meaning
+    /// that all keys in our map must also be in the other map, with
+    /// the same values. To be a proper submap, ours must also contain
+    /// fewer keys than the other map.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map1 = hashmap!{1 => 1, 2 => 2};
+    /// let map2 = hashmap!{1 => 1, 2 => 2, 3 => 3};
+    /// assert!(map1.is_proper_submap(map2));
+    ///
+    /// let map3 = hashmap!{1 => 1, 2 => 2};
+    /// let map4 = hashmap!{1 => 1, 2 => 2};
+    /// assert!(!map3.is_proper_submap(map4));
+    /// # }
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn is_proper_submap<RM>(&self, other: RM) -> bool
+    where
+        V: PartialEq,
+        RM: Borrow<Self>,
+    {
+        self.is_proper_submap_by(other.borrow(), PartialEq::eq)
+    }
+}
+
+impl<K, V, S> HashMap<K, V, S>
+where
+    K: Hash + Eq + Clone,
+    V: Clone,
+    S: BuildHasher,
+{
+    /// Get a mutable iterator over the values of a hash map.
+    ///
+    /// Please note that the order is consistent between maps using
+    /// the same hasher, but no other ordering guarantee is offered.
+    /// Items will not come out in insertion order or sort order.
+    /// They will, however, come out in the same order every time for
+    /// the same map.
+    #[inline]
+    #[must_use]
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
+        let root = Ref::make_mut(&mut self.root);
+        IterMut {
+            it: NodeIterMut::new(root, self.size),
+        }
     }
 
     /// Get a mutable reference to the value for a key from a hash
@@ -423,35 +551,6 @@ where
             None => None,
             Some(&mut (_, ref mut value)) => Some(value),
         }
-    }
-
-    /// Test for the presence of a key in a hash map.
-    ///
-    /// Time: O(log n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::hashmap::HashMap;
-    /// # fn main() {
-    /// let map = hashmap!{123 => "lol"};
-    /// assert!(
-    ///   map.contains_key(&123)
-    /// );
-    /// assert!(
-    ///   !map.contains_key(&321)
-    /// );
-    /// # }
-    /// ```
-    #[inline]
-    #[must_use]
-    pub fn contains_key<BK>(&self, k: &BK) -> bool
-    where
-        BK: Hash + Eq + ?Sized,
-        K: Borrow<BK>,
-    {
-        self.get(k).is_some()
     }
 
     /// Insert a key/value mapping into a map.
@@ -1052,101 +1151,6 @@ where
         }
         out
     }
-
-    /// Test whether a map is a submap of another map, meaning that
-    /// all keys in our map must also be in the other map, with the
-    /// same values.
-    ///
-    /// Use the provided function to decide whether values are equal.
-    ///
-    /// Time: O(n log n)
-    #[must_use]
-    pub fn is_submap_by<B, RM, F>(&self, other: RM, mut cmp: F) -> bool
-    where
-        B: Clone,
-        F: FnMut(&V, &B) -> bool,
-        RM: Borrow<HashMap<K, B, S>>,
-    {
-        self.iter()
-            .all(|(k, v)| other.borrow().get(k).map(|ov| cmp(v, ov)).unwrap_or(false))
-    }
-
-    /// Test whether a map is a proper submap of another map, meaning
-    /// that all keys in our map must also be in the other map, with
-    /// the same values. To be a proper submap, ours must also contain
-    /// fewer keys than the other map.
-    ///
-    /// Use the provided function to decide whether values are equal.
-    ///
-    /// Time: O(n log n)
-    #[must_use]
-    pub fn is_proper_submap_by<B, RM, F>(&self, other: RM, cmp: F) -> bool
-    where
-        B: Clone,
-        F: FnMut(&V, &B) -> bool,
-        RM: Borrow<HashMap<K, B, S>>,
-    {
-        self.len() != other.borrow().len() && self.is_submap_by(other, cmp)
-    }
-
-    /// Test whether a map is a submap of another map, meaning that
-    /// all keys in our map must also be in the other map, with the
-    /// same values.
-    ///
-    /// Time: O(n log n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::hashmap::HashMap;
-    /// # fn main() {
-    /// let map1 = hashmap!{1 => 1, 2 => 2};
-    /// let map2 = hashmap!{1 => 1, 2 => 2, 3 => 3};
-    /// assert!(map1.is_submap(map2));
-    /// # }
-    /// ```
-    #[inline]
-    #[must_use]
-    pub fn is_submap<RM>(&self, other: RM) -> bool
-    where
-        V: PartialEq,
-        RM: Borrow<Self>,
-    {
-        self.is_submap_by(other.borrow(), PartialEq::eq)
-    }
-
-    /// Test whether a map is a proper submap of another map, meaning
-    /// that all keys in our map must also be in the other map, with
-    /// the same values. To be a proper submap, ours must also contain
-    /// fewer keys than the other map.
-    ///
-    /// Time: O(n log n)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[macro_use] extern crate im;
-    /// # use im::hashmap::HashMap;
-    /// # fn main() {
-    /// let map1 = hashmap!{1 => 1, 2 => 2};
-    /// let map2 = hashmap!{1 => 1, 2 => 2, 3 => 3};
-    /// assert!(map1.is_proper_submap(map2));
-    ///
-    /// let map3 = hashmap!{1 => 1, 2 => 2};
-    /// let map4 = hashmap!{1 => 1, 2 => 2};
-    /// assert!(!map3.is_proper_submap(map4));
-    /// # }
-    /// ```
-    #[inline]
-    #[must_use]
-    pub fn is_proper_submap<RM>(&self, other: RM) -> bool
-    where
-        V: PartialEq,
-        RM: Borrow<Self>,
-    {
-        self.is_proper_submap_by(other.borrow(), PartialEq::eq)
-    }
 }
 
 // Entries
@@ -1357,8 +1361,8 @@ where
 #[cfg(not(has_specialisation))]
 impl<K, V, S> PartialEq for HashMap<K, V, S>
 where
-    K: Hash + Eq + Clone,
-    V: PartialEq + Clone,
+    K: Hash + Eq,
+    V: PartialEq,
     S: BuildHasher,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -1369,8 +1373,8 @@ where
 #[cfg(has_specialisation)]
 impl<K, V, S> PartialEq for HashMap<K, V, S>
 where
-    K: Hash + Eq + Clone,
-    V: PartialEq + Clone,
+    K: Hash + Eq,
+    V: PartialEq,
     S: BuildHasher,
 {
     default fn eq(&self, other: &Self) -> bool {
@@ -1381,8 +1385,8 @@ where
 #[cfg(has_specialisation)]
 impl<K, V, S> PartialEq for HashMap<K, V, S>
 where
-    K: Hash + Eq + Clone,
-    V: Eq + Clone,
+    K: Hash + Eq,
+    V: Eq,
     S: BuildHasher,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -1395,8 +1399,8 @@ where
 
 impl<K, V, S> Eq for HashMap<K, V, S>
 where
-    K: Hash + Eq + Clone,
-    V: Eq + Clone,
+    K: Hash + Eq,
+    V: Eq,
     S: BuildHasher,
 {
 }
@@ -1435,8 +1439,8 @@ where
 
 impl<K, V, S> Hash for HashMap<K, V, S>
 where
-    K: Hash + Eq + Clone,
-    V: Hash + Clone,
+    K: Hash + Eq,
+    V: Hash,
     S: BuildHasher,
 {
     fn hash<H>(&self, state: &mut H)
@@ -1522,8 +1526,7 @@ where
 impl<'a, BK, K, V, S> Index<&'a BK> for HashMap<K, V, S>
 where
     BK: Hash + Eq + ?Sized,
-    K: Hash + Eq + Clone + Borrow<BK>,
-    V: Clone,
+    K: Hash + Eq + Borrow<BK>,
     S: BuildHasher,
 {
     type Output = V;
@@ -1555,8 +1558,8 @@ where
 #[cfg(not(has_specialisation))]
 impl<K, V, S> Debug for HashMap<K, V, S>
 where
-    K: Hash + Eq + Clone + Debug,
-    V: Debug + Clone,
+    K: Hash + Eq + Debug,
+    V: Debug,
     S: BuildHasher,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
@@ -1571,8 +1574,8 @@ where
 #[cfg(has_specialisation)]
 impl<K, V, S> Debug for HashMap<K, V, S>
 where
-    K: Hash + Eq + Clone + Debug,
-    V: Debug + Clone,
+    K: Hash + Eq + Debug,
+    V: Debug,
     S: BuildHasher,
 {
     default fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
@@ -1587,8 +1590,8 @@ where
 #[cfg(has_specialisation)]
 impl<K, V, S> Debug for HashMap<K, V, S>
 where
-    K: Hash + Eq + Clone + Ord + Debug,
-    V: Debug + Clone,
+    K: Hash + Eq + Ord + Debug,
+    V: Debug,
     S: BuildHasher,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
@@ -1671,7 +1674,7 @@ pub struct ConsumingIter<A: HashValue> {
 
 impl<A> Iterator for ConsumingIter<A>
 where
-    A: HashValue,
+    A: HashValue + Clone,
 {
     type Item = A;
 
@@ -1684,9 +1687,9 @@ where
     }
 }
 
-impl<A> ExactSizeIterator for ConsumingIter<A> where A: HashValue {}
+impl<A> ExactSizeIterator for ConsumingIter<A> where A: HashValue + Clone {}
 
-impl<A> FusedIterator for ConsumingIter<A> where A: HashValue {}
+impl<A> FusedIterator for ConsumingIter<A> where A: HashValue + Clone {}
 
 // An iterator over the keys of a map.
 pub struct Keys<'a, K: 'a, V: 'a> {
@@ -1732,8 +1735,7 @@ impl<'a, K, V> FusedIterator for Values<'a, K, V> {}
 
 impl<'a, K, V, S> IntoIterator for &'a HashMap<K, V, S>
 where
-    K: Hash + Eq + Clone,
-    V: Clone,
+    K: Hash + Eq,
     S: BuildHasher,
 {
     type Item = &'a (K, V);
@@ -1762,7 +1764,7 @@ where
     }
 }
 
-// // Conversions
+// Conversions
 
 impl<K, V, S> FromIterator<(K, V)> for HashMap<K, V, S>
 where
@@ -1782,11 +1784,7 @@ where
     }
 }
 
-impl<K, V, S> AsRef<HashMap<K, V, S>> for HashMap<K, V, S>
-where
-    K: Clone,
-    V: Clone,
-{
+impl<K, V, S> AsRef<HashMap<K, V, S>> for HashMap<K, V, S> {
     #[inline]
     fn as_ref(&self) -> &Self {
         self

@@ -19,14 +19,17 @@ use self::InsertAction::*;
 const NODE_SIZE: usize = NodeSize::USIZE;
 const MEDIAN: usize = (NODE_SIZE + 1) >> 1;
 
-pub trait BTreeValue: Clone {
+pub trait BTreeValue {
     type Key;
     fn ptr_eq(&self, other: &Self) -> bool;
     fn search_key<BK>(slice: &[Self], key: &BK) -> Result<usize, usize>
     where
         BK: Ord + ?Sized,
+        Self: Sized,
         Self::Key: Borrow<BK>;
-    fn search_value(slice: &[Self], value: &Self) -> Result<usize, usize>;
+    fn search_value(slice: &[Self], value: &Self) -> Result<usize, usize>
+    where
+        Self: Sized;
     fn cmp_keys<BK>(&self, other: &BK) -> Ordering
     where
         BK: Ord + ?Sized,
@@ -177,6 +180,7 @@ impl<A: BTreeValue> Node<A> {
 
     pub fn lookup_mut<BK>(&mut self, key: &BK) -> Option<&mut A>
     where
+        A: Clone,
         BK: Ord + ?Sized,
         A::Key: Borrow<BK>,
     {
@@ -421,7 +425,10 @@ impl<A: BTreeValue> Node<A> {
         self.children.push_back(child);
     }
 
-    pub fn insert(&mut self, value: A) -> Insert<A> {
+    pub fn insert(&mut self, value: A) -> Insert<A>
+    where
+        A: Clone,
+    {
         if self.keys.is_empty() {
             self.keys.push_back(value);
             self.children.push_back(None);
@@ -481,6 +488,7 @@ impl<A: BTreeValue> Node<A> {
 
     pub fn remove<BK>(&mut self, key: &BK) -> Remove<A>
     where
+        A: Clone,
         BK: Ord + ?Sized,
         A::Key: Borrow<BK>,
     {
@@ -490,6 +498,7 @@ impl<A: BTreeValue> Node<A> {
 
     fn remove_index<BK>(&mut self, index: Result<usize, usize>, key: &BK) -> Remove<A>
     where
+        A: Clone,
         BK: Ord + ?Sized,
         A::Key: Borrow<BK>,
     {
@@ -998,7 +1007,7 @@ impl<A: Clone> ConsumingIter<A> {
 
 impl<A> Iterator for ConsumingIter<A>
 where
-    A: BTreeValue,
+    A: BTreeValue + Clone,
 {
     type Item = A;
 
@@ -1034,7 +1043,7 @@ where
 
 impl<A> DoubleEndedIterator for ConsumingIter<A>
 where
-    A: BTreeValue,
+    A: BTreeValue + Clone,
 {
     fn next_back(&mut self) -> Option<Self::Item> {
         loop {
@@ -1062,7 +1071,7 @@ where
     }
 }
 
-impl<A: BTreeValue> ExactSizeIterator for ConsumingIter<A> {}
+impl<A: BTreeValue + Clone> ExactSizeIterator for ConsumingIter<A> {}
 
 // DiffIter
 
