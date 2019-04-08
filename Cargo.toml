@@ -25,7 +25,7 @@ rustc_version = "0.2"
 
 [dependencies]
 typenum = "1.10"
-sized-chunks = "0.1.1"
+sized-chunks = "0.1.2"
 quickcheck = { version = "0.8", optional = true }
 proptest = { version = "0.9", optional = true }
 serde = { version = "1.0", optional = true }

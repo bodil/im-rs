@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic
 Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Enforces the latest bugfix release of sized-chunks. (#78)
+
 ## [12.3.3] - 2019-03-11
 
 ### Fixed
