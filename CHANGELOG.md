@@ -22,9 +22,11 @@ The minimum supported Rust version is now 1.34.0.
 - The deprecated methods `Vector::chunks` and `Vector::chunks_mut` have been
   removed in favour of `Vector::leaves` and `Vector::leaves_mut` respectively.
   (#50)
+- The deprecated reference to [`sized-chunks`](https://crates.io/crates/sized-chunks)
+  has been removed. If you need it, please use the `sized-chunks` crate directly.
 - `im::iter::unfold_mut` has been removed, as there's no meaningful difference
   between it and rust-std 1.34.0's `std::iter::from_fn` with a captured state
-  varible.
+  variable.
 
 ## [12.3.4] - 2019-04-08
 

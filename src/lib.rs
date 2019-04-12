@@ -364,9 +364,6 @@ pub mod iter;
 #[cfg(any(test, feature = "serde"))]
 pub mod ser;
 
-#[deprecated(since = "12.3.1", note = "please use the `sized_chunks` crate instead")]
-pub use sized_chunks::sized_chunk as chunk;
-
 pub use crate::hashmap::HashMap;
 pub use crate::hashset::HashSet;
 pub use crate::ordmap::OrdMap;
