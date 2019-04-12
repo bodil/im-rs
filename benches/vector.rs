@@ -9,7 +9,6 @@ extern crate rand;
 extern crate rayon;
 extern crate test;
 
-use im::iter::unfold_mut;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 use std::iter::FromIterator;
@@ -22,7 +21,7 @@ where
     Standard: Distribution<A>,
 {
     let rng = rand::thread_rng();
-    unfold_mut(rng, |rng| Some(rng.gen()))
+    std::iter::from_fn(|| Some(rng.gen()))
 }
 
 fn vector_push_front_mut(b: &mut Bencher, count: usize) {

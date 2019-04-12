@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic
 Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+The minimum supported Rust version is now 1.34.0.
+
+### Changed
+
+- `im::iter::unfold` now gives you the owned state value rather than an
+  immutable reference to it, which makes it a little more useful.
+
+### Removed
+
+- `im::iter::unfold_mut` has been removed, as there's no meaningful difference
+  between it and rust-std 1.34.0's `std::iter::from_fn` with a captured state
+  varible.
+
 ## [12.3.4] - 2019-04-08
 
 ### Changed
