@@ -176,18 +176,6 @@ impl<K, V> OrdMap<K, V> {
 
     /// Construct a map with a single mapping.
     ///
-    /// This method has been deprecated; use [`unit`][unit] instead.
-    ///
-    /// [unit]: #method.unit
-    #[inline]
-    #[must_use]
-    #[deprecated(since = "12.3.0", note = "renamed to `unit` for consistency")]
-    pub fn singleton(key: K, value: V) -> Self {
-        Self::unit(key, value)
-    }
-
-    /// Construct a map with a single mapping.
-    ///
     /// # Examples
     ///
     /// ```

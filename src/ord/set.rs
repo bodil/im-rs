@@ -187,18 +187,6 @@ impl<A> OrdSet<A> {
 
     /// Construct a set with a single value.
     ///
-    /// This method has been deprecated; use [`unit`][unit] instead.
-    ///
-    /// [unit]: #method.unit
-    #[inline]
-    #[must_use]
-    #[deprecated(since = "12.3.0", note = "renamed to `unit` for consistency")]
-    pub fn singleton(a: A) -> Self {
-        Self::unit(a)
-    }
-
-    /// Construct a set with a single value.
-    ///
     /// # Examples
     ///
     /// ```

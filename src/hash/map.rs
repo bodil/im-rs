@@ -132,18 +132,6 @@ where
 {
     /// Construct a hash map with a single mapping.
     ///
-    /// This method has been deprecated; use [`unit`][unit] instead.
-    ///
-    /// [unit]: #method.unit
-    #[inline]
-    #[must_use]
-    #[deprecated(since = "12.3.0", note = "renamed to `unit` for consistency")]
-    pub fn singleton(k: K, v: V) -> HashMap<K, V> {
-        Self::unit(k, v)
-    }
-
-    /// Construct a hash map with a single mapping.
-    ///
     /// # Examples
     ///
     /// ```

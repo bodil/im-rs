@@ -295,40 +295,6 @@ impl<A: Clone> Vector<A> {
 
     /// Get an iterator over the leaf nodes of a vector.
     ///
-    /// This method has been deprecated; use [`leaves`][leaves] instead.
-    ///
-    /// Time: O(1)
-    ///
-    /// [leaves]: #method.leaves
-    #[inline]
-    #[must_use]
-    #[deprecated(
-        since = "12.3.0",
-        note = "renamed to `leaves` to avoid confusion with Vec::chunks"
-    )]
-    pub fn chunks(&self) -> Chunks<'_, A> {
-        Chunks::new(self)
-    }
-
-    /// Get a mutable iterator over the leaf nodes of a vector.
-    ///
-    /// This method has been deprecated; use [`leaves_mut`][leaves_mut] instead.
-    ///
-    /// Time: O(1)
-    ///
-    /// [leaves_mut]: #method.leaves_mut
-    #[inline]
-    #[must_use]
-    #[deprecated(
-        since = "12.3.0",
-        note = "renamed to `leaves_mut` to avoid confusion with Vec::chunks"
-    )]
-    pub fn chunks_mut(&mut self) -> ChunksMut<'_, A> {
-        ChunksMut::new(self)
-    }
-
-    /// Get an iterator over the leaf nodes of a vector.
-    ///
     /// This returns an iterator over the [`Chunk`s][Chunk] at the leaves of the
     /// RRB tree. These are useful for efficient parallelisation of work on
     /// the vector, but should not be used for basic iteration.
@@ -731,18 +697,6 @@ impl<A: Clone> Vector<A> {
 }
 
 impl<A: Clone> Vector<A> {
-    /// Construct a vector with a single value.
-    ///
-    /// This method has been deprecated; use [`unit`][unit] instead.
-    ///
-    /// [unit]: #method.unit
-    #[inline]
-    #[must_use]
-    #[deprecated(since = "12.3.0", note = "renamed to `unit` for consistency")]
-    pub fn singleton(a: A) -> Self {
-        Self::unit(a)
-    }
-
     /// Construct a vector with a single value.
     ///
     /// # Examples
