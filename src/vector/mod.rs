@@ -293,36 +293,6 @@ impl<A: Clone> Vector<A> {
         IterMut::new(self)
     }
 
-    /// Get an iterator over the leaf nodes of a vector.
-    ///
-    /// This returns an iterator over the [`Chunk`s][Chunk] at the leaves of the
-    /// RRB tree. These are useful for efficient parallelisation of work on
-    /// the vector, but should not be used for basic iteration.
-    ///
-    /// Time: O(1)
-    ///
-    /// [Chunk]: ../chunk/struct.Chunk.html
-    #[inline]
-    #[must_use]
-    pub fn leaves(&self) -> Chunks<'_, A> {
-        Chunks::new(self)
-    }
-
-    /// Get a mutable iterator over the leaf nodes of a vector.
-    //
-    /// This returns an iterator over the [`Chunk`s][Chunk] at the leaves of the
-    /// RRB tree. These are useful for efficient parallelisation of work on
-    /// the vector, but should not be used for basic iteration.
-    ///
-    /// Time: O(1)
-    ///
-    /// [Chunk]: ../chunk/struct.Chunk.html
-    #[inline]
-    #[must_use]
-    pub fn leaves_mut(&mut self) -> ChunksMut<'_, A> {
-        ChunksMut::new(self)
-    }
-
     /// Construct a [`Focus`][Focus] for a vector.
     ///
     /// Time: O(1)
@@ -834,7 +804,7 @@ impl<A: Clone> Vector<A> {
         } else {
             match self {
                 Empty => None,
-                Single(chunk) => Some(Ref::make_mut(chunk).pop_front()),
+                Single(chunk) => Ref::make_mut(chunk).pop_front(),
                 Full(tree) => tree.pop_front(),
             }
         }
@@ -861,7 +831,7 @@ impl<A: Clone> Vector<A> {
         } else {
             match self {
                 Empty => None,
-                Single(chunk) => Some(Ref::make_mut(chunk).pop_back()),
+                Single(chunk) => Ref::make_mut(chunk).pop_back(),
                 Full(tree) => tree.pop_back(),
             }
         }
@@ -1453,7 +1423,7 @@ impl<A: Clone> RRB<A> {
         }
         self.length -= 1;
         let outer_f = Ref::make_mut(&mut self.outer_f);
-        Some(outer_f.pop_front())
+        outer_f.pop_front()
     }
 
     fn pop_back(&mut self) -> Option<A> {
@@ -1477,7 +1447,7 @@ impl<A: Clone> RRB<A> {
         }
         self.length -= 1;
         let outer_b = Ref::make_mut(&mut self.outer_b);
-        Some(outer_b.pop_back())
+        outer_b.pop_back()
     }
 
     fn push_front(&mut self, value: A) {
@@ -2021,123 +1991,6 @@ impl<A: Clone> ExactSizeIterator for ConsumingIter<A> {}
 
 impl<A: Clone> FusedIterator for ConsumingIter<A> {}
 
-/// An iterator over the leaf nodes of a vector.
-///
-/// To obtain one, use [`Vector::chunks()`][chunks].
-///
-/// [chunks]: enum.Vector.html#method.chunks
-pub struct Chunks<'a, A: 'a> {
-    focus: Focus<'a, A>,
-    front_index: usize,
-    back_index: usize,
-}
-
-impl<'a, A: Clone> Chunks<'a, A> {
-    fn new(seq: &'a Vector<A>) -> Self {
-        Chunks {
-            focus: seq.focus(),
-            front_index: 0,
-            back_index: seq.len(),
-        }
-    }
-}
-
-impl<'a, A: Clone> Iterator for Chunks<'a, A> {
-    type Item = &'a [A];
-
-    /// Advance the iterator and return the next value.
-    ///
-    /// Time: O(1)*
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.front_index >= self.back_index {
-            return None;
-        }
-        #[allow(unsafe_code)]
-        let focus: &'a mut Focus<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
-        let (range, value) = focus.chunk_at(self.front_index);
-        self.front_index = range.end;
-        Some(value)
-    }
-}
-
-impl<'a, A: Clone> DoubleEndedIterator for Chunks<'a, A> {
-    /// Remove and return an element from the back of the iterator.
-    ///
-    /// Time: O(1)*
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.front_index >= self.back_index {
-            return None;
-        }
-        self.back_index -= 1;
-        #[allow(unsafe_code)]
-        let focus: &'a mut Focus<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
-        let (range, value) = focus.chunk_at(self.back_index);
-        self.back_index = range.start;
-        Some(value)
-    }
-}
-
-impl<'a, A: Clone> FusedIterator for Chunks<'a, A> {}
-
-/// A mutable iterator over the leaf nodes of a vector.
-///
-/// To obtain one, use [`Vector::chunks_mut()`][chunks_mut].
-///
-/// [chunks_mut]: enum.Vector.html#method.chunks_mut
-pub struct ChunksMut<'a, A: 'a> {
-    focus: FocusMut<'a, A>,
-    front_index: usize,
-    back_index: usize,
-}
-
-impl<'a, A: Clone> ChunksMut<'a, A> {
-    fn new(seq: &'a mut Vector<A>) -> Self {
-        let len = seq.len();
-        ChunksMut {
-            focus: seq.focus_mut(),
-            front_index: 0,
-            back_index: len,
-        }
-    }
-}
-
-impl<'a, A: Clone> Iterator for ChunksMut<'a, A> {
-    type Item = &'a mut [A];
-
-    /// Advance the iterator and return the next value.
-    ///
-    /// Time: O(1)*
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.front_index >= self.back_index {
-            return None;
-        }
-        #[allow(unsafe_code)]
-        let focus: &'a mut FocusMut<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
-        let (range, value) = focus.chunk_at(self.front_index);
-        self.front_index = range.end;
-        Some(value)
-    }
-}
-
-impl<'a, A: Clone> DoubleEndedIterator for ChunksMut<'a, A> {
-    /// Remove and return an element from the back of the iterator.
-    ///
-    /// Time: O(1)*
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.front_index >= self.back_index {
-            return None;
-        }
-        self.back_index -= 1;
-        #[allow(unsafe_code)]
-        let focus: &'a mut FocusMut<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
-        let (range, value) = focus.chunk_at(self.back_index);
-        self.back_index = range.start;
-        Some(value)
-    }
-}
-
-impl<'a, A: Clone> FusedIterator for ChunksMut<'a, A> {}
-
 // Rayon
 
 #[cfg(all(threadsafe, any(test, feature = "rayon")))]
@@ -2573,14 +2426,26 @@ mod test {
     #[test]
     fn issue_77() {
         let mut x = Vector::new();
-        for _ in 0..44 { x.push_back(0); }
-        for _ in 0..20 { x.insert(0, 0); }
+        for _ in 0..44 {
+            x.push_back(0);
+        }
+        for _ in 0..20 {
+            x.insert(0, 0);
+        }
         x.insert(1, 0);
-        for _ in 0..441 { x.push_back(0); }
-        for _ in 0..58 { x.insert(0, 0); }
+        for _ in 0..441 {
+            x.push_back(0);
+        }
+        for _ in 0..58 {
+            x.insert(0, 0);
+        }
         x.insert(514, 0);
-        for _ in 0..73 { x.push_back(0); }
-        for _ in 0..10 { x.insert(0, 0); }
+        for _ in 0..73 {
+            x.push_back(0);
+        }
+        for _ in 0..10 {
+            x.insert(0, 0);
+        }
         x.insert(514, 0);
     }
 
@@ -2746,26 +2611,6 @@ mod test {
 
             let expected: Vector<i32> = input.clone().into_iter().map(|i| i.overflowing_add(1).0).collect();
             assert_eq!(expected, vec);
-        }
-
-        #[test]
-        fn chunks(ref input in vector(i32::ANY, 0..10000)) {
-            let output: Vector<_> = input.leaves().flat_map(|a|a).cloned().collect();
-            assert_eq!(input, &output);
-            let rev_in: Vector<_> = input.iter().rev().cloned().collect();
-            let rev_out: Vector<_> = input.leaves().rev().map(|c| c.iter().rev()).flat_map(|a|a).cloned().collect();
-            assert_eq!(rev_in, rev_out);
-        }
-
-        #[test]
-        fn chunks_mut(ref mut input_src in vector(i32::ANY, 0..10000)) {
-            let mut input = input_src.clone();
-            #[allow(clippy::map_clone)]
-            let output: Vector<_> = input.leaves_mut().flat_map(|a| a).map(|v| *v).collect();
-            assert_eq!(input, output);
-            let rev_in: Vector<_> = input.iter().rev().cloned().collect();
-            let rev_out: Vector<_> = input.leaves_mut().rev().map(|c| c.iter().rev()).flat_map(|a|a).cloned().collect();
-            assert_eq!(rev_in, rev_out);
         }
 
         // The following two tests are very slow and there are unit tests above

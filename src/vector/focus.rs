@@ -7,7 +7,7 @@ use std::ops::{Range, RangeBounds};
 use std::ptr::null;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
-use crate::nodes::chunk::Chunk;
+use crate::nodes::chunk::{Chunk, Slice, SliceMut};
 use crate::sync::Lock;
 use crate::util::{to_range, Ref};
 use crate::vector::{Iter, IterMut, Vector, RRB};
@@ -88,7 +88,7 @@ where
     #[doc(hidden)]
     Empty,
     #[doc(hidden)]
-    Single(&'a [A]),
+    Single(Slice<'a, A>),
     #[doc(hidden)]
     Full(TreeFocus<A>),
 }
@@ -103,7 +103,7 @@ where
     pub fn new(vector: &'a Vector<A>) -> Self {
         match vector {
             Vector::Empty => Focus::Empty,
-            Vector::Single(chunk) => Focus::Single(chunk),
+            Vector::Single(chunk) => Focus::Single(chunk.slice(..)),
             Vector::Full(tree) => Focus::Full(TreeFocus::new(tree)),
         }
     }
@@ -114,7 +114,7 @@ where
     pub fn len(&self) -> usize {
         match self {
             Focus::Empty => 0,
-            Focus::Single(chunk) => chunk.len(),
+            Focus::Single(slice) => slice.len(),
             Focus::Full(tree) => tree.len(),
         }
     }
@@ -130,7 +130,7 @@ where
     pub fn get(&mut self, index: usize) -> Option<&A> {
         match self {
             Focus::Empty => None,
-            Focus::Single(chunk) => chunk.get(index),
+            Focus::Single(slice) => slice.get(index),
             Focus::Full(tree) => tree.get(index),
         }
     }
@@ -140,22 +140,6 @@ where
     /// Panics if the index is out of bounds.
     pub fn index(&mut self, index: usize) -> &A {
         self.get(index).expect("index out of bounds")
-    }
-
-    /// Get the chunk for the given index.
-    ///
-    /// This gives you a reference to the leaf node that contains the index,
-    /// along with its start and end indices.
-    pub fn chunk_at(&mut self, index: usize) -> (Range<usize>, &[A]) {
-        let len = self.len();
-        if index >= len {
-            panic!("vector::Focus::chunk_at: index out of bounds");
-        }
-        match self {
-            Focus::Empty => (0..0, &[]),
-            Focus::Single(chunk) => (0..len, chunk),
-            Focus::Full(tree) => tree.get_chunk(index),
-        }
     }
 
     /// Narrow the focus onto a subslice of the vector.
@@ -186,12 +170,12 @@ where
         R: RangeBounds<usize>,
     {
         let r = to_range(&range, self.len());
-        if r.start >= r.end || r.start >= self.len() {
+        if r.start > r.end || r.start > self.len() {
             panic!("vector::Focus::narrow: range out of bounds");
         }
         match self {
             Focus::Empty => Focus::Empty,
-            Focus::Single(chunk) => Focus::Single(&chunk[r]),
+            Focus::Single(slice) => Focus::Single(slice.slice(range)),
             Focus::Full(tree) => Focus::Full(tree.narrow(r)),
         }
     }
@@ -232,8 +216,8 @@ where
         }
         match self {
             Focus::Empty => (Focus::Empty, Focus::Empty),
-            Focus::Single(chunk) => {
-                let (left, right) = chunk.split_at(index);
+            Focus::Single(slice) => {
+                let (left, right) = slice.split_at(index);
                 (Focus::Single(left), Focus::Single(right))
             }
             Focus::Full(tree) => {
@@ -263,7 +247,7 @@ where
     fn clone(&self) -> Self {
         match self {
             Focus::Empty => Focus::Empty,
-            Focus::Single(chunk) => Focus::Single(chunk),
+            Focus::Single(slice) => Focus::Single(slice.clone()),
             Focus::Full(tree) => Focus::Full(tree.clone()),
         }
     }
@@ -346,10 +330,6 @@ where
         self.view.start + index
     }
 
-    fn logical_range(&self, range: &Range<usize>) -> Range<usize> {
-        (range.start - self.view.start)..(range.end - self.view.start)
-    }
-
     fn set_focus(&mut self, index: usize) {
         if index < self.middle_range.start {
             let outer_len = self.tree.outer_f.len();
@@ -386,7 +366,7 @@ where
         unsafe { &*self.target_ptr }
     }
 
-    pub fn get(&mut self, index: usize) -> Option<&A> {
+    fn get(&mut self, index: usize) -> Option<&A> {
         if index >= self.len() {
             return None;
         }
@@ -396,25 +376,6 @@ where
         }
         let target_phys_index = phys_index - self.target_range.start;
         Some(&self.get_focus()[target_phys_index])
-    }
-
-    pub fn get_chunk(&mut self, index: usize) -> (Range<usize>, &[A]) {
-        let phys_index = self.physical_index(index);
-        if !contains(&self.target_range, &phys_index) {
-            self.set_focus(phys_index);
-        }
-        let mut slice: &[A] = self.get_focus();
-        let mut left = 0;
-        let mut right = 0;
-        if self.target_range.start < self.view.start {
-            left = self.view.start - self.target_range.start;
-        }
-        if self.target_range.end > self.view.end {
-            right = self.target_range.end - self.view.end;
-        }
-        slice = &slice[left..(slice.len() - right)];
-        let phys_range = (self.target_range.start + left)..(self.target_range.end - right);
-        (self.logical_range(&phys_range), slice)
     }
 }
 
@@ -486,7 +447,7 @@ where
     #[doc(hidden)]
     Empty,
     #[doc(hidden)]
-    Single(&'a mut [A]),
+    Single(SliceMut<'a, A>),
     #[doc(hidden)]
     Full(TreeFocusMut<'a, A>),
 }
@@ -499,7 +460,7 @@ where
     pub fn new(vector: &'a mut Vector<A>) -> Self {
         match vector {
             Vector::Empty => FocusMut::Empty,
-            Vector::Single(chunk) => FocusMut::Single(Ref::make_mut(chunk).as_mut_slice()),
+            Vector::Single(chunk) => FocusMut::Single(Ref::make_mut(chunk).slice_mut(..)),
             Vector::Full(tree) => FocusMut::Full(TreeFocusMut::new(tree)),
         }
     }
@@ -635,25 +596,6 @@ where
         unsafe { f(&mut *pa, &mut *pb, &mut *pc) }
     }
 
-    /// Get the chunk for the given index.
-    ///
-    /// This gives you a reference to the leaf node that contains the index,
-    /// along with its start and end indices.
-    pub fn chunk_at(&mut self, index: usize) -> (Range<usize>, &mut [A]) {
-        let len = self.len();
-        if index >= len {
-            panic!("vector::FocusMut::chunk_at: index out of bounds");
-        }
-        match self {
-            FocusMut::Empty => (0..0, &mut []),
-            FocusMut::Single(chunk) => (0..len, chunk),
-            FocusMut::Full(tree) => {
-                let (range, chunk) = tree.get_chunk(index);
-                (range, chunk)
-            }
-        }
-    }
-
     /// Narrow the focus onto a subslice of the vector.
     ///
     /// `FocusMut::narrow(range)` has the same effect as `&slice[range]`, without
@@ -687,7 +629,7 @@ where
         }
         match self {
             FocusMut::Empty => FocusMut::Empty,
-            FocusMut::Single(chunk) => FocusMut::Single(&mut chunk[r]),
+            FocusMut::Single(chunk) => FocusMut::Single(chunk.slice(r)),
             FocusMut::Full(tree) => FocusMut::Full(tree.narrow(r)),
         }
     }
@@ -736,7 +678,7 @@ where
         match self {
             FocusMut::Empty => (FocusMut::Empty, FocusMut::Empty),
             FocusMut::Single(chunk) => {
-                let (left, right) = chunk.split_at_mut(index);
+                let (left, right) = chunk.split_at(index);
                 (FocusMut::Single(left), FocusMut::Single(right))
             }
             FocusMut::Full(tree) => {
@@ -750,7 +692,7 @@ where
     pub fn unmut(self) -> Focus<'a, A> {
         match self {
             FocusMut::Empty => Focus::Empty,
-            FocusMut::Single(chunk) => Focus::Single(chunk),
+            FocusMut::Single(chunk) => Focus::Single(chunk.unmut()),
             FocusMut::Full(mut tree) => Focus::Full(TreeFocus {
                 tree: {
                     let t = tree.tree.lock().unwrap();
@@ -855,10 +797,6 @@ where
         self.view.start + index
     }
 
-    fn logical_range(&self, range: &Range<usize>) -> Range<usize> {
-        (range.start - self.view.start)..(range.end - self.view.start)
-    }
-
     fn set_focus(&mut self, index: usize) {
         let mut tree = self
             .tree
@@ -902,7 +840,7 @@ where
         unsafe { &mut *self.target_ptr.load(Ordering::Relaxed) }
     }
 
-    pub fn get(&mut self, index: usize) -> Option<&mut A> {
+    fn get(&mut self, index: usize) -> Option<&mut A> {
         if index >= self.len() {
             return None;
         }
@@ -912,25 +850,5 @@ where
         }
         let target_phys_index = phys_index - self.target_range.start;
         Some(&mut self.get_focus()[target_phys_index])
-    }
-
-    pub fn get_chunk(&mut self, index: usize) -> (Range<usize>, &mut [A]) {
-        let phys_index = self.physical_index(index);
-        if !contains(&self.target_range, &phys_index) {
-            self.set_focus(phys_index);
-        }
-        let mut left = 0;
-        let mut right = 0;
-        if self.target_range.start < self.view.start {
-            left = self.view.start - self.target_range.start;
-        }
-        if self.target_range.end > self.view.end {
-            right = self.target_range.end - self.view.end;
-        }
-        let phys_range = (self.target_range.start + left)..(self.target_range.end - right);
-        let log_range = self.logical_range(&phys_range);
-        let slice_len = self.get_focus().len();
-        let slice = &mut (self.get_focus().as_mut_slice())[left..(slice_len - right)];
-        (log_range, slice)
     }
 }

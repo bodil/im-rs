@@ -92,7 +92,7 @@ impl Size {
                 match side {
                     Left => {
                         let first = size_table.pop_front();
-                        debug_assert_eq!(value, first);
+                        debug_assert_eq!(value, first.unwrap());
                         for entry in size_table.iter_mut() {
                             *entry -= value;
                         }
@@ -100,7 +100,7 @@ impl Size {
                     Right => {
                         let pop = size_table.pop_back();
                         let last = size_table.last().unwrap_or(&0);
-                        debug_assert_eq!(value, pop - last);
+                        debug_assert_eq!(value, pop.unwrap() - last);
                     }
                 }
             }
@@ -519,8 +519,8 @@ impl<A: Clone> Node<A> {
     fn pop_child_node(&mut self, side: Side) -> Ref<Node<A>> {
         let children = self.children.unwrap_nodes_mut();
         match side {
-            Left => children.pop_front(),
-            Right => children.pop_back(),
+            Left => children.pop_front().unwrap(),
+            Right => children.pop_back().unwrap(),
         }
     }
 
@@ -938,7 +938,7 @@ impl<A: Clone> Node<A> {
                     let right_node = Ref::make_mut(&mut right);
                     let left_last =
                         if let Entry::Nodes(ref mut size, ref mut children) = left_node.children {
-                            let node = Ref::make_mut(children).pop_back();
+                            let node = Ref::make_mut(children).pop_back().unwrap();
                             size.pop(Side::Right, node.len());
                             node
                         } else {
@@ -946,7 +946,7 @@ impl<A: Clone> Node<A> {
                         };
                     let right_first =
                         if let Entry::Nodes(ref mut size, ref mut children) = right_node.children {
-                            let node = Ref::make_mut(children).pop_front();
+                            let node = Ref::make_mut(children).pop_front().unwrap();
                             size.pop(Side::Left, node.len());
                             node
                         } else {
@@ -1061,7 +1061,7 @@ impl<A: Clone> Iterator for ConsumingIter<A> {
         if let Some(ref mut chunk) = self.front_chunk {
             if !chunk.is_empty() {
                 self.remaining -= 1;
-                return Some(chunk.pop_front());
+                return chunk.pop_front();
             }
         }
         match self.root.pop_chunk(self.level, Side::Left) {
@@ -1071,7 +1071,7 @@ impl<A: Clone> Iterator for ConsumingIter<A> {
                 if let Some(ref mut chunk) = self.back_chunk {
                     if !chunk.is_empty() {
                         self.remaining -= 1;
-                        return Some(chunk.pop_front());
+                        return chunk.pop_front();
                     } else {
                         return None;
                     }
@@ -1094,7 +1094,7 @@ impl<A: Clone> DoubleEndedIterator for ConsumingIter<A> {
         if let Some(ref mut chunk) = self.back_chunk {
             if !chunk.is_empty() {
                 self.remaining -= 1;
-                return Some(chunk.pop_back());
+                return chunk.pop_back();
             }
         }
         match self.root.pop_chunk(self.level, Side::Left) {
@@ -1104,7 +1104,7 @@ impl<A: Clone> DoubleEndedIterator for ConsumingIter<A> {
                 if let Some(ref mut chunk) = self.front_chunk {
                     if !chunk.is_empty() {
                         self.remaining -= 1;
-                        return Some(chunk.pop_back());
+                        return chunk.pop_back();
                     } else {
                         return None;
                     }
