@@ -28,6 +28,12 @@ The minimum supported Rust version is now 1.34.0.
   between it and rust-std 1.34.0's `std::iter::from_fn` with a captured state
   variable.
 
+### Fixed
+
+- Some complexity timings have been added and corrected. (#87)
+- `OrdSet::is_subset(&self, other)` now returns immediately when `self` is
+  larger than `other` and thus could not possibly be a subset of it. (#87)
+
 ## [12.3.4] - 2019-04-08
 
 ### Changed

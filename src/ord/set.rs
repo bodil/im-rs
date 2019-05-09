@@ -282,6 +282,8 @@ where
     /// Get the smallest value in a set.
     ///
     /// If the set is empty, returns `None`.
+    ///
+    /// Time: O(log n)
     #[must_use]
     pub fn get_min(&self) -> Option<&A> {
         self.root.min().map(Deref::deref)
@@ -290,6 +292,8 @@ where
     /// Get the largest value in a set.
     ///
     /// If the set is empty, returns `None`.
+    ///
+    /// Time: O(log n)
     #[must_use]
     pub fn get_max(&self) -> Option<&A> {
         self.root.max().map(Deref::deref)
@@ -362,21 +366,24 @@ where
     /// Test whether a set is a subset of another set, meaning that
     /// all values in our set must also be in the other set.
     ///
-    /// Time: O(n log n)
+    /// Time: O(n log m) where m is the size of the other set
     #[must_use]
     pub fn is_subset<RS>(&self, other: RS) -> bool
     where
         RS: Borrow<Self>,
     {
-        let o = other.borrow();
-        self.iter().all(|a| o.contains(&a))
+        let other = other.borrow();
+        if other.len() < self.len() {
+            return false;
+        }
+        self.iter().all(|a| other.contains(&a))
     }
 
     /// Test whether a set is a proper subset of another set, meaning
     /// that all values in our set must also be in the other set. A
     /// proper subset must also be smaller than the other set.
     ///
-    /// Time: O(n log n)
+    /// Time: O(n log m) where m is the size of the other set
     #[must_use]
     pub fn is_proper_subset<RS>(&self, other: RS) -> bool
     where
@@ -829,6 +836,9 @@ where
 {
     type Item = &'a A;
 
+    /// Advance the iterator and return the next value.
+    ///
+    /// Time: O(1)*
     fn next(&mut self) -> Option<Self::Item> {
         self.it.next().map(Deref::deref)
     }
@@ -867,6 +877,9 @@ where
 {
     type Item = &'a A;
 
+    /// Advance the iterator and return the next value.
+    ///
+    /// Time: O(1)*
     fn next(&mut self) -> Option<Self::Item> {
         self.it.next().map(Deref::deref)
     }
@@ -896,6 +909,9 @@ where
 {
     type Item = A;
 
+    /// Advance the iterator and return the next value.
+    ///
+    /// Time: O(1)*
     fn next(&mut self) -> Option<Self::Item> {
         self.it.next().map(|v| v.0)
     }
@@ -912,6 +928,9 @@ where
 {
     type Item = DiffItem<'a, A>;
 
+    /// Advance the iterator and return the next value.
+    ///
+    /// Time: O(1)*
     fn next(&mut self) -> Option<Self::Item> {
         self.it.next().map(|item| match item {
             DiffItem::Add(v) => DiffItem::Add(v.deref()),
