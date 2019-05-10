@@ -978,8 +978,11 @@ where
             .fold(Self::default(), |a, b| a.union_with_key(b, &f))
     }
 
-    /// Construct the difference between two maps by discarding keys
+    /// Construct the symmetric difference between two maps by discarding keys
     /// which occur in both maps.
+    ///
+    /// This is an alias for the
+    /// [`symmetric_difference`][symmetric_difference] method.
     ///
     /// Time: O(n log n)
     ///
@@ -998,25 +1001,68 @@ where
     #[inline]
     #[must_use]
     pub fn difference(self, other: Self) -> Self {
-        self.difference_with_key(other, |_, _, _| None)
+        self.symmetric_difference(other)
     }
 
-    /// Construct the difference between two maps by using a function
+    /// Construct the symmetric difference between two maps by discarding keys
+    /// which occur in both maps.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map1 = hashmap!{1 => 1, 3 => 4};
+    /// let map2 = hashmap!{2 => 2, 3 => 5};
+    /// let expected = hashmap!{1 => 1, 2 => 2};
+    /// assert_eq!(expected, map1.symmetric_difference(map2));
+    /// # }
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn symmetric_difference(self, other: Self) -> Self {
+        self.symmetric_difference_with_key(other, |_, _, _| None)
+    }
+
+    /// Construct the symmetric difference between two maps by using a function
+    /// to decide what to do if a key occurs in both.
+    ///
+    /// This is an alias for the
+    /// [`symmetric_difference_with`][symmetric_difference_with] method.
+    ///
+    /// Time: O(n log n)
+    #[inline]
+    #[must_use]
+    pub fn difference_with<F>(self, other: Self, f: F) -> Self
+    where
+        F: FnMut(V, V) -> Option<V>,
+    {
+        self.symmetric_difference_with(other, f)
+    }
+
+    /// Construct the symmetric difference between two maps by using a function
     /// to decide what to do if a key occurs in both.
     ///
     /// Time: O(n log n)
     #[inline]
     #[must_use]
-    pub fn difference_with<F>(self, other: Self, mut f: F) -> Self
+    pub fn symmetric_difference_with<F>(self, other: Self, mut f: F) -> Self
     where
         F: FnMut(V, V) -> Option<V>,
     {
-        self.difference_with_key(other, |_, a, b| f(a, b))
+        self.symmetric_difference_with_key(other, |_, a, b| f(a, b))
     }
 
-    /// Construct the difference between two maps by using a function
+    /// Construct the symmetric difference between two maps by using a function
     /// to decide what to do if a key occurs in both. The function
     /// receives the key as well as both values.
+    ///
+    /// This is an alias for the
+    /// [`symmetric_difference_with`_key][symmetric_difference_with_key]
+    /// method.
     ///
     /// Time: O(n log n)
     ///
@@ -1036,7 +1082,36 @@ where
     /// # }
     /// ```
     #[must_use]
-    pub fn difference_with_key<F>(mut self, other: Self, mut f: F) -> Self
+    pub fn difference_with_key<F>(self, other: Self, f: F) -> Self
+    where
+        F: FnMut(&K, V, V) -> Option<V>,
+    {
+        self.symmetric_difference_with_key(other, f)
+    }
+
+    /// Construct the symmetric difference between two maps by using a function
+    /// to decide what to do if a key occurs in both. The function
+    /// receives the key as well as both values.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// # fn main() {
+    /// let map1 = hashmap!{1 => 1, 3 => 4};
+    /// let map2 = hashmap!{2 => 2, 3 => 5};
+    /// let expected = hashmap!{1 => 1, 2 => 2, 3 => 9};
+    /// assert_eq!(expected, map1.symmetric_difference_with_key(
+    ///     map2,
+    ///     |key, left, right| Some(left + right)
+    /// ));
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn symmetric_difference_with_key<F>(mut self, other: Self, mut f: F) -> Self
     where
         F: FnMut(&K, V, V) -> Option<V>,
     {
@@ -1054,6 +1129,32 @@ where
             }
         }
         out.union(self)
+    }
+
+    /// Construct the relative complement between two maps by discarding keys
+    /// which occur in `other`.
+    ///
+    /// Time: O(m log n) where m is the size of the other map
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # fn main() {
+    /// let map1 = ordmap!{1 => 1, 3 => 4};
+    /// let map2 = ordmap!{2 => 2, 3 => 5};
+    /// let expected = ordmap!{1 => 1};
+    /// assert_eq!(expected, map1.relative_complement(map2));
+    /// # }
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn relative_complement(mut self, other: Self) -> Self {
+        for (key, _) in other {
+            let _ = self.remove(&key);
+        }
+        self
     }
 
     /// Construct the intersection of two maps, keeping the values
