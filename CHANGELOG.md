@@ -23,19 +23,25 @@ The minimum supported Rust version is now 1.34.0.
 
 ### Removed
 
+- `Vector::leaves` and `Vector::leaves_mut` have been removed, as they can no
+  longer be implemented without exposing the underlying chunk type.
+- The deprecated methods `Vector::chunks` and `Vector::chunks_mut`,
+  corresponding to the above mentioned `leaves` and `leaves_mut`, have also been
+  removed. (#50)
 - The deprecated `singleton` constructors have been removed. Please use `unit`
   instead.
-- The deprecated methods `Vector::chunks` and `Vector::chunks_mut` have been
-  removed in favour of `Vector::leaves` and `Vector::leaves_mut` respectively.
-  (#50)
-- The deprecated reference to [`sized-chunks`](https://crates.io/crates/sized-chunks)
-  has been removed. If you need it, please use the `sized-chunks` crate directly.
+- The deprecated reference to
+  [`sized-chunks`](https://crates.io/crates/sized-chunks) has been removed. If
+  you need it, please use the `sized-chunks` crate directly.
 - `im::iter::unfold_mut` has been removed, as there's no meaningful difference
   between it and rust-std 1.34.0's `std::iter::from_fn` with a captured state
   variable.
 
 ### Fixed
 
+- `Vector` is now backed by a `sized_chunks::RingBuffer` rather than a
+  `sized_chunks::Chunk`. This doesn't impact benchmark performance appreciably,
+  but should yield some minor speed boosts for edge cases.
 - Some complexity timings have been added and corrected. (#87)
 - `OrdSet::is_subset(&self, other)` now returns immediately when `self` is
   larger than `other` and thus could not possibly be a subset of it. (#87)
