@@ -15,6 +15,12 @@ The minimum supported Rust version is now 1.34.0.
 - `im::iter::unfold` now gives you the owned state value rather than an
   immutable reference to it, which makes it a little more useful.
 
+### Added
+
+- 'Focus::get' and its mutable counterparts now correctly return references with
+  the lifetime of the underlying `Vector` rather than the lifetime of the
+  `Focus`.
+
 ### Removed
 
 - The deprecated `singleton` constructors have been removed. Please use `unit`

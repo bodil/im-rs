@@ -127,7 +127,7 @@ where
     }
 
     /// Get a reference to the value at a given index.
-    pub fn get(&mut self, index: usize) -> Option<&A> {
+    pub fn get(&mut self, index: usize) -> Option<&'a A> {
         match self {
             Focus::Empty => None,
             Focus::Single(slice) => slice.get(index),
@@ -138,7 +138,7 @@ where
     /// Get a reference to the value at a given index.
     ///
     /// Panics if the index is out of bounds.
-    pub fn index(&mut self, index: usize) -> &A {
+    pub fn index(&mut self, index: usize) -> &'a A {
         self.get(index).expect("index out of bounds")
     }
 
@@ -362,11 +362,11 @@ where
     }
 
     #[allow(unsafe_code)]
-    fn get_focus(&self) -> &Chunk<A> {
+    fn get_focus<'a>(&self) -> &'a Chunk<A> {
         unsafe { &*self.target_ptr }
     }
 
-    fn get(&mut self, index: usize) -> Option<&A> {
+    fn get<'a>(&mut self, index: usize) -> Option<&'a A> {
         if index >= self.len() {
             return None;
         }
@@ -480,12 +480,12 @@ where
     }
 
     /// Get a reference to the value at a given index.
-    pub fn get(&mut self, index: usize) -> Option<&A> {
+    pub fn get(&mut self, index: usize) -> Option<&'a A> {
         self.get_mut(index).map(|r| &*r)
     }
 
     /// Get a mutable reference to the value at a given index.
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut A> {
+    pub fn get_mut(&mut self, index: usize) -> Option<&'a mut A> {
         match self {
             FocusMut::Empty => None,
             FocusMut::Single(chunk) => chunk.get_mut(index),
@@ -836,11 +836,11 @@ where
     }
 
     #[allow(unsafe_code)]
-    fn get_focus(&mut self) -> &mut Chunk<A> {
+    fn get_focus(&mut self) -> &'a mut Chunk<A> {
         unsafe { &mut *self.target_ptr.load(Ordering::Relaxed) }
     }
 
-    fn get(&mut self, index: usize) -> Option<&mut A> {
+    fn get(&mut self, index: usize) -> Option<&'a mut A> {
         if index >= self.len() {
             return None;
         }

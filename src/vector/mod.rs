@@ -1812,9 +1812,7 @@ impl<'a, A: Clone> Iterator for Iter<'a, A> {
         if self.front_index >= self.back_index {
             return None;
         }
-        #[allow(unsafe_code)]
-        let focus: &'a mut Focus<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
-        let value = focus.get(self.front_index);
+        let value = self.focus.get(self.front_index);
         self.front_index += 1;
         value
     }
@@ -1834,9 +1832,7 @@ impl<'a, A: Clone> DoubleEndedIterator for Iter<'a, A> {
             return None;
         }
         self.back_index -= 1;
-        #[allow(unsafe_code)]
-        let focus: &'a mut Focus<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
-        focus.get(self.back_index)
+        self.focus.get(self.back_index)
     }
 }
 
