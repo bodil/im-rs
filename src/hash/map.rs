@@ -1144,7 +1144,7 @@ where
     /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 3 => 4};
     /// let map2 = ordmap!{2 => 2, 3 => 5};
-    /// let expected = ordmap!{1 => 1, 2 => 2};
+    /// let expected = ordmap!{1 => 1};
     /// assert_eq!(expected, map1.relative_complement(map2));
     /// # }
     /// ```
