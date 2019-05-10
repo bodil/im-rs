@@ -587,7 +587,10 @@ where
         i.into_iter().fold(Self::default(), Self::union)
     }
 
-    /// Construct the difference between two sets.
+    /// Construct the symmetric difference between two sets.
+    ///
+    /// This is an alias for the
+    /// [`symmetric_difference`][symmetric_difference] method.
     ///
     /// Time: O(n log n)
     ///
@@ -604,7 +607,28 @@ where
     /// # }
     /// ```
     #[must_use]
-    pub fn difference(mut self, other: Self) -> Self {
+    pub fn difference(self, other: Self) -> Self {
+        self.symmetric_difference(other)
+    }
+
+    /// Construct the symmetric difference between two sets.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordset::OrdSet;
+    /// # fn main() {
+    /// let set1 = ordset!{1, 2};
+    /// let set2 = ordset!{2, 3};
+    /// let expected = ordset!{1, 3};
+    /// assert_eq!(expected, set1.symmetric_difference(set2));
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn symmetric_difference(mut self, other: Self) -> Self {
         for value in other {
             if self.remove(&value).is_none() {
                 self.insert(value);
