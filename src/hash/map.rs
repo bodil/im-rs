@@ -1131,6 +1131,32 @@ where
         out.union(self)
     }
 
+    /// Construct the relative complement between two maps by discarding keys
+    /// which occur in `other`.
+    ///
+    /// Time: O(m log n) where m is the size of the other map
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// # fn main() {
+    /// let map1 = ordmap!{1 => 1, 3 => 4};
+    /// let map2 = ordmap!{2 => 2, 3 => 5};
+    /// let expected = ordmap!{1 => 1, 2 => 2};
+    /// assert_eq!(expected, map1.relative_complement(map2));
+    /// # }
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn relative_complement(mut self, other: Self) -> Self {
+        for (key, _) in other {
+            let _ = self.remove(&key);
+        }
+        self
+    }
+
     /// Construct the intersection of two maps, keeping the values
     /// from the current map.
     ///

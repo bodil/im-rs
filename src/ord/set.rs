@@ -637,6 +637,31 @@ where
         self
     }
 
+    /// Construct the relative complement between two sets, that is the set
+    /// of values in `self` that do not occur in `other`.
+    ///
+    /// Time: O(m log n) where m is the size of the other set
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordset::OrdSet;
+    /// # fn main() {
+    /// let set1 = ordset!{1, 2};
+    /// let set2 = ordset!{2, 3};
+    /// let expected = ordset!{1};
+    /// assert_eq!(expected, set1.relative_complement(set2));
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn relative_complement(mut self, other: Self) -> Self {
+        for value in other {
+            let _ = self.remove(&value);
+        }
+        self
+    }
+
     /// Construct the intersection of two sets.
     ///
     /// Time: O(n log n)
