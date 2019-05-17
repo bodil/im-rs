@@ -30,6 +30,13 @@ The minimum supported Rust version is now 1.34.0.
 
 ### Fixed
 
+- `Vector` now uses
+  [`sized_chunks::InlineArray`](https://docs.rs/sized-chunks/0.3.0/sized_chunks/inline_array/struct.InlineArray.html)
+  instead of an `Empty` enum case to avoid allocation at very small sizes,
+  letting you store a handful of elements on the stack before needing to grow
+  into a full chunk. This has a beneficial effect on performance as well, as
+  there's no pointer into the heap to dereference, making it faster than
+  `std::vec::Vec` in this configuration.
 - Some complexity timings have been added and corrected. (#87)
 - `OrdSet::is_subset(&self, other)` now returns immediately when `self` is
   larger than `other` and thus could not possibly be a subset of it. (#87)
