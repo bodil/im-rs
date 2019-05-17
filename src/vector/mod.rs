@@ -52,6 +52,8 @@ use std::iter::{Chain, FromIterator, FusedIterator};
 use std::mem::{replace, swap};
 use std::ops::{Add, Index, IndexMut, RangeBounds};
 
+use sized_chunks::{inline_array::Iter as InlineIter, InlineArray};
+
 use crate::nodes::chunk::{Chunk, Iter as ChunkIter, CHUNK_SIZE};
 use crate::nodes::rrb::{
     ConsumingIter as ConsumingNodeIter, Node, PopResult, PushResult, SplitResult,
@@ -59,7 +61,7 @@ use crate::nodes::rrb::{
 use crate::sort;
 use crate::util::{clone_ref, swap_indices, to_range, Ref, Side};
 
-use self::Vector::{Empty, Full, Single};
+use self::Vector::{Full, Inline, Single};
 
 mod focus;
 
@@ -138,7 +140,7 @@ macro_rules! vector {
 /// [VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
 pub enum Vector<A> {
     #[doc(hidden)]
-    Empty,
+    Inline(InlineArray<A, RRB<A>>),
     #[doc(hidden)]
     Single(Ref<Chunk<A>>),
     #[doc(hidden)]
@@ -171,65 +173,69 @@ impl<A> Clone for RRB<A> {
 }
 
 impl<A: Clone> Vector<A> {
-    /// True if a vector is empty or a full single chunk, ie. must be promoted
+    /// True if a vector is a full inline or single chunk, ie. must be promoted
     /// to grow further.
     fn needs_promotion(&self) -> bool {
         match self {
-            Empty => true,
+            Inline(chunk) if chunk.is_full() => true,
             Single(chunk) if chunk.is_full() => true,
             _ => false,
         }
     }
 
-    /// Promote an empty to a single.
-    fn promote_empty(&mut self) {
-        if let Empty = self {
-            *self = Single(Ref::new(Chunk::new()))
+    /// Promote an inline to a single.
+    fn promote_inline(&mut self) {
+        if let Inline(chunk) = self {
+            *self = Single(Ref::new(chunk.into()))
         }
     }
 
-    /// Promote a single to a full, with the single chunk becomming inner_f, or
-    /// promote an empty to a single.
+    /// Promote a single to a full, with the single chunk becoming inner_f, or
+    /// promote an inline to a single.
     fn promote_front(&mut self) {
-        let chunk = match self {
-            Empty => return self.promote_empty(),
-            Single(chunk) => chunk.clone(),
-            _ => return,
-        };
-        *self = Full(RRB {
-            length: chunk.len(),
-            middle_level: 0,
-            outer_f: Ref::new(Chunk::new()),
-            inner_f: chunk,
-            middle: Ref::new(Node::new()),
-            inner_b: Ref::new(Chunk::new()),
-            outer_b: Ref::new(Chunk::new()),
-        })
+        *self = match self {
+            Inline(chunk) => Single(Ref::new(chunk.into())),
+            Single(chunk) => {
+                let chunk = chunk.clone();
+                Full(RRB {
+                    length: chunk.len(),
+                    middle_level: 0,
+                    outer_f: Ref::new(Chunk::new()),
+                    inner_f: chunk,
+                    middle: Ref::new(Node::new()),
+                    inner_b: Ref::new(Chunk::new()),
+                    outer_b: Ref::new(Chunk::new()),
+                })
+            }
+            Full(_) => return,
+        }
     }
 
-    /// Promote a single to a full, with the single chunk becomming inner_b, or
-    /// promote an empty to a single.
+    /// Promote a single to a full, with the single chunk becoming inner_b, or
+    /// promote an inline to a single.
     fn promote_back(&mut self) {
-        let chunk = match self {
-            Empty => return self.promote_empty(),
-            Single(chunk) => chunk.clone(),
-            _ => return,
-        };
-        *self = Full(RRB {
-            length: chunk.len(),
-            middle_level: 0,
-            outer_f: Ref::new(Chunk::new()),
-            inner_f: Ref::new(Chunk::new()),
-            middle: Ref::new(Node::new()),
-            inner_b: chunk,
-            outer_b: Ref::new(Chunk::new()),
-        })
+        *self = match self {
+            Inline(chunk) => Single(Ref::new(chunk.into())),
+            Single(chunk) => {
+                let chunk = chunk.clone();
+                Full(RRB {
+                    length: chunk.len(),
+                    middle_level: 0,
+                    outer_f: Ref::new(Chunk::new()),
+                    inner_f: Ref::new(Chunk::new()),
+                    middle: Ref::new(Node::new()),
+                    inner_b: chunk,
+                    outer_b: Ref::new(Chunk::new()),
+                })
+            }
+            Full(_) => return,
+        }
     }
 
     /// Construct an empty vector.
     #[must_use]
     pub fn new() -> Self {
-        Empty
+        Inline(InlineArray::new())
     }
 
     /// Get the length of a vector.
@@ -248,7 +254,7 @@ impl<A: Clone> Vector<A> {
     #[must_use]
     pub fn len(&self) -> usize {
         match self {
-            Empty => 0,
+            Inline(chunk) => chunk.len(),
             Single(chunk) => chunk.len(),
             Full(tree) => tree.length,
         }
@@ -369,7 +375,7 @@ impl<A: Clone> Vector<A> {
         }
 
         match self {
-            Empty => None,
+            Inline(chunk) => chunk.get(index),
             Single(chunk) => chunk.get(index),
             Full(tree) => {
                 let mut local_index = index;
@@ -428,7 +434,7 @@ impl<A: Clone> Vector<A> {
         }
 
         match self {
-            Empty => None,
+            Inline(chunk) => chunk.get_mut(index),
             Single(chunk) => Ref::make_mut(chunk).get_mut(index),
             Full(tree) => {
                 let mut local_index = index;
@@ -716,7 +722,13 @@ impl<A: Clone> Vector<A> {
     #[inline]
     #[must_use]
     pub fn unit(a: A) -> Self {
-        Single(Ref::new(Chunk::unit(a)))
+        if InlineArray::<A, RRB<A>>::CAPACITY > 0 {
+            let mut array = InlineArray::new();
+            array.push(a);
+            Inline(array)
+        } else {
+            Single(Ref::new(Chunk::unit(a)))
+        }
     }
 
     /// Create a new vector with the value at index `index` updated.
@@ -781,7 +793,9 @@ impl<A: Clone> Vector<A> {
             self.promote_back();
         }
         match self {
-            Empty => unreachable!("promote should have promoted the Empty"),
+            Inline(chunk) => {
+                chunk.insert(0, value);
+            }
             Single(chunk) => Ref::make_mut(chunk).push_front(value),
             Full(tree) => tree.push_front(value),
         }
@@ -807,7 +821,9 @@ impl<A: Clone> Vector<A> {
             self.promote_front();
         }
         match self {
-            Empty => unreachable!("promote should have promoted the Empty"),
+            Inline(chunk) => {
+                chunk.push(value);
+            }
             Single(chunk) => Ref::make_mut(chunk).push_back(value),
             Full(tree) => tree.push_back(value),
         }
@@ -833,7 +849,7 @@ impl<A: Clone> Vector<A> {
             None
         } else {
             match self {
-                Empty => None,
+                Inline(chunk) => chunk.remove(0),
                 Single(chunk) => Some(Ref::make_mut(chunk).pop_front()),
                 Full(tree) => tree.pop_front(),
             }
@@ -860,7 +876,7 @@ impl<A: Clone> Vector<A> {
             None
         } else {
             match self {
-                Empty => None,
+                Inline(chunk) => chunk.pop(),
                 Single(chunk) => Some(Ref::make_mut(chunk).pop_back()),
                 Full(tree) => tree.pop_back(),
             }
@@ -892,15 +908,19 @@ impl<A: Clone> Vector<A> {
             return;
         }
 
+        self.promote_inline();
+        other.promote_inline();
+
         let total_length = self
             .len()
             .checked_add(other.len())
             .expect("Vector length overflow");
 
         match self {
-            Empty => unreachable!("empty vecs are handled before this"),
+            Inline(_) => unreachable!("inline vecs should have been promoted"),
             Single(left) => {
                 match other {
+                    Inline(_) => unreachable!("inline vecs should have been promoted"),
                     // If both are single chunks and left has room for right: directly
                     // memcpy right into left
                     Single(ref mut right) if total_length <= CHUNK_SIZE => {
@@ -1065,7 +1085,7 @@ impl<A: Clone> Vector<A> {
         assert!(index <= self.len());
 
         match self {
-            Empty => Empty,
+            Inline(chunk) => Inline(chunk.split_off(index)),
             Single(chunk) => Single(Ref::new(Ref::make_mut(chunk).split_off(index))),
             Full(tree) => {
                 let mut local_index = index;
@@ -1257,7 +1277,17 @@ impl<A: Clone> Vector<A> {
             return self.push_back(value);
         }
         assert!(index < self.len());
+        if if let Inline(chunk) = self {
+            chunk.is_full()
+        } else {
+            false
+        } {
+            self.promote_inline();
+        }
         match self {
+            Inline(chunk) => {
+                chunk.insert(index, value);
+            }
             Single(chunk) if chunk.len() < CHUNK_SIZE => Ref::make_mut(chunk).insert(index, value),
             // TODO a lot of optimisations still possible here
             _ => {
@@ -1287,6 +1317,7 @@ impl<A: Clone> Vector<A> {
     pub fn remove(&mut self, index: usize) -> A {
         assert!(index < self.len());
         match self {
+            Inline(chunk) => chunk.remove(index).unwrap(),
             Single(chunk) => Ref::make_mut(chunk).remove(index),
             _ => {
                 if index == 0 {
@@ -1565,7 +1596,7 @@ impl<A: Clone> Default for Vector<A> {
 impl<A: Clone> Clone for Vector<A> {
     fn clone(&self) -> Self {
         match self {
-            Empty => Empty,
+            Inline(chunk) => Inline(chunk.clone()),
             Single(chunk) => Single(chunk.clone()),
             Full(tree) => Full(tree.clone()),
         }
@@ -1961,7 +1992,7 @@ impl<'a, A: Clone> FusedIterator for IterMut<'a, A> {}
 
 /// A consuming iterator over vectors with values of type `A`.
 pub enum ConsumingIter<A> {
-    Empty,
+    Inline(InlineIter<A, RRB<A>>),
     Single(ChunkIter<A>),
     Full(
         Chain<
@@ -1974,7 +2005,7 @@ pub enum ConsumingIter<A> {
 impl<A: Clone> ConsumingIter<A> {
     fn new(seq: Vector<A>) -> Self {
         match seq {
-            Empty => ConsumingIter::Empty,
+            Inline(chunk) => ConsumingIter::Inline(chunk.into_iter()),
             Single(chunk) => ConsumingIter::Single(clone_ref(chunk).into_iter()),
             Full(tree) => ConsumingIter::Full(tree.into_iter()),
         }
@@ -1989,7 +2020,7 @@ impl<A: Clone> Iterator for ConsumingIter<A> {
     /// Time: O(1)*
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            ConsumingIter::Empty => None,
+            ConsumingIter::Inline(iter) => iter.next(),
             ConsumingIter::Single(iter) => iter.next(),
             ConsumingIter::Full(iter) => iter.next(),
         }
@@ -1997,7 +2028,7 @@ impl<A: Clone> Iterator for ConsumingIter<A> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         match self {
-            ConsumingIter::Empty => (0, Some(0)),
+            ConsumingIter::Inline(iter) => iter.size_hint(),
             ConsumingIter::Single(iter) => iter.size_hint(),
             ConsumingIter::Full(iter) => iter.size_hint(),
         }
@@ -2010,7 +2041,7 @@ impl<A: Clone> DoubleEndedIterator for ConsumingIter<A> {
     /// Time: O(1)*
     fn next_back(&mut self) -> Option<Self::Item> {
         match self {
-            ConsumingIter::Empty => None,
+            ConsumingIter::Inline(iter) => iter.next_back(),
             ConsumingIter::Single(iter) => iter.next_back(),
             ConsumingIter::Full(iter) => iter.next_back(),
         }
@@ -2573,14 +2604,26 @@ mod test {
     #[test]
     fn issue_77() {
         let mut x = Vector::new();
-        for _ in 0..44 { x.push_back(0); }
-        for _ in 0..20 { x.insert(0, 0); }
+        for _ in 0..44 {
+            x.push_back(0);
+        }
+        for _ in 0..20 {
+            x.insert(0, 0);
+        }
         x.insert(1, 0);
-        for _ in 0..441 { x.push_back(0); }
-        for _ in 0..58 { x.insert(0, 0); }
+        for _ in 0..441 {
+            x.push_back(0);
+        }
+        for _ in 0..58 {
+            x.insert(0, 0);
+        }
         x.insert(514, 0);
-        for _ in 0..73 { x.push_back(0); }
-        for _ in 0..10 { x.insert(0, 0); }
+        for _ in 0..73 {
+            x.push_back(0);
+        }
+        for _ in 0..10 {
+            x.insert(0, 0);
+        }
         x.insert(514, 0);
     }
 
