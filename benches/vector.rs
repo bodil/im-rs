@@ -20,8 +20,8 @@ fn rando<A>() -> impl Iterator<Item = A>
 where
     Standard: Distribution<A>,
 {
-    let rng = rand::thread_rng();
-    std::iter::from_fn(|| Some(rng.gen()))
+    let mut rng = rand::thread_rng();
+    std::iter::from_fn(move || Some(rng.gen()))
 }
 
 fn vector_push_front_mut(b: &mut Bencher, count: usize) {
