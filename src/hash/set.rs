@@ -19,7 +19,7 @@
 //! [1]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
 //! [std::cmp::Eq]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
 //! [std::hash::Hash]: https://doc.rust-lang.org/std/hash/trait.Hash.html
-//! [std::collections::hash_map::RandomState]: https://doc.rust-lang.org/std/collections/hash_map/struct.RandomState.h
+//! [std::collections::hash_map::RandomState]: https://doc.rust-lang.org/std/collections/hash_map/struct.RandomState.html
 
 use std::borrow::Borrow;
 use std::cmp::Ordering;
@@ -89,7 +89,7 @@ macro_rules! hashset {
 /// [1]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
 /// [std::cmp::Eq]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
 /// [std::hash::Hash]: https://doc.rust-lang.org/std/hash/trait.Hash.html
-/// [std::collections::hash_map::RandomState]: https://doc.rust-lang.org/std/collections/hash_map/struct.RandomState.h
+/// [std::collections::hash_map::RandomState]: https://doc.rust-lang.org/std/collections/hash_map/struct.RandomState.html
 pub struct HashSet<A, S = RandomState> {
     hasher: Ref<S>,
     root: Ref<Node<Value<A>>>,
