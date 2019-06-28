@@ -108,8 +108,8 @@ fn std_btreemap_insert_clone_1000(b: &mut Bencher) {
 
 fn vecdeque_push_front_mut(b: &mut Bencher, count: usize) {
     b.iter(|| {
-        let mut l = VecDeque::new();
-        for i in 0..count {
+        let mut l = VecDeque::<i32>::new();
+        for i in 0..count as i32 {
             l.push_front(i);
         }
     })
@@ -137,8 +137,8 @@ fn vecdeque_push_front_mut_100000(b: &mut Bencher) {
 
 fn vecdeque_push_back_mut(b: &mut Bencher, count: usize) {
     b.iter(|| {
-        let mut l = VecDeque::new();
-        for i in 0..count {
+        let mut l = VecDeque::<i32>::new();
+        for i in 0..count as i32 {
             l.push_back(i);
         }
     })
@@ -165,7 +165,7 @@ fn vecdeque_push_back_mut_100000(b: &mut Bencher) {
 }
 
 fn vecdeque_pop_front_mut(b: &mut Bencher, count: usize) {
-    let l = VecDeque::from_iter(0..count);
+    let l = VecDeque::<i32>::from_iter(0..count as i32);
     b.iter(|| {
         let mut p = l.clone();
         for _ in 0..count {
@@ -195,7 +195,7 @@ fn vecdeque_pop_front_mut_100000(b: &mut Bencher) {
 }
 
 fn vecdeque_pop_back_mut(b: &mut Bencher, count: usize) {
-    let l = VecDeque::from_iter(0..count);
+    let l = VecDeque::<i32>::from_iter(0..count as i32);
     b.iter(|| {
         let mut p = l.clone();
         for _ in 0..count {
@@ -225,7 +225,7 @@ fn vecdeque_pop_back_mut_100000(b: &mut Bencher) {
 }
 
 fn vecdeque_split(b: &mut Bencher, count: usize) {
-    let vec = VecDeque::from_iter(0..count);
+    let vec = VecDeque::<i32>::from_iter(0..count as i32);
     b.iter(|| {
         let mut left = vec.clone();
         let _right = left.split_off(count / 2);
@@ -253,8 +253,9 @@ fn vecdeque_split_100000(b: &mut Bencher) {
 }
 
 fn vecdeque_append(b: &mut Bencher, count: usize) {
-    let vec1 = VecDeque::from_iter(0..count / 2);
-    let vec2 = VecDeque::from_iter(count / 2..count);
+    let count = count as i32;
+    let vec1 = VecDeque::<i32>::from_iter(0..count / 2);
+    let vec2 = VecDeque::<i32>::from_iter(count / 2..count);
     b.iter(|| {
         let mut vec = vec1.clone();
         vec.append(&mut vec2.clone());
@@ -282,7 +283,7 @@ fn vecdeque_append_100000(b: &mut Bencher) {
 }
 
 fn vec_split(b: &mut Bencher, count: usize) {
-    let vec = Vec::from_iter(0..count);
+    let vec = Vec::<i32>::from_iter(0..count as i32);
     b.iter(|| {
         let _left = vec[..count / 2].to_owned();
         let _right = vec[count / 2..].to_owned();
@@ -310,8 +311,9 @@ fn vec_split_100000(b: &mut Bencher) {
 }
 
 fn vec_append(b: &mut Bencher, count: usize) {
-    let vec1 = Vec::from_iter(0..count / 2);
-    let vec2 = Vec::from_iter(count / 2..count);
+    let count = count as i32;
+    let vec1 = Vec::<i32>::from_iter(0..count / 2);
+    let vec2 = Vec::<i32>::from_iter(count / 2..count);
     b.iter(|| {
         let mut vec = vec1.clone();
         vec.append(&mut vec2.clone());
@@ -336,4 +338,63 @@ fn vec_append_1000(b: &mut Bencher) {
 #[bench]
 fn vec_append_100000(b: &mut Bencher) {
     vec_append(b, 100_000)
+}
+
+fn vec_push_back_mut(b: &mut Bencher, count: usize) {
+    b.iter(|| {
+        let mut l = Vec::<i32>::with_capacity(16);
+        for i in 0..count as i32 {
+            l.push(i);
+        }
+    })
+}
+
+#[bench]
+fn vec_push_back_mut_10(b: &mut Bencher) {
+    vec_push_back_mut(b, 10)
+}
+
+#[bench]
+fn vec_push_back_mut_100(b: &mut Bencher) {
+    vec_push_back_mut(b, 100)
+}
+
+#[bench]
+fn vec_push_back_mut_1000(b: &mut Bencher) {
+    vec_push_back_mut(b, 1000)
+}
+
+#[bench]
+fn vec_push_back_mut_100000(b: &mut Bencher) {
+    vec_push_back_mut(b, 100_000)
+}
+
+fn vec_pop_back_mut(b: &mut Bencher, count: usize) {
+    let l = Vec::<i32>::from_iter(0..count as i32);
+    b.iter(|| {
+        let mut p = l.clone();
+        for _ in 0..count {
+            p.pop();
+        }
+    })
+}
+
+#[bench]
+fn vec_pop_back_mut_10(b: &mut Bencher) {
+    vec_pop_back_mut(b, 10)
+}
+
+#[bench]
+fn vec_pop_back_mut_100(b: &mut Bencher) {
+    vec_pop_back_mut(b, 100)
+}
+
+#[bench]
+fn vec_pop_back_mut_1000(b: &mut Bencher) {
+    vec_pop_back_mut(b, 1000)
+}
+
+#[bench]
+fn vec_pop_back_mut_100000(b: &mut Bencher) {
+    vec_pop_back_mut(b, 100_000)
 }
