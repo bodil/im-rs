@@ -572,7 +572,7 @@ impl<A: BTreeValue> Node<A> {
             RemoveAction::PullUp(target_index, pull_to, child_index) => {
                 let children = &mut self.children;
                 let mut update = None;
-                let mut value;
+                let value;
                 if let Some(&mut Some(ref mut child_ref)) = children.get_mut(child_index) {
                     let child = Ref::make_mut(child_ref);
                     match child.remove_index(Ok(target_index), key) {
@@ -613,7 +613,7 @@ impl<A: BTreeValue> Node<A> {
             }
             RemoveAction::StealFromLeft(index) => {
                 let mut update = None;
-                let mut out_value;
+                let out_value;
                 {
                     let mut children = self.children.as_mut_slice()[index - 1..=index]
                         .iter_mut()
@@ -659,7 +659,7 @@ impl<A: BTreeValue> Node<A> {
             }
             RemoveAction::StealFromRight(index) => {
                 let mut update = None;
-                let mut out_value;
+                let out_value;
                 {
                     let mut children = self.children.as_mut_slice()[index..index + 2]
                         .iter_mut()
@@ -711,8 +711,8 @@ impl<A: BTreeValue> Node<A> {
                 let right = mem::replace(&mut self.children[index], None).unwrap();
                 let middle = self.keys.remove(index);
                 let mut merged = Node::merge(middle, clone_ref(left), clone_ref(right));
-                let mut update;
-                let mut out_value;
+                let update;
+                let out_value;
                 match merged.remove(key) {
                     Remove::NoChange => {
                         panic!("nodes::btree::Node::remove: caught an absent key too late while merging");
@@ -737,7 +737,7 @@ impl<A: BTreeValue> Node<A> {
             }
             RemoveAction::ContinueDown(index) => {
                 let mut update = None;
-                let mut out_value;
+                let out_value;
                 if let Some(&mut Some(ref mut child_ref)) = self.children.get_mut(index) {
                     let child = Ref::make_mut(child_ref);
                     match child.remove(key) {
