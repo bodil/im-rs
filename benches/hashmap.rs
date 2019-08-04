@@ -8,7 +8,7 @@ extern crate im;
 extern crate rand;
 extern crate test;
 
-use rand::{rngs::SmallRng, FromEntropy, Rng};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 use std::iter::FromIterator;
 use test::Bencher;
 
