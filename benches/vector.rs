@@ -193,6 +193,11 @@ fn vector_append_1000(b: &mut Bencher) {
 }
 
 #[bench]
+fn vector_append_10000(b: &mut Bencher) {
+    vector_append(b, 10_000)
+}
+
+#[bench]
 fn vector_append_100000(b: &mut Bencher) {
     vector_append(b, 100_000)
 }

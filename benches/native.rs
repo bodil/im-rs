@@ -278,6 +278,11 @@ fn vecdeque_append_1000(b: &mut Bencher) {
 }
 
 #[bench]
+fn vecdeque_append_10000(b: &mut Bencher) {
+    vecdeque_append(b, 10_000)
+}
+
+#[bench]
 fn vecdeque_append_100000(b: &mut Bencher) {
     vecdeque_append(b, 100_000)
 }
@@ -333,6 +338,11 @@ fn vec_append_100(b: &mut Bencher) {
 #[bench]
 fn vec_append_1000(b: &mut Bencher) {
     vec_append(b, 1000)
+}
+
+#[bench]
+fn vec_append_10000(b: &mut Bencher) {
+    vec_append(b, 10_000)
 }
 
 #[bench]
