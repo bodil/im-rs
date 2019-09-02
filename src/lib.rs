@@ -220,7 +220,7 @@
 //! if there's always another kind of list that's better at something.
 //!
 //! | Type | Algorithm | Constraints | Order | Push | Pop | Split | Append | Lookup |
-//! | --- | --- | --- | --- | --- | --- | --- |
+//! | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 //! | [`Vector<A>`][vector::Vector] | [RRB tree][rrb-tree] | [`Clone`][std::clone::Clone] | insertion | O(1)* | O(1)* | O(log n) | O(log n) | O(log n) |
 //!
 //! ### Maps
@@ -232,7 +232,7 @@
 //! overwrite the previous value.
 //!
 //! | Type | Algorithm | Key Constraints | Order | Insert | Remove | Lookup |
-//! | --- | --- | --- | --- | --- | --- |
+//! | --- | --- | --- | --- | --- | --- | --- |
 //! | [`HashMap<K, V>`][hashmap::HashMap] | [HAMT][hamt] | [`Clone`][std::clone::Clone] + [`Hash`][std::hash::Hash] + [`Eq`][std::cmp::Eq] | undefined | O(log n) | O(log n) | O(log n) |
 //! | [`OrdMap<K, V>`][ordmap::OrdMap] | [B-tree][b-tree] | [`Clone`][std::clone::Clone] + [`Ord`][std::cmp::Ord] | sorted | O(log n) | O(log n) | O(log n) |
 //!
@@ -243,7 +243,7 @@
 //! only exist once in a given set.
 //!
 //! | Type | Algorithm | Constraints | Order | Insert | Remove | Lookup |
-//! | --- | --- | --- | --- | --- | --- |
+//! | --- | --- | --- | --- | --- | --- | --- |
 //! | [`HashSet<A>`][hashset::HashSet] | [HAMT][hamt] | [`Clone`][std::clone::Clone] + [`Hash`][std::hash::Hash] + [`Eq`][std::cmp::Eq] | undefined | O(log n) | O(log n) | O(log n) |
 //! | [`OrdSet<A>`][ordset::OrdSet] | [B-tree][b-tree] | [`Clone`][std::clone::Clone] + [`Ord`][std::cmp::Ord] | sorted | O(log n) | O(log n) | O(log n) |
 //!

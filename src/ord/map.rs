@@ -962,6 +962,8 @@ where
     /// assert_eq!(expected, map1.difference(map2));
     /// # }
     /// ```
+    ///
+    /// [symmetric_difference]: #method.symmetric_difference
     #[inline]
     #[must_use]
     pub fn difference(self, other: Self) -> Self {
@@ -998,6 +1000,8 @@ where
     /// [`symmetric_difference_with`][symmetric_difference_with] method.
     ///
     /// Time: O(n log n)
+    ///
+    /// [symmetric_difference_with]: #method.symmetric_difference_with
     #[inline]
     #[must_use]
     pub fn difference_with<F>(self, other: Self, f: F) -> Self
@@ -1045,6 +1049,7 @@ where
     /// ));
     /// # }
     /// ```
+    /// [symmetric_difference_with_key]: #method.symmetric_difference_with_key
     #[must_use]
     pub fn difference_with_key<F>(self, other: Self, f: F) -> Self
     where

@@ -506,6 +506,8 @@ where
     /// assert_eq!(expected, set1.difference(set2));
     /// # }
     /// ```
+    ///
+    /// [symmetric_difference]: #method.symmetric_difference
     #[must_use]
     pub fn difference(self, other: Self) -> Self {
         self.symmetric_difference(other)
