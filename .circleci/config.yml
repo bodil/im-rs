@@ -44,6 +44,11 @@ commands:
         default: ""
     steps:
       - run:
+          name: Install extra tooling
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y -q clang
+      - run:
           name: Update toolchain
           command: |
             test -z "<<parameters.toolchain>>" || echo "<<parameters.toolchain>>" >rust-toolchain
