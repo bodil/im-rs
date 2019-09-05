@@ -29,13 +29,13 @@ quickcheck = { version = "0.9", optional = true }
 proptest = { version = "0.9", optional = true }
 serde = { version = "1.0", optional = true }
 rayon = { version = "1.0", optional = true }
+rand = { version = "0.7", features = ["small_rng"] }
 
 [dev-dependencies]
 proptest = "0.9"
 serde = "1.0"
 serde_json = "1.0"
 rayon = "1.0"
-rand = { version = "0.7", features = ["small_rng"] }
 pretty_assertions = "0.6"
 metrohash = "1.0.6"
 proptest-derive = "0.1.0"
