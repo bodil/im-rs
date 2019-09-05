@@ -4,14 +4,16 @@
 
 use crate::vector::FocusMut;
 use std::cmp::Ordering;
+use rand::prelude::*;
 
 // Ported from the Java version at:
 //    http://www.cs.princeton.edu/~rs/talks/QuicksortIsOptimal.pdf
-// Should be O(n) to O(n log n)
-pub fn quicksort<A, F>(vector: &mut FocusMut<A>, left: usize, right: usize, cmp: &F)
+// Should be O(n log n) expected 
+pub fn do_quicksort<A, F, R>(vector: &mut FocusMut<A>, left: usize, right: usize, cmp: &F, rng: &mut R)
 where
     A: Clone,
     F: Fn(&A, &A) -> Ordering,
+    R: Rng
 {
     if right <= left {
         return;
@@ -19,10 +21,13 @@ where
 
     let l = left as isize;
     let r = right as isize;
+    let p = rng.gen_range(l, r + 1);
     let mut l1 = l;
     let mut r1 = r;
     let mut l2 = l - 1;
     let mut r2 = r;
+
+    vector.swap(r as usize, p as usize);
     loop {
         while l1 != r && vector.pair(l1 as usize, r as usize, |a, b| cmp(a, b)) == Ordering::Less {
             l1 += 1;
@@ -65,9 +70,18 @@ where
     }
 
     if r1 >= 0 {
-        quicksort(vector, left, r1 as usize, cmp);
+        do_quicksort(vector, left, r1 as usize, cmp, rng);
     }
-    quicksort(vector, l1 as usize, right, cmp);
+    do_quicksort(vector, l1 as usize, right, cmp, rng);
+}
+
+pub fn quicksort<A, F>(vector: &mut FocusMut<A>, left: usize, right: usize, cmp: &F)
+where
+    A: Clone,
+    F: Fn(&A, &A) -> Ordering,
+{
+    let mut rng = rand::thread_rng();
+    do_quicksort(vector, left, right, cmp, &mut rng);
 }
 
 #[cfg(test)]
