@@ -8,7 +8,7 @@ use rand::prelude::*;
 
 // Ported from the Java version at:
 //    http://www.cs.princeton.edu/~rs/talks/QuicksortIsOptimal.pdf
-// Should be O(n log n) expected 
+// Should be O(n) to O(n log n)
 pub fn do_quicksort<A, F, R>(vector: &mut FocusMut<A>, left: usize, right: usize, cmp: &F, rng: &mut R)
 where
     A: Clone,
