@@ -6,8 +6,6 @@ pub mod btree;
 pub mod hamt;
 pub mod rrb;
 
-pub use sized_chunks::*;
-
 pub mod chunk {
     use crate::config::VectorChunkSize;
     use sized_chunks as sc;

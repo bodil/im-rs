@@ -7,10 +7,10 @@ use std::cmp::Ordering;
 use std::mem;
 use std::ops::{Bound, RangeBounds};
 
+use sized_chunks::Chunk;
 use typenum::{Add1, Unsigned};
 
 use crate::config::OrdChunkSize as NodeSize;
-use crate::nodes::sized_chunk::Chunk;
 use crate::util::{clone_ref, Ref};
 
 use self::Insert::*;

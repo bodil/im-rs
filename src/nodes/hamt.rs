@@ -9,11 +9,11 @@ use std::iter::FusedIterator;
 use std::slice::{Iter as SliceIter, IterMut as SliceIterMut};
 use std::{mem, ptr};
 
+use bitmaps::Bits;
+use sized_chunks::sparse_chunk::{Iter as ChunkIter, IterMut as ChunkIterMut, SparseChunk};
 use typenum::{Pow, Unsigned, U2};
 
 use crate::config::HashLevelSize;
-use crate::nodes::sparse_chunk::{Iter as ChunkIter, IterMut as ChunkIterMut, SparseChunk};
-use crate::nodes::types::Bits;
 use crate::util::{clone_ref, Ref};
 
 pub type HashWidth = <U2 as Pow<HashLevelSize>>::Output;

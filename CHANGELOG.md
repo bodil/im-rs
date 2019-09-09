@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic
 Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- As `sized-chunks` now requires a slightly more recent version of `rustc` to
+  compile, specifically version 1.36.0, so does `im`. This is a breaking change,
+  but will of course only affect your code if you're using an older `rustc`.
+
 ## [13.0.0] - 2019-05-18
 
 The minimum supported Rust version is now 1.34.0.
