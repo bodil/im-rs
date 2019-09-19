@@ -3,17 +3,27 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::vector::FocusMut;
+use rand_core::{RngCore, SeedableRng};
 use std::cmp::Ordering;
-use rand::prelude::*;
+
+fn gen_range<R: RngCore>(rng: &mut R, min: usize, max: usize) -> usize {
+    let range = max - min;
+    min + (rng.next_u64() as usize % range)
+}
 
 // Ported from the Java version at:
 //    http://www.cs.princeton.edu/~rs/talks/QuicksortIsOptimal.pdf
 // Should be O(n) to O(n log n)
-pub fn do_quicksort<A, F, R>(vector: &mut FocusMut<A>, left: usize, right: usize, cmp: &F, rng: &mut R)
-where
+pub fn do_quicksort<A, F, R>(
+    vector: &mut FocusMut<A>,
+    left: usize,
+    right: usize,
+    cmp: &F,
+    rng: &mut R,
+) where
     A: Clone,
     F: Fn(&A, &A) -> Ordering,
-    R: Rng
+    R: RngCore,
 {
     if right <= left {
         return;
@@ -21,7 +31,7 @@ where
 
     let l = left as isize;
     let r = right as isize;
-    let p = rng.gen_range(l, r + 1);
+    let p = gen_range(rng, left, right + 1) as isize;
     let mut l1 = l;
     let mut r1 = r;
     let mut l2 = l - 1;
@@ -80,7 +90,7 @@ where
     A: Clone,
     F: Fn(&A, &A) -> Ordering,
 {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand_xoshiro::Xoshiro256Plus::seed_from_u64(0);
     do_quicksort(vector, left, right, cmp, &mut rng);
 }
 

@@ -14,6 +14,11 @@ Versioning](http://semver.org/spec/v2.0.0.html).
   compile, specifically version 1.36.0, so does `im`. This is a breaking change,
   but will of course only affect your code if you're using an older `rustc`.
 
+### Fixed
+
+- Fixed a quadratic time worst case scenario in the quicksort implementation for
+  `Vector`. (#101)
+
 ## [13.0.0] - 2019-05-18
 
 The minimum supported Rust version is now 1.34.0.
