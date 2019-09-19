@@ -1,0 +1,41 @@
+name: Continuous Integration
+on:
+  push:
+  pull_request:
+  # schedule:
+  #   - cron: "0 0 1,15 * *"
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [im, im-rc]
+        rust: [stable, beta, nightly]
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+
+    steps:
+      - uses: hecrj/setup-rust-action@v1
+        with:
+          rust-version: ${{ matrix.rust }}
+      - name: Install cargo tooling
+        run: cargo install cargo-make cargo-script
+      - uses: actions/checkout@v1
+      - name: Prepare distribution folders
+        run: cargo make prepare-release
+      - name: Run tests
+        run: |
+          cd dist/${{ matrix.crate }}
+          cargo test --all-features
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hecrj/setup-rust-action@v1
+        with:
+          rust-version: stable
+          components: clippy
+      - uses: actions/checkout@v1
+      - name: Clippy
+        run: cargo clippy -- -D warnings
