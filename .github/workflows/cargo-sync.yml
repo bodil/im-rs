@@ -1,0 +1,22 @@
+name: Sync Cargo.tomls
+on:
+  push:
+    paths:
+      - Cargo.toml
+  pull_request:
+    paths:
+      - Cargo.toml
+
+jobs:
+  sync:
+    steps:
+      - uses: hecrj/setup-rust-action@v1
+      - name: Install cargo tooling
+        run: cargo install cargo-make cargo-script
+      - name: Sync Cargo.tomls
+        run: cargo make sync
+      - uses: stefanzweifel/git-auto-commit-action@v2.0.0
+        with:
+          commit_message: Sync Cargo.toml files.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
