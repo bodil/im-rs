@@ -1884,6 +1884,20 @@ impl<'a, A: Clone> Iterator for Iter<'a, A> {
         let remaining = self.back_index - self.front_index;
         (remaining, Some(remaining))
     }
+
+    fn count(self) -> usize {
+        self.back_index - self.front_index
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        let len = self.len();
+        if n >= len {
+            None
+        } else {
+            self.front_index += n;
+            self.next()
+        }
+    }
 }
 
 impl<'a, A: Clone> DoubleEndedIterator for Iter<'a, A> {
@@ -1901,7 +1915,11 @@ impl<'a, A: Clone> DoubleEndedIterator for Iter<'a, A> {
     }
 }
 
-impl<'a, A: Clone> ExactSizeIterator for Iter<'a, A> {}
+impl<'a, A: Clone> ExactSizeIterator for Iter<'a, A> {
+    fn len(&self) -> usize {
+        self.back_index - self.front_index
+    }
+}
 
 impl<'a, A: Clone> FusedIterator for Iter<'a, A> {}
 
@@ -1966,6 +1984,21 @@ where
         let remaining = self.back_index - self.front_index;
         (remaining, Some(remaining))
     }
+
+    fn count(self) -> usize {
+        self.back_index - self.front_index
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        let len = self.len();
+        if n >= len {
+            None
+        } else {
+            self.front_index += n;
+            self.next()
+        }
+    }
+
 }
 
 impl<'a, A> DoubleEndedIterator for IterMut<'a, A>
@@ -1986,7 +2019,11 @@ where
     }
 }
 
-impl<'a, A: Clone> ExactSizeIterator for IterMut<'a, A> {}
+impl<'a, A: Clone> ExactSizeIterator for IterMut<'a, A> {
+    fn len(&self) -> usize {
+        self.back_index - self.front_index
+    }
+}
 
 impl<'a, A: Clone> FusedIterator for IterMut<'a, A> {}
 
@@ -2635,6 +2672,16 @@ mod test {
                 assert_eq!(&vec[index], item);
             }
             assert_eq!(vec.len(), seq.len());
+            assert_eq!(vec.iter().count(), seq.iter().count());
+        }
+
+        #[test]
+        #[allow(clippy::iter_nth)]
+        fn iter_nth(ref vec in vec(i32::ANY, 0..1000)) {
+            let seq: Vector<i32> = Vector::from_iter(vec.iter().cloned());
+            assert_eq!(vec.iter().nth(0), seq.iter().nth(0));
+            assert_eq!(vec.iter().nth(1), seq.iter().nth(1));
+            assert_eq!(vec.iter().nth(vec.len() - 1), seq.iter().nth(vec.len() - 1));
         }
 
         #[test]
