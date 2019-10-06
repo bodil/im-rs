@@ -217,3 +217,16 @@ proptest! {
         }
     }
 }
+
+#[test]
+fn split_off_causes_overflow() {
+    let mut vec = Vector::new();
+
+    for i in 0..6000 {
+        vec.push_back(i);
+    }
+
+    while vec.len() > 64 {
+        vec = vec.split_off(64)
+    }
+}
