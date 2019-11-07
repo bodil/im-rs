@@ -221,7 +221,7 @@
 //!
 //! | Type | Algorithm | Constraints | Order | Push | Pop | Split | Append | Lookup |
 //! | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-//! | [`Vector<A>`][vector::Vector] | [RRB tree][rrb-tree] | [`Clone`][std::clone::Clone] | insertion | O(1)* | O(1)* | O(log n) | O(log n) | O(log n) |
+//! | [`Vector<A>`][vector::Vector] | [RRB tree][rrb-tree] | [`Clone`][std::clone::Clone] | insertion | O(1)\* | O(1)\* | O(log n) | O(log n) | O(log n) |
 //!
 //! ### Maps
 //!
