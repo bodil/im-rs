@@ -123,7 +123,7 @@ impl<A> Node<A> {
     }
 
     #[inline]
-    pub fn from_split(left: Node<A>, median: A, right: Node<A>) -> Self {
+    pub fn new_from_split(left: Node<A>, median: A, right: Node<A>) -> Self {
         Node {
             keys: Chunk::unit(median),
             children: Chunk::pair(Some(Ref::from(left)), Some(Ref::from(right))),

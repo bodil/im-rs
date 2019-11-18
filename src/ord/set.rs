@@ -428,7 +428,7 @@ where
                 }
                 Insert::Update(root) => Ref::from(root),
                 Insert::Split(left, median, right) => {
-                    Ref::from(Node::from_split(left, median, right))
+                    Ref::from(Node::new_from_split(left, median, right))
                 }
             }
         };

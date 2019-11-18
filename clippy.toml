@@ -2,3 +2,4 @@ blacklisted-names = []
 single-char-binding-names-threshold = 15
 # I HAVE THE POWER OF OLEG
 type-complexity-threshold = 999999
+cognitive-complexity-threshold = 30
