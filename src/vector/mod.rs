@@ -2636,6 +2636,19 @@ mod test {
     }
 
     #[test]
+    fn issue_105() {
+        let mut v = Vector::new();
+
+        for i in 0..270_000 {
+            v.push_front(i);
+        }
+
+        while !v.is_empty() {
+            v = v.take(v.len() - 1);
+        }
+    }
+
+    #[test]
     fn issue_107_split_off_causes_overflow() {
         let mut vec = Vector::from_iter(0..4289);
         let mut control = Vec::from_iter(0..4289);

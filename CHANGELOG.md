@@ -18,7 +18,7 @@ Versioning](http://semver.org/spec/v2.0.0.html).
 
 - Fixed a quadratic time worst case scenario in the quicksort implementation for
   `Vector`. (#101)
-- Fixed an edge case bug when splitting and joining large `Vector`s. (#107)
+- Fixed an edge case bug when splitting and joining large `Vector`s. (#105, #107)
 
 ## [13.0.0] - 2019-05-18
 
