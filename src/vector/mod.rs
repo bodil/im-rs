@@ -1413,7 +1413,7 @@ impl<A: Clone> Vector<A> {
     #[allow(dead_code)]
     pub(crate) fn assert_invariants(&self) {
         if let Vector::Full(ref tree) = self {
-            tree.middle.assert_invariants();
+            tree.assert_invariants();
         }
     }
 }
@@ -1449,6 +1449,14 @@ impl<A: Clone> RRB<A> {
             inner_b: Ref::new(Chunk::new()),
             outer_b: Ref::new(Chunk::new()),
         }
+    }
+
+    fn assert_invariants(&self) {
+        let ml = self.middle.assert_invariants(self.middle_level);
+        assert_eq!(
+            self.length,
+            self.outer_f.len() + self.inner_f.len() + ml + self.inner_b.len() + self.outer_b.len()
+        );
     }
 
     fn prune(&mut self) {
@@ -2625,6 +2633,20 @@ mod test {
             x.insert(0, 0);
         }
         x.insert(514, 0);
+    }
+
+    #[test]
+    fn issue_107_split_off_causes_overflow() {
+        let mut vec = Vector::from_iter(0..4289);
+        let mut control = Vec::from_iter(0..4289);
+        let chunk = 64;
+
+        while vec.len() >= chunk {
+            vec = vec.split_off(chunk);
+            control = control.split_off(chunk);
+            assert_eq!(vec.len(), control.len());
+            assert_eq!(control, vec.iter().cloned().collect::<Vec<_>>());
+        }
     }
 
     proptest! {
