@@ -1,6 +1,6 @@
 [package]
 name = "im-rc"
-version = "13.0.0"
+version = "14.0.0"
 edition = "2018"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 license = "MPL-2.0+"
@@ -25,7 +25,7 @@ version_check = "0.9"
 [dependencies]
 typenum = "1.10"
 bitmaps = "2.0.0"
-sized-chunks = { version = "*" }
+sized-chunks = "0.5.0"
 quickcheck = { version = "0.9", optional = true }
 proptest = { version = "0.9", optional = true }
 serde = { version = "1.0", optional = true }
