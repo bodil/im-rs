@@ -9,6 +9,7 @@ on:
 
 jobs:
   sync:
+    runs-on: ubuntu-latest
     steps:
       - uses: hecrj/setup-rust-action@v1
       - name: Install cargo tooling
