@@ -47,7 +47,7 @@
 //!
 //! Another goal of this library has been the idea that you shouldn't
 //! even have to think about what data structure to use in any given
-//! situation, until the point where you need to start worring about
+//! situation, until the point where you need to start worrying about
 //! optimisation - which, in practice, often never comes. Beyond the
 //! shape of your data (ie. whether to use a list or a map), it should
 //! be fine not to think too carefully about data structures - you can
