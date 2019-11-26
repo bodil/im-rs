@@ -143,10 +143,8 @@ where
     /// # #[macro_use] extern crate im;
     /// # use im::hashset::HashSet;
     /// # use std::sync::Arc;
-    /// # fn main() {
     /// let set = HashSet::unit(123);
     /// assert!(set.contains(&123));
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -165,14 +163,12 @@ impl<A, S> HashSet<A, S> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashset::HashSet;
-    /// # fn main() {
     /// assert!(
     ///   !hashset![1, 2, 3].is_empty()
     /// );
     /// assert!(
     ///   HashSet::<i32>::new().is_empty()
     /// );
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -189,9 +185,7 @@ impl<A, S> HashSet<A, S> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashset::HashSet;
-    /// # fn main() {
     /// assert_eq!(3, hashset![1, 2, 3].len());
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -247,11 +241,9 @@ impl<A, S> HashSet<A, S> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::HashSet;
-    /// # fn main() {
     /// let mut set = hashset![1, 2, 3];
     /// set.clear();
     /// assert!(set.is_empty());
-    /// # }
     /// ```
     pub fn clear(&mut self) {
         if !self.is_empty() {
@@ -400,13 +392,11 @@ where
     /// # #[macro_use] extern crate im;
     /// # use im::hashset::HashSet;
     /// # use std::sync::Arc;
-    /// # fn main() {
     /// let set = hashset![123];
     /// assert_eq!(
     ///   set.update(456),
     ///   hashset![123, 456]
     /// );
-    /// # }
     /// ```
     #[must_use]
     pub fn update(&self, a: A) -> Self {
@@ -460,12 +450,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashset::HashSet;
-    /// # fn main() {
     /// let set1 = hashset!{1, 2};
     /// let set2 = hashset!{2, 3};
     /// let expected = hashset!{1, 2, 3};
     /// assert_eq!(expected, set1.union(set2));
-    /// # }
     /// ```
     #[must_use]
     pub fn union(mut self, other: Self) -> Self {
@@ -499,12 +487,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashset::HashSet;
-    /// # fn main() {
     /// let set1 = hashset!{1, 2};
     /// let set2 = hashset!{2, 3};
     /// let expected = hashset!{1, 3};
     /// assert_eq!(expected, set1.difference(set2));
-    /// # }
     /// ```
     ///
     /// [symmetric_difference]: #method.symmetric_difference
@@ -522,12 +508,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashset::HashSet;
-    /// # fn main() {
     /// let set1 = hashset!{1, 2};
     /// let set2 = hashset!{2, 3};
     /// let expected = hashset!{1, 3};
     /// assert_eq!(expected, set1.symmetric_difference(set2));
-    /// # }
     /// ```
     #[must_use]
     pub fn symmetric_difference(mut self, other: Self) -> Self {
@@ -549,12 +533,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordset::OrdSet;
-    /// # fn main() {
     /// let set1 = ordset!{1, 2};
     /// let set2 = ordset!{2, 3};
     /// let expected = ordset!{1};
     /// assert_eq!(expected, set1.relative_complement(set2));
-    /// # }
     /// ```
     #[must_use]
     pub fn relative_complement(mut self, other: Self) -> Self {
@@ -573,12 +555,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashset::HashSet;
-    /// # fn main() {
     /// let set1 = hashset!{1, 2};
     /// let set2 = hashset!{2, 3};
     /// let expected = hashset!{2};
     /// assert_eq!(expected, set1.intersection(set2));
-    /// # }
     /// ```
     #[must_use]
     pub fn intersection(self, other: Self) -> Self {

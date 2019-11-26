@@ -53,7 +53,6 @@ use crate::vector::{Iter, IterMut, Vector, RRB};
 /// # #[macro_use] extern crate im;
 /// # use im::vector::Vector;
 /// # use std::iter::FromIterator;
-/// # fn main() {
 /// let mut vec: Vector<i64> = Vector::from_iter(0..1000);
 ///
 /// // Summing a vector, the slow way:
@@ -74,7 +73,6 @@ use crate::vector::{Iter, IterMut, Vector, RRB};
 /// // And the easy way, for completeness:
 /// let sum: i64 = vec.iter().sum();
 /// assert_eq!(499500, sum);
-/// # }
 /// ```
 ///
 /// [Vector]: enum.Vector.html
@@ -166,12 +164,10 @@ where
     /// # #[macro_use] extern crate im;
     /// # use im::vector::Vector;
     /// # use std::iter::FromIterator;
-    /// # fn main() {
     /// let vec = Vector::from_iter(0..1000);
     /// let narrowed = vec.focus().narrow(100..200);
     /// let narrowed_vec = narrowed.into_iter().cloned().collect();
     /// assert_eq!(Vector::from_iter(100..200), narrowed_vec);
-    /// # }
     /// ```
     ///
     /// [slice::split_at]: https://doc.rust-lang.org/std/primitive.slice.html#method.split_at
@@ -208,14 +204,12 @@ where
     /// # #[macro_use] extern crate im;
     /// # use im::vector::Vector;
     /// # use std::iter::FromIterator;
-    /// # fn main() {
     /// let vec = Vector::from_iter(0..1000);
     /// let (left, right) = vec.focus().split_at(500);
     /// let left_vec = left.into_iter().cloned().collect();
     /// let right_vec = right.into_iter().cloned().collect();
     /// assert_eq!(Vector::from_iter(0..500), left_vec);
     /// assert_eq!(Vector::from_iter(500..1000), right_vec);
-    /// # }
     /// ```
     ///
     /// [slice::split_at]: https://doc.rust-lang.org/std/primitive.slice.html#method.split_at
@@ -422,7 +416,6 @@ where
 /// # #[macro_use] extern crate im;
 /// # use im::vector::Vector;
 /// # use std::iter::FromIterator;
-/// # fn main() {
 /// let mut vec = Vector::from_iter(0..1000);
 /// let focus1 = vec.focus_mut();
 /// // Fails here in 2015 edition because you're creating
@@ -431,7 +424,6 @@ where
 /// // Fails here in 2018 edition because creating focus2
 /// // made focus1's lifetime go out of scope.
 /// assert_eq!(Some(&0), focus1.get(0));
-/// # }
 /// ```
 ///
 /// On the other hand, you can split that one focus into multiple sub-focuses,
@@ -441,13 +433,11 @@ where
 /// # #[macro_use] extern crate im;
 /// # use im::vector::Vector;
 /// # use std::iter::FromIterator;
-/// # fn main() {
 /// let mut vec = Vector::from_iter(0..1000);
 /// let focus = vec.focus_mut();
 /// let (mut left, mut right) = focus.split_at(500);
 /// assert_eq!(Some(&0), left.get(0));
 /// assert_eq!(Some(&500), right.get(0));
-/// # }
 /// ```
 ///
 /// These sub-foci also work as a lock on the vector, even if the focus they
@@ -457,7 +447,6 @@ where
 /// # #[macro_use] extern crate im;
 /// # use im::vector::Vector;
 /// # use std::iter::FromIterator;
-/// # fn main() {
 /// let mut vec = Vector::from_iter(0..1000);
 /// let (left, right) = {
 ///     let focus = vec.focus_mut();
@@ -467,7 +456,6 @@ where
 /// // create another focus:
 /// let focus2 = vec.focus_mut();
 /// assert_eq!(Some(&0), left.get(0));
-/// # }
 /// ```
 ///
 /// [Focus]: enum.Focus.html
@@ -571,11 +559,9 @@ where
     /// # #[macro_use] extern crate im;
     /// # use im::vector::Vector;
     /// # use std::iter::FromIterator;
-    /// # fn main() {
     /// let mut vec = vector![1, 2, 3, 4, 5];
     /// vec.focus_mut().pair(1, 3, |a, b| *a += *b);
     /// assert_eq!(vector![1, 6, 3, 4, 5], vec);
-    /// # }
     /// ```
     #[allow(unsafe_code)]
     pub fn pair<F, B>(&mut self, a: usize, b: usize, mut f: F) -> B
@@ -603,11 +589,9 @@ where
     /// # #[macro_use] extern crate im;
     /// # use im::vector::Vector;
     /// # use std::iter::FromIterator;
-    /// # fn main() {
     /// let mut vec = vector![1, 2, 3, 4, 5];
     /// vec.focus_mut().triplet(0, 2, 4, |a, b, c| *a += *b + *c);
     /// assert_eq!(vector![9, 2, 3, 4, 5], vec);
-    /// # }
     /// ```
     #[allow(unsafe_code)]
     pub fn triplet<F, B>(&mut self, a: usize, b: usize, c: usize, mut f: F) -> B
@@ -654,12 +638,10 @@ where
     /// # #[macro_use] extern crate im;
     /// # use im::vector::Vector;
     /// # use std::iter::FromIterator;
-    /// # fn main() {
     /// let mut vec = Vector::from_iter(0..1000);
     /// let narrowed = vec.focus_mut().narrow(100..200);
     /// let narrowed_vec = narrowed.unmut().into_iter().cloned().collect();
     /// assert_eq!(Vector::from_iter(100..200), narrowed_vec);
-    /// # }
     /// ```
     ///
     /// [slice::split_at]: https://doc.rust-lang.org/std/primitive.slice.html#method.split_at
@@ -696,7 +678,6 @@ where
     /// # #[macro_use] extern crate im;
     /// # use im::vector::Vector;
     /// # use std::iter::FromIterator;
-    /// # fn main() {
     /// let mut vec = Vector::from_iter(0..1000);
     /// {
     ///     let (left, right) = vec.focus_mut().split_at(500);
@@ -710,7 +691,6 @@ where
     /// let expected = Vector::from_iter(100..600)
     ///              + Vector::from_iter(400..900);
     /// assert_eq!(expected, vec);
-    /// # }
     /// ```
     ///
     /// [slice::split_at]: https://doc.rust-lang.org/std/primitive.slice.html#method.split_at

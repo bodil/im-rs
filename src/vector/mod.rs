@@ -246,9 +246,7 @@ impl<A: Clone> Vector<A> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # fn main() {
     /// assert_eq!(5, vector![1, 2, 3, 4, 5].len());
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -269,11 +267,9 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::Vector;
-    /// # fn main() {
     /// let vec = vector!["Joe", "Mike", "Robert"];
     /// assert_eq!(false, vec.is_empty());
     /// assert_eq!(true, Vector::<i32>::new().is_empty());
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -362,11 +358,9 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::Vector;
-    /// # fn main() {
     /// let vec = vector!["Joe", "Mike", "Robert"];
     /// assert_eq!(Some(&"Robert"), vec.get(2));
     /// assert_eq!(None, vec.get(5));
-    /// # }
     /// ```
     #[must_use]
     pub fn get(&self, index: usize) -> Option<&A> {
@@ -417,7 +411,6 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::Vector;
-    /// # fn main() {
     /// let mut vec = vector!["Joe", "Mike", "Robert"];
     /// {
     ///     let robert = vec.get_mut(2).unwrap();
@@ -425,7 +418,6 @@ impl<A: Clone> Vector<A> {
     ///     *robert = "Bjarne";
     /// }
     /// assert_eq!(vector!["Joe", "Mike", "Bjarne"], vec);
-    /// # }
     /// ```
     #[must_use]
     pub fn get_mut(&mut self, index: usize) -> Option<&mut A> {
@@ -563,11 +555,9 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::Vector;
-    /// # fn main() {
     /// let mut vec = vector![1, 2, 3, 4, 5];
     /// assert_eq!(Some(2), vec.index_of(&3));
     /// assert_eq!(None, vec.index_of(&31337));
-    /// # }
     /// ```
     #[must_use]
     pub fn index_of(&self, value: &A) -> Option<usize>
@@ -595,11 +585,9 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::Vector;
-    /// # fn main() {
     /// let mut vec = vector![1, 2, 3, 4, 5];
     /// assert_eq!(true, vec.contains(&3));
     /// assert_eq!(false, vec.contains(&31337));
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -636,7 +624,6 @@ impl<A: Clone> Vector<A> {
     /// Time: O(log n)
     ///
     /// [sort_by]: #method.sort_by
-    #[must_use]
     pub fn binary_search_by<F>(&self, mut f: F) -> Result<usize, usize>
     where
         F: FnMut(&A) -> Ordering,
@@ -670,7 +657,6 @@ impl<A: Clone> Vector<A> {
     /// maintain sorted order.
     ///
     /// Time: O(log n)
-    #[must_use]
     pub fn binary_search(&self, value: &A) -> Result<usize, usize>
     where
         A: Ord,
@@ -692,7 +678,6 @@ impl<A: Clone> Vector<A> {
     /// Time: O(log n)
     ///
     /// [sort_by_key]: #method.sort_by_key
-    #[must_use]
     pub fn binary_search_by_key<B, F>(&self, b: &B, mut f: F) -> Result<usize, usize>
     where
         F: FnMut(&A) -> B,
@@ -710,14 +695,12 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::vector::Vector;
-    /// # fn main() {
     /// let vec = Vector::unit(1337);
     /// assert_eq!(1, vec.len());
     /// assert_eq!(
     ///   vec.get(0),
     ///   Some(&1337)
     /// );
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -742,10 +725,8 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::Vector;
-    /// # fn main() {
     /// let mut vec = vector![1, 2, 3];
     /// assert_eq!(vector![1, 5, 3], vec.update(1, 5));
-    /// # }
     /// ```
     #[must_use]
     pub fn update(&self, index: usize, value: A) -> Self {
@@ -782,11 +763,9 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::Vector;
-    /// # fn main() {
     /// let mut vec = vector![5, 6, 7];
     /// vec.push_front(4);
     /// assert_eq!(vector![4, 5, 6, 7], vec);
-    /// # }
     /// ```
     pub fn push_front(&mut self, value: A) {
         if self.needs_promotion() {
@@ -810,11 +789,9 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::Vector;
-    /// # fn main() {
     /// let mut vec = vector![1, 2, 3];
     /// vec.push_back(4);
     /// assert_eq!(vector![1, 2, 3, 4], vec);
-    /// # }
     /// ```
     pub fn push_back(&mut self, value: A) {
         if self.needs_promotion() {
@@ -838,11 +815,9 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::Vector;
-    /// # fn main() {
     /// let mut vec = vector![1, 2, 3];
     /// assert_eq!(Some(1), vec.pop_front());
     /// assert_eq!(vector![2, 3], vec);
-    /// # }
     /// ```
     pub fn pop_front(&mut self) -> Option<A> {
         if self.is_empty() {
@@ -865,11 +840,9 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::Vector;
-    /// # fn main() {
     /// let mut vec = vector![1, 2, 3];
     /// assert_eq!(Some(3), vec.pop_back());
     /// assert_eq!(vector![1, 2], vec);
-    /// # }
     /// ```
     pub fn pop_back(&mut self) -> Option<A> {
         if self.is_empty() {
@@ -892,11 +865,9 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::vector::Vector;
-    /// # fn main() {
     /// let mut vec = vector![1, 2, 3];
     /// vec.append(vector![7, 8, 9]);
     /// assert_eq!(vector![1, 2, 3, 7, 8, 9], vec);
-    /// # }
     /// ```
     pub fn append(&mut self, mut other: Self) {
         if other.is_empty() {
@@ -978,14 +949,16 @@ impl<A: Clone> Vector<A> {
 
                     let mut middle1 = clone_ref(replace(&mut left.middle, Ref::from(Node::new())));
                     let mut middle2 = clone_ref(right.middle);
-                    let normalised_middle = if left.middle_level > right.middle_level {
-                        middle2 = middle2.elevate(left.middle_level - right.middle_level);
-                        left.middle_level
-                    } else if left.middle_level < right.middle_level {
-                        middle1 = middle1.elevate(right.middle_level - left.middle_level);
-                        right.middle_level
-                    } else {
-                        left.middle_level
+                    let normalised_middle = match left.middle_level.cmp(&right.middle_level) {
+                        Ordering::Greater => {
+                            middle2 = middle2.elevate(left.middle_level - right.middle_level);
+                            left.middle_level
+                        }
+                        Ordering::Less => {
+                            middle1 = middle1.elevate(right.middle_level - left.middle_level);
+                            right.middle_level
+                        }
+                        Ordering::Equal => left.middle_level,
                     };
                     left.middle = Ref::new(Node::merge(
                         Ref::from(middle1),
@@ -1049,12 +1022,10 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::vector::Vector;
-    /// # fn main() {
     /// let mut vec = vector![1, 2, 3, 7, 8, 9];
     /// let (left, right) = vec.split_at(3);
     /// assert_eq!(vector![1, 2, 3], left);
     /// assert_eq!(vector![7, 8, 9], right);
-    /// # }
     /// ```
     pub fn split_at(mut self, index: usize) -> (Self, Self) {
         let right = self.split_off(index);
@@ -1074,12 +1045,10 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::vector::Vector;
-    /// # fn main() {
     /// let mut left = vector![1, 2, 3, 7, 8, 9];
     /// let right = left.split_off(3);
     /// assert_eq!(vector![1, 2, 3], left);
     /// assert_eq!(vector![7, 8, 9], right);
-    /// # }
     /// ```
     pub fn split_off(&mut self, index: usize) -> Self {
         assert!(index <= self.len());
@@ -1347,11 +1316,9 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::vector::Vector;
-    /// # fn main() {
     /// let mut vec = vector![1, 2, 3, 7, 8, 9];
     /// vec.insert_ord(5);
     /// assert_eq!(vector![1, 2, 3, 5, 7, 8, 9], vec);
-    /// # }
     /// ```
     pub fn insert_ord(&mut self, item: A)
     where
@@ -1372,11 +1339,9 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::vector::Vector;
-    /// # fn main() {
     /// let mut vec = vector![3, 2, 5, 4, 1];
     /// vec.sort();
     /// assert_eq!(vector![1, 2, 3, 4, 5], vec);
-    /// # }
     /// ```
     pub fn sort(&mut self)
     where
@@ -1394,11 +1359,9 @@ impl<A: Clone> Vector<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::vector::Vector;
-    /// # fn main() {
     /// let mut vec = vector![3, 2, 5, 4, 1];
     /// vec.sort_by(|left, right| left.cmp(right));
     /// assert_eq!(vector![1, 2, 3, 4, 5], vec);
-    /// # }
     /// ```
     pub fn sort_by<F>(&mut self, cmp: F)
     where
@@ -2451,11 +2414,10 @@ mod test {
 
     #[test]
     fn indexing() {
-        let vec1 = vector![0, 1, 2, 3, 4, 5];
-        let mut vec2 = vec1.clone();
-        vec2.push_front(0);
-        assert_eq!(0, *vec2.get(0).unwrap());
-        assert_eq!(0, vec2[0]);
+        let mut vec = vector![0, 1, 2, 3, 4, 5];
+        vec.push_front(0);
+        assert_eq!(0, *vec.get(0).unwrap());
+        assert_eq!(0, vec[0]);
     }
 
     #[test]
@@ -2482,7 +2444,7 @@ mod test {
                 *p += 1;
             }
         }
-        let expected: Vector<i32> = input.clone().into_iter().map(|i| i + 1).collect();
+        let expected: Vector<i32> = input.into_iter().map(|i| i + 1).collect();
         assert_eq!(expected, vec);
     }
 

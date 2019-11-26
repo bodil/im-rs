@@ -181,13 +181,11 @@ impl<K, V> OrdMap<K, V> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map = OrdMap::unit(123, "onetwothree");
     /// assert_eq!(
     ///   map.get(&123),
     ///   Some(&"onetwothree")
     /// );
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -207,14 +205,12 @@ impl<K, V> OrdMap<K, V> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// assert!(
     ///   !ordmap!{1 => 2}.is_empty()
     /// );
     /// assert!(
     ///   OrdMap::<i32, i32>::new().is_empty()
     /// );
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -231,13 +227,11 @@ impl<K, V> OrdMap<K, V> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// assert_eq!(3, ordmap!{
     ///   1 => 11,
     ///   2 => 22,
     ///   3 => 33
     /// }.len());
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -257,11 +251,9 @@ impl<K, V> OrdMap<K, V> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::OrdMap;
-    /// # fn main() {
     /// let mut map = ordmap![1=>1, 2=>2, 3=>3];
     /// map.clear();
     /// assert!(map.is_empty());
-    /// # }
     /// ```
     pub fn clear(&mut self) {
         if !self.is_empty() {
@@ -285,13 +277,11 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// assert_eq!(Some(&(3, 33)), ordmap!{
     ///   1 => 11,
     ///   2 => 22,
     ///   3 => 33
     /// }.get_max());
-    /// # }
     /// ```
     #[must_use]
     pub fn get_max(&self) -> Option<&(K, V)> {
@@ -308,13 +298,11 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// assert_eq!(Some(&(1, 11)), ordmap!{
     ///   1 => 11,
     ///   2 => 22,
     ///   3 => 33
     /// }.get_min());
-    /// # }
     /// ```
     #[must_use]
     pub fn get_min(&self) -> Option<&(K, V)> {
@@ -377,13 +365,11 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map = ordmap!{123 => "lol"};
     /// assert_eq!(
     ///   map.get(&123),
     ///   Some(&"lol")
     /// );
-    /// # }
     /// ```
     #[must_use]
     pub fn get<BK>(&self, key: &BK) -> Option<&V>
@@ -403,7 +389,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map = ordmap!{123 => "lol"};
     /// assert!(
     ///   map.contains_key(&123)
@@ -411,7 +396,6 @@ where
     /// assert!(
     ///   !map.contains_key(&321)
     /// );
-    /// # }
     /// ```
     #[must_use]
     pub fn contains_key<BK>(&self, k: &BK) -> bool
@@ -467,11 +451,9 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 2 => 2};
     /// let map2 = ordmap!{1 => 1, 2 => 2, 3 => 3};
     /// assert!(map1.is_submap(map2));
-    /// # }
     /// ```
     #[must_use]
     pub fn is_submap<RM>(&self, other: RM) -> bool
@@ -494,7 +476,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 2 => 2};
     /// let map2 = ordmap!{1 => 1, 2 => 2, 3 => 3};
     /// assert!(map1.is_proper_submap(map2));
@@ -502,7 +483,6 @@ where
     /// let map3 = ordmap!{1 => 1, 2 => 2};
     /// let map4 = ordmap!{1 => 1, 2 => 2};
     /// assert!(!map3.is_proper_submap(map4));
-    /// # }
     /// ```
     #[must_use]
     pub fn is_proper_submap<RM>(&self, other: RM) -> bool
@@ -545,7 +525,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let mut map = ordmap!{};
     /// map.insert(123, "123");
     /// map.insert(456, "456");
@@ -553,7 +532,6 @@ where
     ///   map,
     ///   ordmap!{123 => "123", 456 => "456"}
     /// );
-    /// # }
     /// ```
     ///
     /// [insert]: #method.insert
@@ -587,12 +565,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let mut map = ordmap!{123 => "123", 456 => "456"};
     /// map.remove(&123);
     /// map.remove(&456);
     /// assert!(map.is_empty());
-    /// # }
     /// ```
     ///
     /// [remove]: #method.remove
@@ -643,13 +619,11 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map = ordmap!{};
     /// assert_eq!(
     ///   map.update(123, "123"),
     ///   ordmap!{123 => "123"}
     /// );
-    /// # }
     /// ```
     #[must_use]
     pub fn update(&self, key: K, value: V) -> Self {
@@ -797,12 +771,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 3 => 3};
     /// let map2 = ordmap!{2 => 2, 3 => 4};
     /// let expected = ordmap!{1 => 1, 2 => 2, 3 => 3};
     /// assert_eq!(expected, map1.union(map2));
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -847,7 +819,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 3 => 4};
     /// let map2 = ordmap!{2 => 2, 3 => 5};
     /// let expected = ordmap!{1 => 1, 2 => 2, 3 => 9};
@@ -855,7 +826,6 @@ where
     ///     map2,
     ///     |key, left, right| left + right
     /// ));
-    /// # }
     /// ```
     #[must_use]
     pub fn union_with_key<F>(mut self, other: Self, mut f: F) -> Self
@@ -886,12 +856,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 3 => 3};
     /// let map2 = ordmap!{2 => 2};
     /// let expected = ordmap!{1 => 1, 2 => 2, 3 => 3};
     /// assert_eq!(expected, OrdMap::unions(vec![map1, map2]));
-    /// # }
     /// ```
     #[must_use]
     pub fn unions<I>(i: I) -> Self
@@ -955,12 +923,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 3 => 4};
     /// let map2 = ordmap!{2 => 2, 3 => 5};
     /// let expected = ordmap!{1 => 1, 2 => 2};
     /// assert_eq!(expected, map1.difference(map2));
-    /// # }
     /// ```
     ///
     /// [symmetric_difference]: #method.symmetric_difference
@@ -980,12 +946,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 3 => 4};
     /// let map2 = ordmap!{2 => 2, 3 => 5};
     /// let expected = ordmap!{1 => 1, 2 => 2};
     /// assert_eq!(expected, map1.symmetric_difference(map2));
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -1039,7 +1003,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 3 => 4};
     /// let map2 = ordmap!{2 => 2, 3 => 5};
     /// let expected = ordmap!{1 => 1, 2 => 2, 3 => 9};
@@ -1047,7 +1010,6 @@ where
     ///     map2,
     ///     |key, left, right| Some(left + right)
     /// ));
-    /// # }
     /// ```
     /// [symmetric_difference_with_key]: #method.symmetric_difference_with_key
     #[must_use]
@@ -1069,7 +1031,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 3 => 4};
     /// let map2 = ordmap!{2 => 2, 3 => 5};
     /// let expected = ordmap!{1 => 1, 2 => 2, 3 => 9};
@@ -1077,7 +1038,6 @@ where
     ///     map2,
     ///     |key, left, right| Some(left + right)
     /// ));
-    /// # }
     /// ```
     #[must_use]
     pub fn symmetric_difference_with_key<F>(mut self, other: Self, mut f: F) -> Self
@@ -1110,12 +1070,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 3 => 4};
     /// let map2 = ordmap!{2 => 2, 3 => 5};
     /// let expected = ordmap!{1 => 1};
     /// assert_eq!(expected, map1.relative_complement(map2));
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -1136,12 +1094,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 2 => 2};
     /// let map2 = ordmap!{2 => 3, 3 => 4};
     /// let expected = ordmap!{2 => 2};
     /// assert_eq!(expected, map1.intersection(map2));
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -1176,7 +1132,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 2 => 2};
     /// let map2 = ordmap!{2 => 3, 3 => 4};
     /// let expected = ordmap!{2 => 5};
@@ -1184,7 +1139,6 @@ where
     ///     map2,
     ///     |key, left, right| left + right
     /// ));
-    /// # }
     /// ```
     #[must_use]
     pub fn intersection_with_key<B, C, F>(mut self, other: OrdMap<K, B>, mut f: F) -> OrdMap<K, C>

@@ -137,13 +137,11 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map = HashMap::unit(123, "onetwothree");
     /// assert_eq!(
     ///   map.get(&123),
     ///   Some(&"onetwothree")
     /// );
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -162,14 +160,12 @@ impl<K, V, S> HashMap<K, V, S> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// assert!(
     ///   !hashmap!{1 => 2}.is_empty()
     /// );
     /// assert!(
     ///   HashMap::<i32, i32>::new().is_empty()
     /// );
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -186,13 +182,11 @@ impl<K, V, S> HashMap<K, V, S> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// assert_eq!(3, hashmap!{
     ///   1 => 11,
     ///   2 => 22,
     ///   3 => 33
     /// }.len());
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -295,11 +289,9 @@ impl<K, V, S> HashMap<K, V, S> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::HashMap;
-    /// # fn main() {
     /// let mut map = hashmap![1=>1, 2=>2, 3=>3];
     /// map.clear();
     /// assert!(map.is_empty());
-    /// # }
     /// ```
     pub fn clear(&mut self) {
         if !self.is_empty() {
@@ -346,13 +338,11 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map = hashmap!{123 => "lol"};
     /// assert_eq!(
     ///   map.get(&123),
     ///   Some(&"lol")
     /// );
-    /// # }
     /// ```
     #[must_use]
     pub fn get<BK>(&self, key: &BK) -> Option<&V>
@@ -374,7 +364,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map = hashmap!{123 => "lol"};
     /// assert!(
     ///   map.contains_key(&123)
@@ -382,7 +371,6 @@ where
     /// assert!(
     ///   !map.contains_key(&321)
     /// );
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -439,11 +427,9 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map1 = hashmap!{1 => 1, 2 => 2};
     /// let map2 = hashmap!{1 => 1, 2 => 2, 3 => 3};
     /// assert!(map1.is_submap(map2));
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -467,7 +453,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map1 = hashmap!{1 => 1, 2 => 2};
     /// let map2 = hashmap!{1 => 1, 2 => 2, 3 => 3};
     /// assert!(map1.is_proper_submap(map2));
@@ -475,7 +460,6 @@ where
     /// let map3 = hashmap!{1 => 1, 2 => 2};
     /// let map4 = hashmap!{1 => 1, 2 => 2};
     /// assert!(!map3.is_proper_submap(map4));
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -520,13 +504,11 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map = hashmap!{123 => "lol"};
     /// assert_eq!(
     ///   map.get(&123),
     ///   Some(&"lol")
     /// );
-    /// # }
     /// ```
     #[must_use]
     pub fn get_mut<BK>(&mut self, key: &BK) -> Option<&mut V>
@@ -553,7 +535,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let mut map = hashmap!{};
     /// map.insert(123, "123");
     /// map.insert(456, "456");
@@ -561,7 +542,6 @@ where
     ///   map,
     ///   hashmap!{123 => "123", 456 => "456"}
     /// );
-    /// # }
     /// ```
     #[inline]
     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
@@ -588,13 +568,11 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let mut map = hashmap!{123 => "123", 456 => "456"};
     /// assert_eq!(Some("123"), map.remove(&123));
     /// assert_eq!(Some("456"), map.remove(&456));
     /// assert_eq!(None, map.remove(&789));
     /// assert!(map.is_empty());
-    /// # }
     /// ```
     pub fn remove<BK>(&mut self, k: &BK) -> Option<V>
     where
@@ -614,13 +592,11 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let mut map = hashmap!{123 => "123", 456 => "456"};
     /// assert_eq!(Some((123, "123")), map.remove_with_key(&123));
     /// assert_eq!(Some((456, "456")), map.remove_with_key(&456));
     /// assert_eq!(None, map.remove_with_key(&789));
     /// assert!(map.is_empty());
-    /// # }
     /// ```
     pub fn remove_with_key<BK>(&mut self, k: &BK) -> Option<(K, V)>
     where
@@ -670,13 +646,11 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map = hashmap!{};
     /// assert_eq!(
     ///   map.update(123, "123"),
     ///   hashmap!{123 => "123"}
     /// );
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -831,12 +805,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map1 = hashmap!{1 => 1, 3 => 3};
     /// let map2 = hashmap!{2 => 2, 3 => 4};
     /// let expected = hashmap!{1 => 1, 2 => 2, 3 => 3};
     /// assert_eq!(expected, map1.union(map2));
-    /// # }
     /// ```
     #[must_use]
     pub fn union(mut self, other: Self) -> Self {
@@ -880,7 +852,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map1 = hashmap!{1 => 1, 3 => 4};
     /// let map2 = hashmap!{2 => 2, 3 => 5};
     /// let expected = hashmap!{1 => 1, 2 => 2, 3 => 9};
@@ -888,7 +859,6 @@ where
     ///     map2,
     ///     |key, left, right| left + right
     /// ));
-    /// # }
     /// ```
     #[must_use]
     pub fn union_with_key<F>(mut self, other: Self, mut f: F) -> Self
@@ -919,12 +889,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map1 = hashmap!{1 => 1, 3 => 3};
     /// let map2 = hashmap!{2 => 2};
     /// let expected = hashmap!{1 => 1, 2 => 2, 3 => 3};
     /// assert_eq!(expected, HashMap::unions(vec![map1, map2]));
-    /// # }
     /// ```
     #[must_use]
     pub fn unions<I>(i: I) -> Self
@@ -991,12 +959,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map1 = hashmap!{1 => 1, 3 => 4};
     /// let map2 = hashmap!{2 => 2, 3 => 5};
     /// let expected = hashmap!{1 => 1, 2 => 2};
     /// assert_eq!(expected, map1.difference(map2));
-    /// # }
     /// ```
     ///
     /// [symmetric_difference]: #method.symmetric_difference
@@ -1016,12 +982,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map1 = hashmap!{1 => 1, 3 => 4};
     /// let map2 = hashmap!{2 => 2, 3 => 5};
     /// let expected = hashmap!{1 => 1, 2 => 2};
     /// assert_eq!(expected, map1.symmetric_difference(map2));
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -1075,7 +1039,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map1 = hashmap!{1 => 1, 3 => 4};
     /// let map2 = hashmap!{2 => 2, 3 => 5};
     /// let expected = hashmap!{1 => 1, 2 => 2, 3 => 9};
@@ -1083,7 +1046,6 @@ where
     ///     map2,
     ///     |key, left, right| Some(left + right)
     /// ));
-    /// # }
     /// ```
     ///
     /// [symmetric_difference_with_key]: #method.symmetric_difference_with_key
@@ -1106,7 +1068,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map1 = hashmap!{1 => 1, 3 => 4};
     /// let map2 = hashmap!{2 => 2, 3 => 5};
     /// let expected = hashmap!{1 => 1, 2 => 2, 3 => 9};
@@ -1114,7 +1075,6 @@ where
     ///     map2,
     ///     |key, left, right| Some(left + right)
     /// ));
-    /// # }
     /// ```
     #[must_use]
     pub fn symmetric_difference_with_key<F>(mut self, other: Self, mut f: F) -> Self
@@ -1147,12 +1107,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordmap::OrdMap;
-    /// # fn main() {
     /// let map1 = ordmap!{1 => 1, 3 => 4};
     /// let map2 = ordmap!{2 => 2, 3 => 5};
     /// let expected = ordmap!{1 => 1};
     /// assert_eq!(expected, map1.relative_complement(map2));
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -1173,12 +1131,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map1 = hashmap!{1 => 1, 2 => 2};
     /// let map2 = hashmap!{2 => 3, 3 => 4};
     /// let expected = hashmap!{2 => 2};
     /// assert_eq!(expected, map1.intersection(map2));
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -1213,7 +1169,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// # fn main() {
     /// let map1 = hashmap!{1 => 1, 2 => 2};
     /// let map2 = hashmap!{2 => 3, 3 => 4};
     /// let expected = hashmap!{2 => 5};
@@ -1221,7 +1176,6 @@ where
     ///     map2,
     ///     |key, left, right| left + right
     /// ));
-    /// # }
     /// ```
     #[must_use]
     pub fn intersection_with_key<B, C, F>(
@@ -2086,13 +2040,13 @@ mod test {
     #[test]
     fn remove_failing() {
         let pairs = [(1469, 0), (-67, 0)];
-        let hasher: BuildHasherDefault<LolHasher> = Default::default();
         let mut m: collections::HashMap<i16, i16, _> =
-            collections::HashMap::with_hasher(hasher.clone());
+            collections::HashMap::with_hasher(BuildHasherDefault::<LolHasher>::default());
         for &(ref k, ref v) in &pairs {
             m.insert(*k, *v);
         }
-        let mut map: HashMap<i16, i16, _> = HashMap::with_hasher(hasher);
+        let mut map: HashMap<i16, i16, _> =
+            HashMap::with_hasher(BuildHasherDefault::<LolHasher>::default());
         for (k, v) in &m {
             map = map.update(*k, *v);
         }
@@ -2217,13 +2171,12 @@ mod test {
 
         #[test]
         fn without(ref pairs in collection::vec((i16::ANY, i16::ANY), 0..100)) {
-            let hasher: BuildHasherDefault<LolHasher> = Default::default();
             let mut m: collections::HashMap<i16, i16, _> =
-                collections::HashMap::with_hasher(hasher.clone());
+                collections::HashMap::with_hasher(BuildHasherDefault::<LolHasher>::default());
             for &(ref k, ref v) in pairs {
                 m.insert(*k, *v);
             }
-            let mut map: HashMap<i16, i16, _> = HashMap::with_hasher(hasher);
+            let mut map: HashMap<i16, i16, _> = HashMap::with_hasher(BuildHasherDefault::<LolHasher>::default());
             for (k, v) in &m {
                 map = map.update(*k, *v);
             }
@@ -2251,13 +2204,12 @@ mod test {
 
         #[test]
         fn remove(ref pairs in collection::vec((i16::ANY, i16::ANY), 0..100)) {
-            let hasher: BuildHasherDefault<LolHasher> = Default::default();
             let mut m: collections::HashMap<i16, i16, _> =
-                collections::HashMap::with_hasher(hasher.clone());
+                collections::HashMap::with_hasher(BuildHasherDefault::<LolHasher>::default());
             for &(ref k, ref v) in pairs {
                 m.insert(*k, *v);
             }
-            let mut map: HashMap<i16, i16, _> = HashMap::with_hasher(hasher);
+            let mut map: HashMap<i16, i16, _> = HashMap::with_hasher(BuildHasherDefault::<LolHasher>::default());
             for (k, v) in &m {
                 map.insert(*k, *v);
             }
