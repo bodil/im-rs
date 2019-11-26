@@ -18,19 +18,16 @@
 /// # use im::iter::unfold;
 /// # use im::vector::Vector;
 /// # use std::iter::FromIterator;
-/// # fn main() {
 /// // Create an infinite stream of numbers, starting at 0.
 /// let mut it = unfold(0, |i| Some((i, i + 1)));
 ///
 /// // Make a list out of its first five elements.
 /// let numbers = Vector::from_iter(it.take(5));
 /// assert_eq!(numbers, vector![0, 1, 2, 3, 4]);
-/// # }
 /// ```
 ///
 /// [std::option::Option]: https://doc.rust-lang.org/std/option/enum.Option.html
 /// [std::option::Option::None]: https://doc.rust-lang.org/std/option/enum.Option.html#variant.None
-#[must_use]
 pub fn unfold<F, S, A>(value: S, f: F) -> impl Iterator<Item = A>
 where
     F: Fn(S) -> Option<(A, S)>,

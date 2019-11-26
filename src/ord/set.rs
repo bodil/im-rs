@@ -192,10 +192,8 @@ impl<A> OrdSet<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordset::OrdSet;
-    /// # fn main() {
     /// let set = OrdSet::unit(123);
     /// assert!(set.contains(&123));
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -215,14 +213,12 @@ impl<A> OrdSet<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordset::OrdSet;
-    /// # fn main() {
     /// assert!(
     ///   !ordset![1, 2, 3].is_empty()
     /// );
     /// assert!(
     ///   OrdSet::<i32>::new().is_empty()
     /// );
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -239,9 +235,7 @@ impl<A> OrdSet<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordset::OrdSet;
-    /// # fn main() {
     /// assert_eq!(3, ordset![1, 2, 3].len());
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -261,11 +255,9 @@ impl<A> OrdSet<A> {
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::OrdSet;
-    /// # fn main() {
     /// let mut set = ordset![1, 2, 3];
     /// set.clear();
     /// assert!(set.is_empty());
-    /// # }
     /// ```
     pub fn clear(&mut self) {
         if !self.is_empty() {
@@ -347,11 +339,9 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordset::OrdSet;
-    /// # fn main() {
     /// let mut set = ordset!{1, 2, 3};
     /// assert!(set.contains(&1));
     /// assert!(!set.contains(&4));
-    /// # }
     /// ```
     #[inline]
     #[must_use]
@@ -406,7 +396,6 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordset::OrdSet;
-    /// # fn main() {
     /// let mut set = ordset!{};
     /// set.insert(123);
     /// set.insert(456);
@@ -414,7 +403,6 @@ where
     ///   set,
     ///   ordset![123, 456]
     /// );
-    /// # }
     /// ```
     #[inline]
     pub fn insert(&mut self, a: A) -> Option<A> {
@@ -498,13 +486,11 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordset::OrdSet;
-    /// # fn main() {
     /// let set = ordset![456];
     /// assert_eq!(
     ///   set.update(123),
     ///   ordset![123, 456]
     /// );
-    /// # }
     /// ```
     #[must_use]
     pub fn update(&self, a: A) -> Self {
@@ -561,12 +547,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordset::OrdSet;
-    /// # fn main() {
     /// let set1 = ordset!{1, 2};
     /// let set2 = ordset!{2, 3};
     /// let expected = ordset!{1, 2, 3};
     /// assert_eq!(expected, set1.union(set2));
-    /// # }
     /// ```
     #[must_use]
     pub fn union(mut self, other: Self) -> Self {
@@ -599,12 +583,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordset::OrdSet;
-    /// # fn main() {
     /// let set1 = ordset!{1, 2};
     /// let set2 = ordset!{2, 3};
     /// let expected = ordset!{1, 3};
     /// assert_eq!(expected, set1.difference(set2));
-    /// # }
     /// ```
     ///
     /// [symmetric_difference]: #method.symmetric_difference
@@ -622,12 +604,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordset::OrdSet;
-    /// # fn main() {
     /// let set1 = ordset!{1, 2};
     /// let set2 = ordset!{2, 3};
     /// let expected = ordset!{1, 3};
     /// assert_eq!(expected, set1.symmetric_difference(set2));
-    /// # }
     /// ```
     #[must_use]
     pub fn symmetric_difference(mut self, other: Self) -> Self {
@@ -649,12 +629,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordset::OrdSet;
-    /// # fn main() {
     /// let set1 = ordset!{1, 2};
     /// let set2 = ordset!{2, 3};
     /// let expected = ordset!{1};
     /// assert_eq!(expected, set1.relative_complement(set2));
-    /// # }
     /// ```
     #[must_use]
     pub fn relative_complement(mut self, other: Self) -> Self {
@@ -673,12 +651,10 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::ordset::OrdSet;
-    /// # fn main() {
     /// let set1 = ordset!{1, 2};
     /// let set2 = ordset!{2, 3};
     /// let expected = ordset!{2};
     /// assert_eq!(expected, set1.intersection(set2));
-    /// # }
     /// ```
     #[must_use]
     pub fn intersection(self, other: Self) -> Self {

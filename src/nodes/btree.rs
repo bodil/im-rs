@@ -334,46 +334,50 @@ impl<A: BTreeValue> Node<A> {
         let mut right_keys;
         let mut right_children;
         let median;
-        if index < MEDIAN {
-            self.children[index] = left_child;
+        match index.cmp(&MEDIAN) {
+            Ordering::Less => {
+                self.children[index] = left_child;
 
-            left_keys = Chunk::from_front(&mut self.keys, index);
-            left_keys.push_back(value);
-            left_keys.drain_from_front(&mut self.keys, MEDIAN - index - 1);
+                left_keys = Chunk::from_front(&mut self.keys, index);
+                left_keys.push_back(value);
+                left_keys.drain_from_front(&mut self.keys, MEDIAN - index - 1);
 
-            left_children = Chunk::from_front(&mut self.children, index + 1);
-            left_children.push_back(right_child);
-            left_children.drain_from_front(&mut self.children, MEDIAN - index - 1);
+                left_children = Chunk::from_front(&mut self.children, index + 1);
+                left_children.push_back(right_child);
+                left_children.drain_from_front(&mut self.children, MEDIAN - index - 1);
 
-            median = self.keys.pop_front();
+                median = self.keys.pop_front();
 
-            right_keys = Chunk::drain_from(&mut self.keys);
-            right_children = Chunk::drain_from(&mut self.children);
-        } else if index > MEDIAN {
-            self.children[index] = left_child;
+                right_keys = Chunk::drain_from(&mut self.keys);
+                right_children = Chunk::drain_from(&mut self.children);
+            }
+            Ordering::Greater => {
+                self.children[index] = left_child;
 
-            left_keys = Chunk::from_front(&mut self.keys, MEDIAN);
-            left_children = Chunk::from_front(&mut self.children, MEDIAN + 1);
+                left_keys = Chunk::from_front(&mut self.keys, MEDIAN);
+                left_children = Chunk::from_front(&mut self.children, MEDIAN + 1);
 
-            median = self.keys.pop_front();
+                median = self.keys.pop_front();
 
-            right_keys = Chunk::from_front(&mut self.keys, index - MEDIAN - 1);
-            right_keys.push_back(value);
-            right_keys.append(&mut self.keys);
+                right_keys = Chunk::from_front(&mut self.keys, index - MEDIAN - 1);
+                right_keys.push_back(value);
+                right_keys.append(&mut self.keys);
 
-            right_children = Chunk::from_front(&mut self.children, index - MEDIAN);
-            right_children.push_back(right_child);
-            right_children.append(&mut self.children);
-        } else {
-            left_keys = Chunk::from_front(&mut self.keys, MEDIAN);
-            left_children = Chunk::from_front(&mut self.children, MEDIAN);
-            left_children.push_back(left_child);
+                right_children = Chunk::from_front(&mut self.children, index - MEDIAN);
+                right_children.push_back(right_child);
+                right_children.append(&mut self.children);
+            }
+            Ordering::Equal => {
+                left_keys = Chunk::from_front(&mut self.keys, MEDIAN);
+                left_children = Chunk::from_front(&mut self.children, MEDIAN);
+                left_children.push_back(left_child);
 
-            median = value;
+                median = value;
 
-            right_keys = Chunk::drain_from(&mut self.keys);
-            right_children = Chunk::drain_from(&mut self.children);
-            right_children[0] = right_child;
+                right_keys = Chunk::drain_from(&mut self.keys);
+                right_children = Chunk::drain_from(&mut self.children);
+                right_children[0] = right_child;
+            }
         }
 
         debug_assert!(left_keys.len() == MEDIAN);
