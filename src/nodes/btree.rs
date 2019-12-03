@@ -1197,18 +1197,20 @@ where
                 },
                 (Some(old), Some(new)) => match (old, new) {
                     (IterItem::Consider(old), IterItem::Consider(new)) => {
-                        match old.keys[0].cmp_values(&new.keys[0]) {
-                            Ordering::Less => {
-                                Self::push(&mut self.old_stack, &old);
-                                self.new_stack.push(IterItem::Consider(new));
-                            }
-                            Ordering::Greater => {
-                                self.old_stack.push(IterItem::Consider(old));
-                                Self::push(&mut self.new_stack, &new);
-                            }
-                            Ordering::Equal => {
-                                Self::push(&mut self.old_stack, &old);
-                                Self::push(&mut self.new_stack, &new);
+                        if !std::ptr::eq(old, new) {
+                            match old.keys[0].cmp_values(&new.keys[0]) {
+                                Ordering::Less => {
+                                    Self::push(&mut self.old_stack, &old);
+                                    self.new_stack.push(IterItem::Consider(new));
+                                }
+                                Ordering::Greater => {
+                                    self.old_stack.push(IterItem::Consider(old));
+                                    Self::push(&mut self.new_stack, &new);
+                                }
+                                Ordering::Equal => {
+                                    Self::push(&mut self.old_stack, &old);
+                                    Self::push(&mut self.new_stack, &new);
+                                }
                             }
                         }
                     }
