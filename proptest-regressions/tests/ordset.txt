@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc ad212dea44eb83bbfd86396a2e0f9460ecb93f6b1a2644bc700ffc317638a37a # shrinks to actions = let mut set = OrdSet::new(); set.insert(0); let expected = vec![0]; assert_eq!(OrdSet::from(expected), set); 

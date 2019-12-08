@@ -8,15 +8,38 @@ use std::cmp::Ordering;
 use std::ops::{Bound, IndexMut, Range, RangeBounds};
 use std::ptr;
 
+#[cfg(feature = "pool")]
+pub use refpool::{PoolClone, PoolDefault};
+
 // The `Ref` type is an alias for either `Rc` or `Arc`, user's choice.
+
+// `Arc` without refpool
+#[cfg(all(threadsafe, not(feature = "pool")))]
+pub use crate::fakepool::{Arc as PoolRef, Pool, PoolClone, PoolDefault};
+
+// `Arc` with refpool
+#[cfg(all(threadsafe, feature = "pool"))]
+pub type PoolRef<A> = refpool::PoolRef<A, refpool::PoolSync>;
+#[cfg(all(threadsafe, feature = "pool"))]
+pub type Pool<A> = refpool::Pool<A, refpool::PoolSync>;
+
+// `Ref` == `Arc` when threadsafe
 #[cfg(threadsafe)]
-use std::sync::Arc;
-#[cfg(threadsafe)]
-pub type Ref<A> = Arc<A>;
+pub type Ref<A> = std::sync::Arc<A>;
+
+// `Rc` without refpool
+#[cfg(all(not(threadsafe), not(feature = "pool")))]
+pub use crate::fakepool::{Pool, PoolClone, PoolDefault, Rc as PoolRef};
+
+// `Rc` with refpool
+#[cfg(all(not(threadsafe), feature = "pool"))]
+pub type PoolRef<A> = refpool::PoolRef<A, refpool::PoolUnsync>;
+#[cfg(all(not(threadsafe), feature = "pool"))]
+pub type Pool<A> = refpool::Pool<A, refpool::PoolUnsync>;
+
+// `Ref` == `Rc` when not threadsafe
 #[cfg(not(threadsafe))]
-use std::rc::Rc;
-#[cfg(not(threadsafe))]
-pub type Ref<A> = Rc<A>;
+pub type Ref<A> = std::rc::Rc<A>;
 
 pub fn clone_ref<A>(r: Ref<A>) -> A
 where

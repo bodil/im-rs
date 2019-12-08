@@ -13,3 +13,6 @@ pub type OrdChunkSize = U64; // Must be an even number!
 /// The level size of HAMTs, in bits
 /// Branching factor is 2 ^ HashLevelSize.
 pub type HashLevelSize = U5;
+
+/// The size of per-instance memory pools if the `pool` feature is enabled.
+pub const POOL_SIZE: usize = 1024;

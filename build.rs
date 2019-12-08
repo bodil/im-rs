@@ -14,9 +14,11 @@ fn main() {
     let pkgname = env::var("CARGO_PKG_NAME").expect("Cargo didn't set the CARGO_PKG_NAME env var!");
     let test_rc = env::var("IM_TEST_RC").is_ok();
     match pkgname.as_str() {
-        "im" => if !test_rc {
-            println!("cargo:rustc-cfg=threadsafe")
-        },
+        "im" => {
+            // if !test_rc {
+            //     println!("cargo:rustc-cfg=threadsafe")
+            // }
+        }
         "im-rc" => {}
         _ => panic!("unexpected package name!"),
     }

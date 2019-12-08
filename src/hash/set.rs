@@ -31,11 +31,12 @@ use std::iter::FusedIterator;
 use std::iter::{FromIterator, IntoIterator, Sum};
 use std::ops::{Add, Deref, Mul};
 
+use crate::config::POOL_SIZE;
 use crate::nodes::hamt::{
     hash_key, Drain as NodeDrain, HashValue, Iter as NodeIter, IterMut as NodeIterMut, Node,
 };
 use crate::ordset::OrdSet;
-use crate::util::Ref;
+use crate::util::{Pool, PoolRef, Ref};
 
 /// Construct a set from a sequence of values.
 ///
@@ -92,7 +93,8 @@ macro_rules! hashset {
 /// [std::collections::hash_map::RandomState]: https://doc.rust-lang.org/std/collections/hash_map/struct.RandomState.html
 pub struct HashSet<A, S = RandomState> {
     hasher: Ref<S>,
-    root: Ref<Node<Value<A>>>,
+    pool: Pool<Node<Value<A>>>,
+    root: PoolRef<Node<Value<A>>>,
     size: usize,
 }
 
@@ -200,9 +202,12 @@ impl<A, S> HashSet<A, S> {
     where
         Ref<S>: From<RS>,
     {
+        let pool = Pool::new(POOL_SIZE);
+        let root = PoolRef::default(&pool);
         HashSet {
             size: 0,
-            root: Ref::new(Node::new()),
+            pool,
+            root,
             hasher: From::from(hasher),
         }
     }
@@ -222,9 +227,12 @@ impl<A, S> HashSet<A, S> {
     where
         A1: Hash + Eq + Clone,
     {
+        let pool = Pool::new(POOL_SIZE);
+        let root = PoolRef::default(&pool);
         HashSet {
             size: 0,
-            root: Ref::new(Node::new()),
+            pool,
+            root,
             hasher: self.hasher.clone(),
         }
     }
@@ -247,7 +255,7 @@ impl<A, S> HashSet<A, S> {
     /// ```
     pub fn clear(&mut self) {
         if !self.is_empty() {
-            self.root = Default::default();
+            self.root = PoolRef::default(&self.pool);
             self.size = 0;
         }
     }
@@ -343,9 +351,9 @@ where
     /// the same order every time for the same set.
     #[must_use]
     pub fn iter_mut(&mut self) -> IterMut<'_, A> {
-        let root = Ref::make_mut(&mut self.root);
+        let root = PoolRef::make_mut(&self.pool, &mut self.root);
         IterMut {
-            it: NodeIterMut::new(root, self.size),
+            it: NodeIterMut::new(&self.pool, root, self.size),
         }
     }
 
@@ -355,8 +363,8 @@ where
     #[inline]
     pub fn insert(&mut self, a: A) -> Option<A> {
         let hash = hash_key(&*self.hasher, &a);
-        let root = Ref::make_mut(&mut self.root);
-        match root.insert(hash, 0, Value(a)) {
+        let root = PoolRef::make_mut(&self.pool, &mut self.root);
+        match root.insert(&self.pool, hash, 0, Value(a)) {
             None => {
                 self.size += 1;
                 None
@@ -373,8 +381,8 @@ where
         BA: Hash + Eq + ?Sized,
         A: Borrow<BA>,
     {
-        let root = Ref::make_mut(&mut self.root);
-        let result = root.remove(hash_key(&*self.hasher, a), 0, a);
+        let root = PoolRef::make_mut(&self.pool, &mut self.root);
+        let result = root.remove(&self.pool, hash_key(&*self.hasher, a), 0, a);
         if result.is_some() {
             self.size -= 1;
         }
@@ -433,9 +441,9 @@ where
         F: FnMut(&A) -> bool,
     {
         let old_root = self.root.clone();
-        let root = Ref::make_mut(&mut self.root);
+        let root = PoolRef::make_mut(&self.pool, &mut self.root);
         for (value, hash) in NodeIter::new(&old_root, self.size) {
-            if !f(value) && root.remove(hash, 0, value).is_some() {
+            if !f(value) && root.remove(&self.pool, hash, 0, value).is_some() {
                 self.size -= 1;
             }
         }
@@ -581,6 +589,7 @@ where
     fn clone(&self) -> Self {
         HashSet {
             hasher: self.hasher.clone(),
+            pool: self.pool.clone(),
             root: self.root.clone(),
             size: self.size,
         }
@@ -654,9 +663,12 @@ where
     S: BuildHasher + Default,
 {
     fn default() -> Self {
+        let pool = Pool::new(POOL_SIZE);
+        let root = PoolRef::default(&pool);
         HashSet {
             hasher: Ref::<S>::default(),
-            root: Ref::new(Node::new()),
+            pool,
+            root,
             size: 0,
         }
     }
@@ -896,7 +908,7 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         ConsumingIter {
-            it: NodeDrain::new(self.root, self.size),
+            it: NodeDrain::new(&self.pool, self.root, self.size),
         }
     }
 }

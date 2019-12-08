@@ -31,11 +31,12 @@ use std::iter::{FromIterator, FusedIterator, Sum};
 use std::mem;
 use std::ops::{Add, Index, IndexMut};
 
+use crate::config::POOL_SIZE;
 use crate::nodes::hamt::{
     hash_key, Drain as NodeDrain, HashBits, HashValue, Iter as NodeIter, IterMut as NodeIterMut,
     Node,
 };
-use crate::util::Ref;
+use crate::util::{Pool, PoolRef, Ref};
 
 /// Construct a hash map from a sequence of key/value pairs.
 ///
@@ -97,7 +98,8 @@ macro_rules! hashmap {
 
 pub struct HashMap<K, V, S = RandomState> {
     size: usize,
-    root: Ref<Node<(K, V)>>,
+    pool: Pool<Node<(K, V)>>,
+    root: PoolRef<Node<(K, V)>>,
     hasher: Ref<S>,
 }
 
@@ -201,9 +203,12 @@ impl<K, V, S> HashMap<K, V, S> {
     where
         Ref<S>: From<RS>,
     {
+        let pool = Pool::new(POOL_SIZE);
+        let root = PoolRef::default(&pool);
         HashMap {
             size: 0,
-            root: Ref::new(Node::new()),
+            pool,
+            root,
             hasher: From::from(hasher),
         }
     }
@@ -225,9 +230,12 @@ impl<K, V, S> HashMap<K, V, S> {
         K1: Hash + Eq + Clone,
         V1: Clone,
     {
+        let pool = Pool::new(POOL_SIZE);
+        let root = PoolRef::default(&pool);
         HashMap {
             size: 0,
-            root: Ref::new(Node::new()),
+            pool,
+            root,
             hasher: self.hasher.clone(),
         }
     }
@@ -295,7 +303,7 @@ impl<K, V, S> HashMap<K, V, S> {
     /// ```
     pub fn clear(&mut self) {
         if !self.is_empty() {
-            self.root = Default::default();
+            self.root = PoolRef::default(&self.pool);
             self.size = 0;
         }
     }
@@ -488,9 +496,9 @@ where
     #[inline]
     #[must_use]
     pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
-        let root = Ref::make_mut(&mut self.root);
+        let root = PoolRef::make_mut(&self.pool, &mut self.root);
         IterMut {
-            it: NodeIterMut::new(root, self.size),
+            it: NodeIterMut::new(&self.pool, root, self.size),
         }
     }
 
@@ -516,8 +524,8 @@ where
         BK: Hash + Eq + ?Sized,
         K: Borrow<BK>,
     {
-        let root = Ref::make_mut(&mut self.root);
-        match root.get_mut(hash_key(&*self.hasher, key), 0, key) {
+        let root = PoolRef::make_mut(&self.pool, &mut self.root);
+        match root.get_mut(&self.pool, hash_key(&*self.hasher, key), 0, key) {
             None => None,
             Some(&mut (_, ref mut value)) => Some(value),
         }
@@ -546,8 +554,8 @@ where
     #[inline]
     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
         let hash = hash_key(&*self.hasher, &k);
-        let root = Ref::make_mut(&mut self.root);
-        let result = root.insert(hash, 0, (k, v));
+        let root = PoolRef::make_mut(&self.pool, &mut self.root);
+        let result = root.insert(&self.pool, hash, 0, (k, v));
         if result.is_none() {
             self.size += 1;
         }
@@ -603,8 +611,8 @@ where
         BK: Hash + Eq + ?Sized,
         K: Borrow<BK>,
     {
-        let root = Ref::make_mut(&mut self.root);
-        let result = root.remove(hash_key(&*self.hasher, k), 0, k);
+        let root = PoolRef::make_mut(&self.pool, &mut self.root);
+        let result = root.remove(&self.pool, hash_key(&*self.hasher, k), 0, k);
         if result.is_some() {
             self.size -= 1;
         }
@@ -1308,8 +1316,8 @@ where
 
     /// Remove this entry from the map and return the removed mapping.
     pub fn remove_entry(self) -> (K, V) {
-        let root = Ref::make_mut(&mut self.map.root);
-        let result = root.remove(self.hash, 0, &self.key);
+        let root = PoolRef::make_mut(&self.map.pool, &mut self.map.root);
+        let result = root.remove(&self.map.pool, self.hash, 0, &self.key);
         self.map.size -= 1;
         result.unwrap()
     }
@@ -1323,15 +1331,21 @@ where
     /// Get a mutable reference to the current value.
     #[must_use]
     pub fn get_mut(&mut self) -> &mut V {
-        let root = Ref::make_mut(&mut self.map.root);
-        &mut root.get_mut(self.hash, 0, &self.key).unwrap().1
+        let root = PoolRef::make_mut(&self.map.pool, &mut self.map.root);
+        &mut root
+            .get_mut(&self.map.pool, self.hash, 0, &self.key)
+            .unwrap()
+            .1
     }
 
     /// Convert this entry into a mutable reference.
     #[must_use]
     pub fn into_mut(self) -> &'a mut V {
-        let root = Ref::make_mut(&mut self.map.root);
-        &mut root.get_mut(self.hash, 0, &self.key).unwrap().1
+        let root = PoolRef::make_mut(&self.map.pool, &mut self.map.root);
+        &mut root
+            .get_mut(&self.map.pool, self.hash, 0, &self.key)
+            .unwrap()
+            .1
     }
 
     /// Overwrite the current value.
@@ -1377,16 +1391,19 @@ where
 
     /// Insert a value into this entry.
     pub fn insert(self, value: V) -> &'a mut V {
-        let root = Ref::make_mut(&mut self.map.root);
+        let root = PoolRef::make_mut(&self.map.pool, &mut self.map.root);
         if root
-            .insert(self.hash, 0, (self.key.clone(), value))
+            .insert(&self.map.pool, self.hash, 0, (self.key.clone(), value))
             .is_none()
         {
             self.map.size += 1;
         }
         // TODO it's unfortunate that we need to look up the key again
         // here to get the mut ref.
-        &mut root.get_mut(self.hash, 0, &self.key).unwrap().1
+        &mut root
+            .get_mut(&self.map.pool, self.hash, 0, &self.key)
+            .unwrap()
+            .1
     }
 }
 
@@ -1401,6 +1418,7 @@ where
     fn clone(&self) -> Self {
         HashMap {
             root: self.root.clone(),
+            pool: self.pool.clone(),
             size: self.size,
             hasher: self.hasher.clone(),
         }
@@ -1439,7 +1457,7 @@ where
     S: BuildHasher,
 {
     fn eq(&self, other: &Self) -> bool {
-        if Ref::ptr_eq(&self.root, &other.root) {
+        if PoolRef::ptr_eq(&self.root, &other.root) {
             return true;
         }
         self.test_eq(other)
@@ -1508,9 +1526,12 @@ where
 {
     #[inline]
     fn default() -> Self {
+        let pool = Pool::new(POOL_SIZE);
+        let root = PoolRef::default(&pool);
         HashMap {
             size: 0,
-            root: Ref::new(Node::new()),
+            pool,
+            root,
             hasher: Ref::<S>::default(),
         }
     }
@@ -1596,8 +1617,8 @@ where
     S: BuildHasher,
 {
     fn index_mut(&mut self, key: &BK) -> &mut Self::Output {
-        let root = Ref::make_mut(&mut self.root);
-        match root.get_mut(hash_key(&*self.hasher, key), 0, key) {
+        let root = PoolRef::make_mut(&self.pool, &mut self.root);
+        match root.get_mut(&self.pool, hash_key(&*self.hasher, key), 0, key) {
             None => panic!("HashMap::index_mut: invalid key"),
             Some(&mut (_, ref mut value)) => value,
         }
@@ -1808,7 +1829,7 @@ where
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
         ConsumingIter {
-            it: NodeDrain::new(self.root, self.size),
+            it: NodeDrain::new(&self.pool, self.root, self.size),
         }
     }
 }
