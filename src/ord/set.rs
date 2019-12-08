@@ -25,6 +25,7 @@ use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::{FromIterator, IntoIterator, Sum};
 use std::ops::{Add, Deref, Mul, RangeBounds};
 
+use crate::config::POOL_SIZE;
 use crate::hashset::HashSet;
 use crate::nodes::btree::{
     BTreeValue, ConsumingIter as ConsumingNodeIter, DiffIter as NodeDiffIter, Insert,
@@ -32,7 +33,7 @@ use crate::nodes::btree::{
 };
 #[cfg(has_specialisation)]
 use crate::util::linear_search_by;
-use crate::util::Ref;
+use crate::util::{Pool, PoolRef};
 
 pub use crate::nodes::btree::DiffItem;
 
@@ -172,16 +173,20 @@ impl<A: Ord + Copy> BTreeValue for Value<A> {
 /// [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 pub struct OrdSet<A> {
     size: usize,
-    root: Ref<Node<Value<A>>>,
+    pool: Pool<Node<Value<A>>>,
+    root: PoolRef<Node<Value<A>>>,
 }
 
 impl<A> OrdSet<A> {
     /// Construct an empty set.
     #[must_use]
     pub fn new() -> Self {
+        let pool = Pool::new(POOL_SIZE);
+        let root = PoolRef::default(&pool);
         OrdSet {
             size: 0,
-            root: Ref::from(Node::new()),
+            pool,
+            root,
         }
     }
 
@@ -198,9 +203,12 @@ impl<A> OrdSet<A> {
     #[inline]
     #[must_use]
     pub fn unit(a: A) -> Self {
+        let pool = Pool::new(POOL_SIZE);
+        let root = PoolRef::new(&pool, Node::unit(Value(a)));
         OrdSet {
             size: 1,
-            root: Ref::from(Node::unit(Value(a))),
+            pool,
+            root,
         }
     }
 
@@ -261,7 +269,7 @@ impl<A> OrdSet<A> {
     /// ```
     pub fn clear(&mut self) {
         if !self.is_empty() {
-            self.root = Default::default();
+            self.root = PoolRef::default(&self.pool);
             self.size = 0;
         }
     }
@@ -407,17 +415,18 @@ where
     #[inline]
     pub fn insert(&mut self, a: A) -> Option<A> {
         let new_root = {
-            let root = Ref::make_mut(&mut self.root);
-            match root.insert(Value(a)) {
+            let root = PoolRef::make_mut(&self.pool, &mut self.root);
+            match root.insert(&self.pool, Value(a)) {
                 Insert::Replaced(Value(old_value)) => return Some(old_value),
                 Insert::Added => {
                     self.size += 1;
                     return None;
                 }
-                Insert::Update(root) => Ref::from(root),
-                Insert::Split(left, median, right) => {
-                    Ref::from(Node::new_from_split(left, median, right))
-                }
+                Insert::Update(root) => PoolRef::new(&self.pool, root),
+                Insert::Split(left, median, right) => PoolRef::new(
+                    &self.pool,
+                    Node::new_from_split(&self.pool, left, median, right),
+                ),
             }
         };
         self.size += 1;
@@ -435,9 +444,9 @@ where
         A: Borrow<BA>,
     {
         let (new_root, removed_value) = {
-            let root = Ref::make_mut(&mut self.root);
-            match root.remove(a) {
-                Remove::Update(value, root) => (Ref::from(root), Some(value.0)),
+            let root = PoolRef::make_mut(&self.pool, &mut self.root);
+            match root.remove(&self.pool, a) {
+                Remove::Update(value, root) => (PoolRef::new(&self.pool, root), Some(value.0)),
                 Remove::Removed(value) => {
                     self.size -= 1;
                     return Some(value.0);
@@ -743,6 +752,7 @@ impl<A> Clone for OrdSet<A> {
     fn clone(&self) -> Self {
         OrdSet {
             size: self.size,
+            pool: self.pool.clone(),
             root: self.root.clone(),
         }
     }
@@ -750,7 +760,7 @@ impl<A> Clone for OrdSet<A> {
 
 impl<A: Ord> PartialEq for OrdSet<A> {
     fn eq(&self, other: &Self) -> bool {
-        Ref::ptr_eq(&self.root, &other.root)
+        PoolRef::ptr_eq(&self.root, &other.root)
             || (self.len() == other.len() && self.diff(other).next().is_none())
     }
 }

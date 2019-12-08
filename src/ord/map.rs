@@ -26,11 +26,12 @@ use std::iter::{FromIterator, Iterator, Sum};
 use std::mem;
 use std::ops::{Add, Index, IndexMut, RangeBounds};
 
+use crate::config::POOL_SIZE;
 use crate::hashmap::HashMap;
 use crate::nodes::btree::{BTreeValue, Insert, Node, Remove};
 #[cfg(has_specialisation)]
 use crate::util::linear_search_by;
-use crate::util::Ref;
+use crate::util::{Pool, PoolRef};
 
 pub use crate::nodes::btree::{ConsumingIter, DiffItem, DiffIter, Iter as RangedIter};
 
@@ -161,16 +162,20 @@ impl<K: Ord + Copy, V> BTreeValue for (K, V) {
 /// [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 pub struct OrdMap<K, V> {
     size: usize,
-    root: Ref<Node<(K, V)>>,
+    pool: Pool<Node<(K, V)>>,
+    root: PoolRef<Node<(K, V)>>,
 }
 
 impl<K, V> OrdMap<K, V> {
     /// Construct an empty map.
     #[must_use]
     pub fn new() -> Self {
+        let pool = Pool::new(POOL_SIZE);
+        let root = PoolRef::default(&pool);
         OrdMap {
             size: 0,
-            root: Ref::from(Node::new()),
+            pool,
+            root,
         }
     }
 
@@ -190,9 +195,12 @@ impl<K, V> OrdMap<K, V> {
     #[inline]
     #[must_use]
     pub fn unit(key: K, value: V) -> Self {
+        let pool = Pool::new(POOL_SIZE);
+        let root = PoolRef::new(&pool, Node::unit((key, value)));
         OrdMap {
             size: 1,
-            root: Ref::from(Node::unit((key, value))),
+            pool,
+            root,
         }
     }
 
@@ -257,7 +265,7 @@ impl<K, V> OrdMap<K, V> {
     /// ```
     pub fn clear(&mut self) {
         if !self.is_empty() {
-            self.root = Default::default();
+            self.root = PoolRef::default(&self.pool);
             self.size = 0;
         }
     }
@@ -505,8 +513,8 @@ where
         BK: Ord + ?Sized,
         K: Borrow<BK>,
     {
-        let root = Ref::make_mut(&mut self.root);
-        root.lookup_mut(key).map(|(_, v)| v)
+        let root = PoolRef::make_mut(&self.pool, &mut self.root);
+        root.lookup_mut(&self.pool, key).map(|(_, v)| v)
     }
 
     /// Insert a key/value mapping into a map.
@@ -538,17 +546,18 @@ where
     #[inline]
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         let new_root = {
-            let root = Ref::make_mut(&mut self.root);
-            match root.insert((key, value)) {
+            let root = PoolRef::make_mut(&self.pool, &mut self.root);
+            match root.insert(&self.pool, (key, value)) {
                 Insert::Replaced((_, old_value)) => return Some(old_value),
                 Insert::Added => {
                     self.size += 1;
                     return None;
                 }
-                Insert::Update(root) => Ref::from(root),
-                Insert::Split(left, median, right) => {
-                    Ref::from(Node::new_from_split(left, median, right))
-                }
+                Insert::Update(root) => PoolRef::new(&self.pool, root),
+                Insert::Split(left, median, right) => PoolRef::new(
+                    &self.pool,
+                    Node::new_from_split(&self.pool, left, median, right),
+                ),
             }
         };
         self.size += 1;
@@ -591,14 +600,14 @@ where
         K: Borrow<BK>,
     {
         let (new_root, removed_value) = {
-            let root = Ref::make_mut(&mut self.root);
-            match root.remove(k) {
+            let root = PoolRef::make_mut(&self.pool, &mut self.root);
+            match root.remove(&self.pool, k) {
                 Remove::NoChange => return None,
                 Remove::Removed(pair) => {
                     self.size -= 1;
                     return Some(pair);
                 }
-                Remove::Update(pair, root) => (Ref::from(root), Some(pair)),
+                Remove::Update(pair, root) => (PoolRef::new(&self.pool, root), Some(pair)),
             }
         };
         self.size -= 1;
@@ -1434,6 +1443,7 @@ impl<K, V> Clone for OrdMap<K, V> {
     fn clone(&self) -> Self {
         OrdMap {
             size: self.size,
+            pool: self.pool.clone(),
             root: self.root.clone(),
         }
     }
@@ -1468,7 +1478,7 @@ where
     V: Eq,
 {
     fn eq(&self, other: &Self) -> bool {
-        Ref::ptr_eq(&self.root, &other.root)
+        PoolRef::ptr_eq(&self.root, &other.root)
             || (self.len() == other.len() && self.diff(other).next().is_none())
     }
 }
@@ -1590,8 +1600,8 @@ where
     V: Clone,
 {
     fn index_mut(&mut self, key: &BK) -> &mut Self::Output {
-        let root = Ref::make_mut(&mut self.root);
-        match root.lookup_mut(key) {
+        let root = PoolRef::make_mut(&self.pool, &mut self.root);
+        match root.lookup_mut(&self.pool, key) {
             None => panic!("OrdMap::index: invalid key"),
             Some(&mut (_, ref mut value)) => value,
         }

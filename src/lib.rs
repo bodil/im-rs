@@ -364,6 +364,9 @@ pub mod iter;
 #[cfg(any(test, feature = "serde"))]
 pub mod ser;
 
+#[cfg(not(feature = "pool"))]
+mod fakepool;
+
 pub use crate::hashmap::HashMap;
 pub use crate::hashset::HashSet;
 pub use crate::ordmap::OrdMap;

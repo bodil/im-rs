@@ -56,10 +56,10 @@ use sized_chunks::{inline_array::Iter as InlineIter, InlineArray};
 
 use crate::nodes::chunk::{Chunk, Iter as ChunkIter, CHUNK_SIZE};
 use crate::nodes::rrb::{
-    ConsumingIter as ConsumingNodeIter, Node, PopResult, PushResult, SplitResult,
+    ConsumingIter as ConsumingNodeIter, Node, PopResult, PushResult, RRBPool, SplitResult,
 };
 use crate::sort;
-use crate::util::{clone_ref, swap_indices, to_range, Ref, Side};
+use crate::util::{clone_ref, swap_indices, to_range, Pool, PoolDefault, PoolRef, Ref, Side};
 
 use self::Vector::{Full, Inline, Single};
 
@@ -140,22 +140,23 @@ macro_rules! vector {
 /// [VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
 pub enum Vector<A> {
     #[doc(hidden)]
-    Inline(InlineArray<A, RRB<A>>),
+    Inline(RRBPool<A>, InlineArray<A, RRB<A>>),
     #[doc(hidden)]
-    Single(Ref<Chunk<A>>),
+    Single(RRBPool<A>, PoolRef<Chunk<A>>),
     #[doc(hidden)]
-    Full(RRB<A>),
+    Full(RRBPool<A>, RRB<A>),
 }
 
 #[doc(hidden)]
 pub struct RRB<A> {
+    #[cfg(feature = "pool")]
     length: usize,
     middle_level: usize,
-    outer_f: Ref<Chunk<A>>,
-    inner_f: Ref<Chunk<A>>,
+    outer_f: PoolRef<Chunk<A>>,
+    inner_f: PoolRef<Chunk<A>>,
     middle: Ref<Node<A>>,
-    inner_b: Ref<Chunk<A>>,
-    outer_b: Ref<Chunk<A>>,
+    inner_b: PoolRef<Chunk<A>>,
+    outer_b: PoolRef<Chunk<A>>,
 }
 
 impl<A> Clone for RRB<A> {
@@ -173,20 +174,30 @@ impl<A> Clone for RRB<A> {
 }
 
 impl<A: Clone> Vector<A> {
+    #[cfg(feature = "pool")]
+    fn pool(&self) -> &RRBPool<A> {
+        match self {
+            Inline(ref pool, _) => pool,
+            Single(ref pool, _) => pool,
+            Full(ref pool, _) => pool,
+        }
+    }
+
     /// True if a vector is a full inline or single chunk, ie. must be promoted
     /// to grow further.
     fn needs_promotion(&self) -> bool {
         match self {
-            Inline(chunk) if chunk.is_full() => true,
-            Single(chunk) if chunk.is_full() => true,
+            Inline(_, chunk) if chunk.is_full() => true,
+            Single(_, chunk) if chunk.is_full() => true,
             _ => false,
         }
     }
 
     /// Promote an inline to a single.
+    #[cfg(feature = "pool")]
     fn promote_inline(&mut self) {
-        if let Inline(chunk) = self {
-            *self = Single(Ref::new(chunk.into()))
+        if let Inline(pool, chunk) = self {
+            *self = Single(pool.clone(), PoolRef::new(&pool.value_pool, chunk.into()));
         }
     }
 
@@ -194,20 +205,25 @@ impl<A: Clone> Vector<A> {
     /// promote an inline to a single.
     fn promote_front(&mut self) {
         *self = match self {
-            Inline(chunk) => Single(Ref::new(chunk.into())),
-            Single(chunk) => {
-                let chunk = chunk.clone();
-                Full(RRB {
-                    length: chunk.len(),
-                    middle_level: 0,
-                    outer_f: Ref::new(Chunk::new()),
-                    inner_f: chunk,
-                    middle: Ref::new(Node::new()),
-                    inner_b: Ref::new(Chunk::new()),
-                    outer_b: Ref::new(Chunk::new()),
-                })
+            Inline(pool, chunk) => {
+                Single(pool.clone(), PoolRef::new(&pool.value_pool, chunk.into()))
             }
-            Full(_) => return,
+            Single(pool, chunk) => {
+                let chunk = chunk.clone();
+                Full(
+                    pool.clone(),
+                    RRB {
+                        length: chunk.len(),
+                        middle_level: 0,
+                        outer_f: PoolRef::default(&pool.value_pool),
+                        inner_f: chunk,
+                        middle: Ref::new(Node::new()),
+                        inner_b: PoolRef::default(&pool.value_pool),
+                        outer_b: PoolRef::default(&pool.value_pool),
+                    },
+                )
+            }
+            Full(_, _) => return,
         }
     }
 
@@ -215,27 +231,32 @@ impl<A: Clone> Vector<A> {
     /// promote an inline to a single.
     fn promote_back(&mut self) {
         *self = match self {
-            Inline(chunk) => Single(Ref::new(chunk.into())),
-            Single(chunk) => {
-                let chunk = chunk.clone();
-                Full(RRB {
-                    length: chunk.len(),
-                    middle_level: 0,
-                    outer_f: Ref::new(Chunk::new()),
-                    inner_f: Ref::new(Chunk::new()),
-                    middle: Ref::new(Node::new()),
-                    inner_b: chunk,
-                    outer_b: Ref::new(Chunk::new()),
-                })
+            Inline(pool, chunk) => {
+                Single(pool.clone(), PoolRef::new(&pool.value_pool, chunk.into()))
             }
-            Full(_) => return,
+            Single(pool, chunk) => {
+                let chunk = chunk.clone();
+                Full(
+                    pool.clone(),
+                    RRB {
+                        length: chunk.len(),
+                        middle_level: 0,
+                        outer_f: PoolRef::default(&pool.value_pool),
+                        inner_f: PoolRef::default(&pool.value_pool),
+                        middle: Ref::new(Node::new()),
+                        inner_b: chunk,
+                        outer_b: PoolRef::default(&pool.value_pool),
+                    },
+                )
+            }
+            Full(_, _) => return,
         }
     }
 
     /// Construct an empty vector.
     #[must_use]
     pub fn new() -> Self {
-        Inline(InlineArray::new())
+        Inline(RRBPool::new(), InlineArray::new())
     }
 
     /// Get the length of a vector.
@@ -252,9 +273,9 @@ impl<A: Clone> Vector<A> {
     #[must_use]
     pub fn len(&self) -> usize {
         match self {
-            Inline(chunk) => chunk.len(),
-            Single(chunk) => chunk.len(),
-            Full(tree) => tree.length,
+            Inline(_, chunk) => chunk.len(),
+            Single(_, chunk) => chunk.len(),
+            Full(_, tree) => tree.length,
         }
     }
 
@@ -369,9 +390,9 @@ impl<A: Clone> Vector<A> {
         }
 
         match self {
-            Inline(chunk) => chunk.get(index),
-            Single(chunk) => chunk.get(index),
-            Full(tree) => {
+            Inline(_, chunk) => chunk.get(index),
+            Single(_, chunk) => chunk.get(index),
+            Full(_, tree) => {
                 let mut local_index = index;
 
                 if local_index < tree.outer_f.len() {
@@ -426,36 +447,36 @@ impl<A: Clone> Vector<A> {
         }
 
         match self {
-            Inline(chunk) => chunk.get_mut(index),
-            Single(chunk) => Ref::make_mut(chunk).get_mut(index),
-            Full(tree) => {
+            Inline(_, chunk) => chunk.get_mut(index),
+            Single(pool, chunk) => PoolRef::make_mut(&pool.value_pool, chunk).get_mut(index),
+            Full(pool, tree) => {
                 let mut local_index = index;
 
                 if local_index < tree.outer_f.len() {
-                    let outer_f = Ref::make_mut(&mut tree.outer_f);
+                    let outer_f = PoolRef::make_mut(&pool.value_pool, &mut tree.outer_f);
                     return Some(&mut outer_f[local_index]);
                 }
                 local_index -= tree.outer_f.len();
 
                 if local_index < tree.inner_f.len() {
-                    let inner_f = Ref::make_mut(&mut tree.inner_f);
+                    let inner_f = PoolRef::make_mut(&pool.value_pool, &mut tree.inner_f);
                     return Some(&mut inner_f[local_index]);
                 }
                 local_index -= tree.inner_f.len();
 
                 if local_index < tree.middle.len() {
                     let middle = Ref::make_mut(&mut tree.middle);
-                    return Some(middle.index_mut(tree.middle_level, local_index));
+                    return Some(middle.index_mut(pool, tree.middle_level, local_index));
                 }
                 local_index -= tree.middle.len();
 
                 if local_index < tree.inner_b.len() {
-                    let inner_b = Ref::make_mut(&mut tree.inner_b);
+                    let inner_b = PoolRef::make_mut(&pool.value_pool, &mut tree.inner_b);
                     return Some(&mut inner_b[local_index]);
                 }
                 local_index -= tree.inner_b.len();
 
-                let outer_b = Ref::make_mut(&mut tree.outer_b);
+                let outer_b = PoolRef::make_mut(&pool.value_pool, &mut tree.outer_b);
                 Some(&mut outer_b[local_index])
             }
         }
@@ -606,7 +627,7 @@ impl<A: Clone> Vector<A> {
     /// Time: O(n)
     pub fn clear(&mut self) {
         if !self.is_empty() {
-            *self = Single(Ref::new(Chunk::new()));
+            *self = Inline(self.pool().clone(), InlineArray::new());
         }
     }
 
@@ -705,12 +726,14 @@ impl<A: Clone> Vector<A> {
     #[inline]
     #[must_use]
     pub fn unit(a: A) -> Self {
+        let pool = RRBPool::new();
         if InlineArray::<A, RRB<A>>::CAPACITY > 0 {
             let mut array = InlineArray::new();
             array.push(a);
-            Inline(array)
+            Inline(pool, array)
         } else {
-            Single(Ref::new(Chunk::unit(a)))
+            let chunk = PoolRef::new(&pool.value_pool, Chunk::unit(a));
+            Single(pool, chunk)
         }
     }
 
@@ -772,11 +795,11 @@ impl<A: Clone> Vector<A> {
             self.promote_back();
         }
         match self {
-            Inline(chunk) => {
+            Inline(_, chunk) => {
                 chunk.insert(0, value);
             }
-            Single(chunk) => Ref::make_mut(chunk).push_front(value),
-            Full(tree) => tree.push_front(value),
+            Single(pool, chunk) => PoolRef::make_mut(&pool.value_pool, chunk).push_front(value),
+            Full(pool, tree) => tree.push_front(pool, value),
         }
     }
 
@@ -798,11 +821,11 @@ impl<A: Clone> Vector<A> {
             self.promote_front();
         }
         match self {
-            Inline(chunk) => {
+            Inline(_, chunk) => {
                 chunk.push(value);
             }
-            Single(chunk) => Ref::make_mut(chunk).push_back(value),
-            Full(tree) => tree.push_back(value),
+            Single(pool, chunk) => PoolRef::make_mut(&pool.value_pool, chunk).push_back(value),
+            Full(pool, tree) => tree.push_back(pool, value),
         }
     }
 
@@ -824,9 +847,9 @@ impl<A: Clone> Vector<A> {
             None
         } else {
             match self {
-                Inline(chunk) => chunk.remove(0),
-                Single(chunk) => Some(Ref::make_mut(chunk).pop_front()),
-                Full(tree) => tree.pop_front(),
+                Inline(_, chunk) => chunk.remove(0),
+                Single(pool, chunk) => Some(PoolRef::make_mut(&pool.value_pool, chunk).pop_front()),
+                Full(pool, tree) => tree.pop_front(pool),
             }
         }
     }
@@ -849,9 +872,9 @@ impl<A: Clone> Vector<A> {
             None
         } else {
             match self {
-                Inline(chunk) => chunk.pop(),
-                Single(chunk) => Some(Ref::make_mut(chunk).pop_back()),
-                Full(tree) => tree.pop_back(),
+                Inline(_, chunk) => chunk.pop(),
+                Single(pool, chunk) => Some(PoolRef::make_mut(&pool.value_pool, chunk).pop_back()),
+                Full(pool, tree) => tree.pop_back(pool),
             }
         }
     }
@@ -888,29 +911,30 @@ impl<A: Clone> Vector<A> {
             .expect("Vector length overflow");
 
         match self {
-            Inline(_) => unreachable!("inline vecs should have been promoted"),
-            Single(left) => {
+            Inline(_, _) => unreachable!("inline vecs should have been promoted"),
+            Single(pool, left) => {
                 match other {
-                    Inline(_) => unreachable!("inline vecs should have been promoted"),
+                    Inline(_, _) => unreachable!("inline vecs should have been promoted"),
                     // If both are single chunks and left has room for right: directly
                     // memcpy right into left
-                    Single(ref mut right) if total_length <= CHUNK_SIZE => {
-                        Ref::make_mut(left).append(Ref::make_mut(right));
+                    Single(_, ref mut right) if total_length <= CHUNK_SIZE => {
+                        PoolRef::make_mut(&pool.value_pool, left)
+                            .append(PoolRef::make_mut(&pool.value_pool, right));
                         return;
                     }
                     // If only left is a single chunk and has room for right: push
                     // right's elements into left
                     ref mut right if total_length <= CHUNK_SIZE => {
                         while let Some(value) = right.pop_front() {
-                            Ref::make_mut(left).push_back(value);
+                            PoolRef::make_mut(&pool.value_pool, left).push_back(value);
                         }
                         return;
                     }
                     _ => {}
                 }
             }
-            Full(left) => {
-                if let Full(mut right) = other {
+            Full(pool, left) => {
+                if let Full(_, mut right) = other {
                     // If left and right are trees with empty middles, left has no back
                     // buffers, and right has no front buffers: copy right's back
                     // buffers over to left
@@ -932,39 +956,35 @@ impl<A: Clone> Vector<A> {
                         && right.middle.is_empty()
                         && total_length <= CHUNK_SIZE * 4
                     {
-                        while let Some(value) = right.pop_front() {
-                            left.push_back(value);
+                        while let Some(value) = right.pop_front(pool) {
+                            left.push_back(pool, value);
                         }
                         return;
                     }
                     // Both are full and big: do the full RRB join
                     let inner_b1 = left.inner_b.clone();
-                    left.push_middle(Side::Right, inner_b1);
+                    left.push_middle(pool, Side::Right, inner_b1);
                     let outer_b1 = left.outer_b.clone();
-                    left.push_middle(Side::Right, outer_b1);
+                    left.push_middle(pool, Side::Right, outer_b1);
                     let inner_f2 = right.inner_f.clone();
-                    right.push_middle(Side::Left, inner_f2);
+                    right.push_middle(pool, Side::Left, inner_f2);
                     let outer_f2 = right.outer_f.clone();
-                    right.push_middle(Side::Left, outer_f2);
+                    right.push_middle(pool, Side::Left, outer_f2);
 
                     let mut middle1 = clone_ref(replace(&mut left.middle, Ref::from(Node::new())));
                     let mut middle2 = clone_ref(right.middle);
                     let normalised_middle = match left.middle_level.cmp(&right.middle_level) {
                         Ordering::Greater => {
-                            middle2 = middle2.elevate(left.middle_level - right.middle_level);
+                            middle2 = middle2.elevate(pool, left.middle_level - right.middle_level);
                             left.middle_level
                         }
                         Ordering::Less => {
-                            middle1 = middle1.elevate(right.middle_level - left.middle_level);
+                            middle1 = middle1.elevate(pool, right.middle_level - left.middle_level);
                             right.middle_level
                         }
                         Ordering::Equal => left.middle_level,
                     };
-                    left.middle = Ref::new(Node::merge(
-                        Ref::from(middle1),
-                        Ref::from(middle2),
-                        normalised_middle,
-                    ));
+                    left.middle = Ref::new(Node::merge(pool, middle1, middle2, normalised_middle));
                     left.middle_level = normalised_middle + 1;
 
                     left.inner_b = right.inner_b;
@@ -1054,44 +1074,52 @@ impl<A: Clone> Vector<A> {
         assert!(index <= self.len());
 
         match self {
-            Inline(chunk) => Inline(chunk.split_off(index)),
-            Single(chunk) => Single(Ref::new(Ref::make_mut(chunk).split_off(index))),
-            Full(tree) => {
+            Inline(pool, chunk) => Inline(pool.clone(), chunk.split_off(index)),
+            Single(pool, chunk) => Single(
+                pool.clone(),
+                PoolRef::new(
+                    &pool.value_pool,
+                    PoolRef::make_mut(&pool.value_pool, chunk).split_off(index),
+                ),
+            ),
+            Full(pool, tree) => {
                 let mut local_index = index;
 
                 if local_index < tree.outer_f.len() {
-                    let of2 = Ref::make_mut(&mut tree.outer_f).split_off(local_index);
+                    let of2 = PoolRef::make_mut(&pool.value_pool, &mut tree.outer_f)
+                        .split_off(local_index);
                     let right = RRB {
                         length: tree.length - index,
                         middle_level: tree.middle_level,
-                        outer_f: Ref::new(of2),
-                        inner_f: replace_def(&mut tree.inner_f),
+                        outer_f: PoolRef::new(&pool.value_pool, of2),
+                        inner_f: replace_pool_def(&pool.value_pool, &mut tree.inner_f),
                         middle: replace_def(&mut tree.middle),
-                        inner_b: replace_def(&mut tree.inner_b),
-                        outer_b: replace_def(&mut tree.outer_b),
+                        inner_b: replace_pool_def(&pool.value_pool, &mut tree.inner_b),
+                        outer_b: replace_pool_def(&pool.value_pool, &mut tree.outer_b),
                     };
                     tree.length = index;
                     tree.middle_level = 0;
-                    return Full(right);
+                    return Full(pool.clone(), right);
                 }
 
                 local_index -= tree.outer_f.len();
 
                 if local_index < tree.inner_f.len() {
-                    let if2 = Ref::make_mut(&mut tree.inner_f).split_off(local_index);
+                    let if2 = PoolRef::make_mut(&pool.value_pool, &mut tree.inner_f)
+                        .split_off(local_index);
                     let right = RRB {
                         length: tree.length - index,
                         middle_level: tree.middle_level,
-                        outer_f: Ref::new(if2),
-                        inner_f: Ref::<Chunk<A>>::default(),
+                        outer_f: PoolRef::new(&pool.value_pool, if2),
+                        inner_f: PoolRef::<Chunk<A>>::default(&pool.value_pool),
                         middle: replace_def(&mut tree.middle),
-                        inner_b: replace_def(&mut tree.inner_b),
-                        outer_b: replace_def(&mut tree.outer_b),
+                        inner_b: replace_pool_def(&pool.value_pool, &mut tree.inner_b),
+                        outer_b: replace_pool_def(&pool.value_pool, &mut tree.outer_b),
                     };
                     tree.length = index;
                     tree.middle_level = 0;
                     swap(&mut tree.outer_b, &mut tree.inner_f);
-                    return Full(right);
+                    return Full(pool.clone(), right);
                 }
 
                 local_index -= tree.inner_f.len();
@@ -1101,24 +1129,24 @@ impl<A: Clone> Vector<A> {
                     let (c1, c2) = {
                         let m1 = Ref::make_mut(&mut tree.middle);
                         let m2 = Ref::make_mut(&mut right_middle);
-                        match m1.split(tree.middle_level, Side::Right, local_index) {
+                        match m1.split(pool, tree.middle_level, Side::Right, local_index) {
                             SplitResult::Dropped(_) => (),
                             SplitResult::OutOfBounds => unreachable!(),
                         };
-                        match m2.split(tree.middle_level, Side::Left, local_index) {
+                        match m2.split(pool, tree.middle_level, Side::Left, local_index) {
                             SplitResult::Dropped(_) => (),
                             SplitResult::OutOfBounds => unreachable!(),
                         };
-                        let c1 = match m1.pop_chunk(tree.middle_level, Side::Right) {
-                            PopResult::Empty => Ref::<Chunk<A>>::default(),
+                        let c1 = match m1.pop_chunk(pool, tree.middle_level, Side::Right) {
+                            PopResult::Empty => PoolRef::default(&pool.value_pool),
                             PopResult::Done(chunk) => chunk,
                             PopResult::Drained(chunk) => {
                                 m1.clear_node();
                                 chunk
                             }
                         };
-                        let c2 = match m2.pop_chunk(tree.middle_level, Side::Left) {
-                            PopResult::Empty => Ref::<Chunk<A>>::default(),
+                        let c2 = match m2.pop_chunk(pool, tree.middle_level, Side::Left) {
+                            PopResult::Empty => PoolRef::default(&pool.value_pool),
                             PopResult::Done(chunk) => chunk,
                             PopResult::Drained(chunk) => {
                                 m2.clear_node();
@@ -1131,37 +1159,39 @@ impl<A: Clone> Vector<A> {
                         length: tree.length - index,
                         middle_level: tree.middle_level,
                         outer_f: c2,
-                        inner_f: Ref::<Chunk<A>>::default(),
+                        inner_f: PoolRef::<Chunk<A>>::default(&pool.value_pool),
                         middle: right_middle,
-                        inner_b: replace_def(&mut tree.inner_b),
+                        inner_b: replace_pool_def(&pool.value_pool, &mut tree.inner_b),
                         outer_b: replace(&mut tree.outer_b, c1),
                     };
                     tree.length = index;
                     tree.prune();
                     right.prune();
-                    return Full(right);
+                    return Full(pool.clone(), right);
                 }
 
                 local_index -= tree.middle.len();
 
                 if local_index < tree.inner_b.len() {
-                    let ib2 = Ref::make_mut(&mut tree.inner_b).split_off(local_index);
+                    let ib2 = PoolRef::make_mut(&pool.value_pool, &mut tree.inner_b)
+                        .split_off(local_index);
                     let right = RRB {
                         length: tree.length - index,
-                        outer_b: replace_def(&mut tree.outer_b),
-                        outer_f: Ref::new(ib2),
-                        ..RRB::new()
+                        outer_b: replace_pool_def(&pool.value_pool, &mut tree.outer_b),
+                        outer_f: PoolRef::new(&pool.value_pool, ib2),
+                        ..RRB::new(pool)
                     };
                     tree.length = index;
                     swap(&mut tree.outer_b, &mut tree.inner_b);
-                    return Full(right);
+                    return Full(pool.clone(), right);
                 }
 
                 local_index -= tree.inner_b.len();
 
-                let ob2 = Ref::make_mut(&mut tree.outer_b).split_off(local_index);
+                let ob2 =
+                    PoolRef::make_mut(&pool.value_pool, &mut tree.outer_b).split_off(local_index);
                 tree.length = index;
-                Single(Ref::new(ob2))
+                Single(pool.clone(), PoolRef::new(&pool.value_pool, ob2))
             }
         }
     }
@@ -1246,7 +1276,7 @@ impl<A: Clone> Vector<A> {
             return self.push_back(value);
         }
         assert!(index < self.len());
-        if if let Inline(chunk) = self {
+        if if let Inline(_, chunk) = self {
             chunk.is_full()
         } else {
             false
@@ -1254,10 +1284,12 @@ impl<A: Clone> Vector<A> {
             self.promote_inline();
         }
         match self {
-            Inline(chunk) => {
+            Inline(_, chunk) => {
                 chunk.insert(index, value);
             }
-            Single(chunk) if chunk.len() < CHUNK_SIZE => Ref::make_mut(chunk).insert(index, value),
+            Single(pool, chunk) if chunk.len() < CHUNK_SIZE => {
+                PoolRef::make_mut(&pool.value_pool, chunk).insert(index, value)
+            }
             // TODO a lot of optimisations still possible here
             _ => {
                 let right = self.split_off(index);
@@ -1286,8 +1318,8 @@ impl<A: Clone> Vector<A> {
     pub fn remove(&mut self, index: usize) -> A {
         assert!(index < self.len());
         match self {
-            Inline(chunk) => chunk.remove(index).unwrap(),
-            Single(chunk) => Ref::make_mut(chunk).remove(index),
+            Inline(_, chunk) => chunk.remove(index).unwrap(),
+            Single(pool, chunk) => PoolRef::make_mut(&pool.value_pool, chunk).remove(index),
             _ => {
                 if index == 0 {
                     return self.pop_front().unwrap();
@@ -1375,7 +1407,7 @@ impl<A: Clone> Vector<A> {
 
     #[allow(dead_code)]
     pub(crate) fn assert_invariants(&self) {
-        if let Vector::Full(ref tree) = self {
+        if let Vector::Full(_, ref tree) = self {
             tree.assert_invariants();
         }
     }
@@ -1386,15 +1418,16 @@ impl<A: Clone> Vector<A> {
 impl<A: Clone> RRB<A> {
     fn into_iter(
         self,
+        pool: RRBPool<A>,
     ) -> Chain<
         Chain<Chain<Chain<ChunkIter<A>, ChunkIter<A>>, ConsumingNodeIter<A>>, ChunkIter<A>>,
         ChunkIter<A>,
     > {
-        let outer_f = clone_ref(self.outer_f).into_iter();
-        let inner_f = clone_ref(self.inner_f).into_iter();
-        let middle = ConsumingNodeIter::new(clone_ref(self.middle), self.middle_level);
-        let inner_b = clone_ref(self.inner_b).into_iter();
-        let outer_b = clone_ref(self.outer_b).into_iter();
+        let outer_f = PoolRef::unwrap_or_clone(self.outer_f).into_iter();
+        let inner_f = PoolRef::unwrap_or_clone(self.inner_f).into_iter();
+        let middle = ConsumingNodeIter::new(pool, clone_ref(self.middle), self.middle_level);
+        let inner_b = PoolRef::unwrap_or_clone(self.inner_b).into_iter();
+        let outer_b = PoolRef::unwrap_or_clone(self.outer_b).into_iter();
         outer_f
             .chain(inner_f)
             .chain(middle)
@@ -1402,15 +1435,15 @@ impl<A: Clone> RRB<A> {
             .chain(outer_b)
     }
 
-    fn new() -> Self {
+    fn new(pool: &RRBPool<A>) -> Self {
         RRB {
             length: 0,
             middle_level: 0,
-            outer_f: Ref::new(Chunk::new()),
-            inner_f: Ref::new(Chunk::new()),
+            outer_f: PoolRef::default(&pool.value_pool),
+            inner_f: PoolRef::default(&pool.value_pool),
             middle: Ref::new(Node::new()),
-            inner_b: Ref::new(Chunk::new()),
-            outer_b: Ref::new(Chunk::new()),
+            inner_b: PoolRef::default(&pool.value_pool),
+            outer_b: PoolRef::default(&pool.value_pool),
         }
     }
 
@@ -1428,13 +1461,14 @@ impl<A: Clone> RRB<A> {
             self.middle_level = 0;
         } else {
             while self.middle_level > 0 && self.middle.is_single() {
-                self.middle = self.middle.first_child().clone();
+                // FIXME could be optimised, cloning the node is expensive
+                self.middle = Ref::new(self.middle.first_child().clone());
                 self.middle_level -= 1;
             }
         }
     }
 
-    fn pop_front(&mut self) -> Option<A> {
+    fn pop_front(&mut self, pool: &RRBPool<A>) -> Option<A> {
         if self.length == 0 {
             return None;
         }
@@ -1447,18 +1481,18 @@ impl<A: Clone> RRB<A> {
                         swap(&mut self.outer_f, &mut self.inner_b);
                     }
                 } else {
-                    self.outer_f = self.pop_middle(Side::Left).unwrap();
+                    self.outer_f = self.pop_middle(pool, Side::Left).unwrap();
                 }
             } else {
                 swap(&mut self.outer_f, &mut self.inner_f);
             }
         }
         self.length -= 1;
-        let outer_f = Ref::make_mut(&mut self.outer_f);
+        let outer_f = PoolRef::make_mut(&pool.value_pool, &mut self.outer_f);
         Some(outer_f.pop_front())
     }
 
-    fn pop_back(&mut self) -> Option<A> {
+    fn pop_back(&mut self, pool: &RRBPool<A>) -> Option<A> {
         if self.length == 0 {
             return None;
         }
@@ -1471,59 +1505,60 @@ impl<A: Clone> RRB<A> {
                         swap(&mut self.outer_b, &mut self.inner_f);
                     }
                 } else {
-                    self.outer_b = self.pop_middle(Side::Right).unwrap();
+                    self.outer_b = self.pop_middle(pool, Side::Right).unwrap();
                 }
             } else {
                 swap(&mut self.outer_b, &mut self.inner_b);
             }
         }
         self.length -= 1;
-        let outer_b = Ref::make_mut(&mut self.outer_b);
+        let outer_b = PoolRef::make_mut(&pool.value_pool, &mut self.outer_b);
         Some(outer_b.pop_back())
     }
 
-    fn push_front(&mut self, value: A) {
+    fn push_front(&mut self, pool: &RRBPool<A>, value: A) {
         if self.outer_f.is_full() {
             swap(&mut self.outer_f, &mut self.inner_f);
             if !self.outer_f.is_empty() {
-                let mut chunk = Ref::new(Chunk::new());
+                let mut chunk = PoolRef::new(&pool.value_pool, Chunk::new());
                 swap(&mut chunk, &mut self.outer_f);
-                self.push_middle(Side::Left, chunk);
+                self.push_middle(pool, Side::Left, chunk);
             }
         }
         self.length = self.length.checked_add(1).expect("Vector length overflow");
-        let outer_f = Ref::make_mut(&mut self.outer_f);
+        let outer_f = PoolRef::make_mut(&pool.value_pool, &mut self.outer_f);
         outer_f.push_front(value)
     }
 
-    fn push_back(&mut self, value: A) {
+    fn push_back(&mut self, pool: &RRBPool<A>, value: A) {
         if self.outer_b.is_full() {
             swap(&mut self.outer_b, &mut self.inner_b);
             if !self.outer_b.is_empty() {
-                let mut chunk = Ref::new(Chunk::new());
+                let mut chunk = PoolRef::new(&pool.value_pool, Chunk::new());
                 swap(&mut chunk, &mut self.outer_b);
-                self.push_middle(Side::Right, chunk);
+                self.push_middle(pool, Side::Right, chunk);
             }
         }
         self.length = self.length.checked_add(1).expect("Vector length overflow");
-        let outer_b = Ref::make_mut(&mut self.outer_b);
+        let outer_b = PoolRef::make_mut(&pool.value_pool, &mut self.outer_b);
         outer_b.push_back(value)
     }
 
-    fn push_middle(&mut self, side: Side, chunk: Ref<Chunk<A>>) {
+    fn push_middle(&mut self, pool: &RRBPool<A>, side: Side, chunk: PoolRef<Chunk<A>>) {
         if chunk.is_empty() {
             return;
         }
         let new_middle = {
             let middle = Ref::make_mut(&mut self.middle);
-            match middle.push_chunk(self.middle_level, side, chunk) {
+            match middle.push_chunk(pool, self.middle_level, side, chunk) {
                 PushResult::Done => return,
                 PushResult::Full(chunk, _num_drained) => Ref::from({
                     match side {
-                        Side::Left => Node::from_chunk(self.middle_level, chunk)
-                            .join_branches(middle.clone(), self.middle_level),
+                        Side::Left => Node::from_chunk(pool, self.middle_level, chunk)
+                            .join_branches(pool, middle.clone(), self.middle_level),
                         Side::Right => middle.clone().join_branches(
-                            Node::from_chunk(self.middle_level, chunk),
+                            pool,
+                            Node::from_chunk(pool, self.middle_level, chunk),
                             self.middle_level,
                         ),
                     }
@@ -1534,10 +1569,10 @@ impl<A: Clone> RRB<A> {
         self.middle = new_middle;
     }
 
-    fn pop_middle(&mut self, side: Side) -> Option<Ref<Chunk<A>>> {
+    fn pop_middle(&mut self, pool: &RRBPool<A>, side: Side) -> Option<PoolRef<Chunk<A>>> {
         let chunk = {
             let middle = Ref::make_mut(&mut self.middle);
-            match middle.pop_chunk(self.middle_level, side) {
+            match middle.pop_chunk(pool, self.middle_level, side) {
                 PopResult::Empty => return None,
                 PopResult::Done(chunk) => chunk,
                 PopResult::Drained(chunk) => {
@@ -1556,6 +1591,11 @@ fn replace_def<A: Default>(dest: &mut A) -> A {
     replace(dest, Default::default())
 }
 
+#[inline]
+fn replace_pool_def<A: PoolDefault>(pool: &Pool<A>, dest: &mut PoolRef<A>) -> PoolRef<A> {
+    replace(dest, PoolRef::default(pool))
+}
+
 // Core traits
 
 impl<A: Clone> Default for Vector<A> {
@@ -1567,9 +1607,9 @@ impl<A: Clone> Default for Vector<A> {
 impl<A: Clone> Clone for Vector<A> {
     fn clone(&self) -> Self {
         match self {
-            Inline(chunk) => Inline(chunk.clone()),
-            Single(chunk) => Single(chunk.clone()),
-            Full(tree) => Full(tree.clone()),
+            Inline(pool, chunk) => Inline(pool.clone(), chunk.clone()),
+            Single(pool, chunk) => Single(pool.clone(), chunk.clone()),
+            Full(pool, tree) => Full(pool.clone(), tree.clone()),
         }
     }
 }
@@ -1606,13 +1646,13 @@ impl<A: Clone + PartialEq> PartialEq for Vector<A> {
 impl<A: Clone + Eq> PartialEq for Vector<A> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Full(left), Full(right)) => {
+            (Full(_, left), Full(_, right)) => {
                 if left.length != right.length {
                     return false;
                 }
 
-                fn cmp_chunk<A>(left: &Ref<Chunk<A>>, right: &Ref<Chunk<A>>) -> bool {
-                    (left.is_empty() && right.is_empty()) || Ref::ptr_eq(left, right)
+                fn cmp_chunk<A>(left: &PoolRef<Chunk<A>>, right: &PoolRef<Chunk<A>>) -> bool {
+                    (left.is_empty() && right.is_empty()) || PoolRef::ptr_eq(left, right)
                 }
 
                 if cmp_chunk(&left.outer_f, &right.outer_f)
@@ -1976,9 +2016,9 @@ pub enum ConsumingIter<A> {
 impl<A: Clone> ConsumingIter<A> {
     fn new(seq: Vector<A>) -> Self {
         match seq {
-            Inline(chunk) => ConsumingIter::Inline(chunk.into_iter()),
-            Single(chunk) => ConsumingIter::Single(clone_ref(chunk).into_iter()),
-            Full(tree) => ConsumingIter::Full(tree.into_iter()),
+            Inline(_, chunk) => ConsumingIter::Inline(chunk.into_iter()),
+            Single(_, chunk) => ConsumingIter::Single(PoolRef::unwrap_or_clone(chunk).into_iter()),
+            Full(pool, tree) => ConsumingIter::Full(tree.into_iter(pool)),
         }
     }
 }
@@ -2499,7 +2539,7 @@ mod test {
         // respectively. Previously the next `push_back()` would append another
         // zero-sized chunk to middle even though there is enough space left.
         match x {
-            Vector::Full(ref tree) => {
+            Vector::Full(_, ref tree) => {
                 assert_eq!(129, tree.middle.len());
                 assert_eq!(3, tree.middle.number_of_children());
             }
@@ -2507,7 +2547,7 @@ mod test {
         }
         x.push_back(0);
         match x {
-            Vector::Full(ref tree) => {
+            Vector::Full(_, ref tree) => {
                 assert_eq!(131, tree.middle.len());
                 assert_eq!(3, tree.middle.number_of_children())
             }
@@ -2560,7 +2600,7 @@ mod test {
         // remaining 63 elements will end up in a new node.
         x.push_back(0u32);
         match x {
-            Vector::Full(tree) => {
+            Vector::Full(_, tree) => {
                 assert_eq!(3, tree.middle.number_of_children());
                 assert_eq!(
                     2 * NODE_SIZE * CHUNK_SIZE + CHUNK_SIZE - 1,
@@ -2622,6 +2662,12 @@ mod test {
             assert_eq!(vec.len(), control.len());
             assert_eq!(control, vec.iter().cloned().collect::<Vec<_>>());
         }
+    }
+
+    #[test]
+    fn collect_crash() {
+        let _vector: Vector<i32> = (0..5953).collect();
+        // let _vector: Vector<i32> = (0..16384).collect();
     }
 
     proptest! {

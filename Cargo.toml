@@ -23,16 +23,21 @@ circle-ci = { repository = "bodil/im-rs" }
 [build-dependencies]
 version_check = "0.9"
 
+[features]
+default = ["pool"]
+pool = ["refpool", "refpool/sync", "sized-chunks/refpool"]
+
 [dependencies]
 typenum = "1.10"
 bitmaps = "2.0.0"
-sized-chunks = "0.5.0"
+sized-chunks = { path = "../sized-chunks" }
 rand_core = "0.5.1"
 rand_xoshiro = "0.4.0"
 quickcheck = { version = "0.9", optional = true }
 proptest = { version = "0.9", optional = true }
 serde = { version = "1.0", optional = true }
 rayon = { version = "1.0", optional = true }
+refpool = { version = "0.2.1", optional = true }
 
 [dev-dependencies]
 proptest = "0.9"
