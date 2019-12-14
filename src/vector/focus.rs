@@ -8,10 +8,9 @@ use std::ptr::null;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use crate::nodes::chunk::Chunk;
-use crate::nodes::rrb::RRBPool;
 use crate::sync::Lock;
 use crate::util::{to_range, PoolRef, Ref};
-use crate::vector::{Iter, IterMut, Vector, RRB};
+use crate::vector::{Iter, IterMut, RRBPool, Vector, RRB};
 
 /// Focused indexing over a [`Vector`][Vector].
 ///

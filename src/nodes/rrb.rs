@@ -6,48 +6,16 @@ use std::iter::FusedIterator;
 use std::mem::replace;
 use std::ops::Range;
 
-use crate::config::POOL_SIZE;
 use crate::nodes::chunk::{Chunk, CHUNK_SIZE};
 use crate::util::{
     Pool, PoolRef,
     Side::{self, Left, Right},
 };
+use crate::vector::RRBPool;
 
 use self::Entry::*;
 
 pub const NODE_SIZE: usize = CHUNK_SIZE;
-
-pub struct RRBPool<A> {
-    pub node_pool: Pool<Chunk<Node<A>>>,
-    pub value_pool: Pool<Chunk<A>>,
-    pub size_pool: Pool<Chunk<usize>>,
-}
-
-impl<A> RRBPool<A> {
-    pub fn new() -> Self {
-        Self {
-            node_pool: Pool::new(POOL_SIZE),
-            value_pool: Pool::new(POOL_SIZE),
-            size_pool: Pool::new(POOL_SIZE),
-        }
-    }
-}
-
-impl<A> Default for RRBPool<A> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<A> Clone for RRBPool<A> {
-    fn clone(&self) -> Self {
-        Self {
-            node_pool: self.node_pool.clone(),
-            value_pool: self.value_pool.clone(),
-            size_pool: self.size_pool.clone(),
-        }
-    }
-}
 
 #[derive(Debug)]
 enum Size {

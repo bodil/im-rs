@@ -25,7 +25,6 @@ use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::{FromIterator, IntoIterator, Sum};
 use std::ops::{Add, Deref, Mul, RangeBounds};
 
-use crate::config::POOL_SIZE;
 use crate::hashset::HashSet;
 use crate::nodes::btree::{
     BTreeValue, ConsumingIter as ConsumingNodeIter, DiffIter as NodeDiffIter, Insert,
@@ -157,6 +156,8 @@ impl<A: Ord + Copy> BTreeValue for Value<A> {
     }
 }
 
+def_pool!(OrdSetPool<A>, Node<Value<A>>);
+
 /// An ordered set.
 ///
 /// An immutable ordered set implemented as a [B-tree] [1].
@@ -173,7 +174,7 @@ impl<A: Ord + Copy> BTreeValue for Value<A> {
 /// [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 pub struct OrdSet<A> {
     size: usize,
-    pool: Pool<Node<Value<A>>>,
+    pool: OrdSetPool<A>,
     root: PoolRef<Node<Value<A>>>,
 }
 
@@ -181,11 +182,23 @@ impl<A> OrdSet<A> {
     /// Construct an empty set.
     #[must_use]
     pub fn new() -> Self {
-        let pool = Pool::new(POOL_SIZE);
-        let root = PoolRef::default(&pool);
+        let pool = OrdSetPool::default();
+        let root = PoolRef::default(&pool.0);
         OrdSet {
             size: 0,
             pool,
+            root,
+        }
+    }
+
+    /// Construct an empty set using a specific memory pool.
+    #[cfg(feature = "pool")]
+    #[must_use]
+    pub fn with_pool(pool: &OrdSetPool<A>) -> Self {
+        let root = PoolRef::default(&pool.0);
+        OrdSet {
+            size: 0,
+            pool: pool.clone(),
             root,
         }
     }
@@ -203,8 +216,8 @@ impl<A> OrdSet<A> {
     #[inline]
     #[must_use]
     pub fn unit(a: A) -> Self {
-        let pool = Pool::new(POOL_SIZE);
-        let root = PoolRef::new(&pool, Node::unit(Value(a)));
+        let pool = OrdSetPool::default();
+        let root = PoolRef::new(&pool.0, Node::unit(Value(a)));
         OrdSet {
             size: 1,
             pool,
@@ -251,6 +264,12 @@ impl<A> OrdSet<A> {
         self.size
     }
 
+    /// Get a reference to the memory pool used by this set.
+    #[cfg(feature = "pool")]
+    pub fn pool(&self) -> &OrdSetPool<A> {
+        &self.pool
+    }
+
     /// Discard all elements from the set.
     ///
     /// This leaves you with an empty set, and all elements that
@@ -269,7 +288,7 @@ impl<A> OrdSet<A> {
     /// ```
     pub fn clear(&mut self) {
         if !self.is_empty() {
-            self.root = PoolRef::default(&self.pool);
+            self.root = PoolRef::default(&self.pool.0);
             self.size = 0;
         }
     }
@@ -415,17 +434,17 @@ where
     #[inline]
     pub fn insert(&mut self, a: A) -> Option<A> {
         let new_root = {
-            let root = PoolRef::make_mut(&self.pool, &mut self.root);
-            match root.insert(&self.pool, Value(a)) {
+            let root = PoolRef::make_mut(&self.pool.0, &mut self.root);
+            match root.insert(&self.pool.0, Value(a)) {
                 Insert::Replaced(Value(old_value)) => return Some(old_value),
                 Insert::Added => {
                     self.size += 1;
                     return None;
                 }
-                Insert::Update(root) => PoolRef::new(&self.pool, root),
+                Insert::Update(root) => PoolRef::new(&self.pool.0, root),
                 Insert::Split(left, median, right) => PoolRef::new(
-                    &self.pool,
-                    Node::new_from_split(&self.pool, left, median, right),
+                    &self.pool.0,
+                    Node::new_from_split(&self.pool.0, left, median, right),
                 ),
             }
         };
@@ -444,9 +463,9 @@ where
         A: Borrow<BA>,
     {
         let (new_root, removed_value) = {
-            let root = PoolRef::make_mut(&self.pool, &mut self.root);
-            match root.remove(&self.pool, a) {
-                Remove::Update(value, root) => (PoolRef::new(&self.pool, root), Some(value.0)),
+            let root = PoolRef::make_mut(&self.pool.0, &mut self.root);
+            match root.remove(&self.pool.0, a) {
+                Remove::Update(value, root) => (PoolRef::new(&self.pool.0, root), Some(value.0)),
                 Remove::Removed(value) => {
                     self.size -= 1;
                     return Some(value.0);

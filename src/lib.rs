@@ -344,6 +344,8 @@ mod config;
 mod nodes;
 mod sort;
 mod sync;
+
+#[macro_use]
 mod util;
 
 #[macro_use]

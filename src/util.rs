@@ -110,3 +110,39 @@ where
     };
     start_index..end_index
 }
+
+macro_rules! def_pool {
+    ($name:ident<$($arg:tt),*>, $pooltype:ty) => {
+        /// A memory pool for the appropriate node type.
+        pub struct $name<$($arg,)*>(Pool<$pooltype>);
+
+        impl<$($arg,)*> $name<$($arg,)*> {
+            /// Create a new pool with the given size.
+            pub fn new(size: usize) -> Self {
+                Self(Pool::new(size))
+            }
+
+            /// Fill the pool with preallocated chunks.
+            pub fn fill(&self) {
+                self.0.fill();
+            }
+
+            ///Get the current size of the pool.
+            pub fn pool_size(&self) -> usize {
+                self.0.get_pool_size()
+            }
+        }
+
+        impl<$($arg,)*> Default for $name<$($arg,)*> {
+            fn default() -> Self {
+                Self::new($crate::config::POOL_SIZE)
+            }
+        }
+
+        impl<$($arg,)*> Clone for $name<$($arg,)*> {
+            fn clone(&self) -> Self {
+                Self(self.0.clone())
+            }
+        }
+    };
+}
