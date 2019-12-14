@@ -56,7 +56,7 @@ use sized_chunks::{inline_array::Iter as InlineIter, InlineArray};
 
 use crate::nodes::chunk::{Chunk, Iter as ChunkIter, CHUNK_SIZE};
 use crate::nodes::rrb::{
-    ConsumingIter as ConsumingNodeIter, Node, PopResult, PushResult, RRBPool, SplitResult,
+    ConsumingIter as ConsumingNodeIter, Node, PopResult, PushResult, SplitResult,
 };
 use crate::sort;
 use crate::util::{clone_ref, swap_indices, to_range, Pool, PoolDefault, PoolRef, Ref, Side};
@@ -66,6 +66,9 @@ use self::Vector::{Full, Inline, Single};
 mod focus;
 
 pub use self::focus::{Focus, FocusMut};
+
+mod pool;
+pub use self::pool::RRBPool;
 
 /// Construct a vector from a sequence of elements.
 ///
@@ -174,8 +177,9 @@ impl<A> Clone for RRB<A> {
 }
 
 impl<A: Clone> Vector<A> {
+    /// Get a reference to the memory pool this `Vector` is using.
     #[cfg(feature = "pool")]
-    fn pool(&self) -> &RRBPool<A> {
+    pub fn pool(&self) -> &RRBPool<A> {
         match self {
             Inline(ref pool, _) => pool,
             Single(ref pool, _) => pool,
@@ -256,7 +260,14 @@ impl<A: Clone> Vector<A> {
     /// Construct an empty vector.
     #[must_use]
     pub fn new() -> Self {
-        Inline(RRBPool::new(), InlineArray::new())
+        Inline(RRBPool::default(), InlineArray::new())
+    }
+
+    /// Construct an empty vector using a specific memory pool.
+    #[cfg(feature = "pool")]
+    #[must_use]
+    pub fn with_pool(pool: &RRBPool<A>) -> Self {
+        Inline(pool.clone(), InlineArray::new())
     }
 
     /// Get the length of a vector.
@@ -726,7 +737,7 @@ impl<A: Clone> Vector<A> {
     #[inline]
     #[must_use]
     pub fn unit(a: A) -> Self {
-        let pool = RRBPool::new();
+        let pool = RRBPool::default();
         if InlineArray::<A, RRB<A>>::CAPACITY > 0 {
             let mut array = InlineArray::new();
             array.push(a);
