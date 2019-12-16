@@ -6,7 +6,6 @@ use std::borrow::Borrow;
 use std::fmt;
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::FusedIterator;
-use std::mem::MaybeUninit;
 use std::slice::{Iter as SliceIter, IterMut as SliceIterMut};
 use std::{mem, ptr};
 
@@ -48,11 +47,12 @@ pub struct Node<A> {
 
 #[allow(unsafe_code)]
 impl<A> PoolDefault for Node<A> {
-    unsafe fn default_uninit(target: &mut MaybeUninit<Self>) {
+    #[cfg(feature = "pool")]
+    unsafe fn default_uninit(target: &mut mem::MaybeUninit<Self>) {
         SparseChunk::default_uninit(
             target
                 .as_mut_ptr()
-                .cast::<MaybeUninit<SparseChunk<Entry<A>, HashWidth>>>()
+                .cast::<mem::MaybeUninit<SparseChunk<Entry<A>, HashWidth>>>()
                 .as_mut()
                 .unwrap(),
         )
@@ -64,11 +64,12 @@ impl<A> PoolClone for Node<A>
 where
     A: Clone,
 {
-    unsafe fn clone_uninit(&self, target: &mut MaybeUninit<Self>) {
+    #[cfg(feature = "pool")]
+    unsafe fn clone_uninit(&self, target: &mut mem::MaybeUninit<Self>) {
         self.data.clone_uninit(
             target
                 .as_mut_ptr()
-                .cast::<MaybeUninit<SparseChunk<Entry<A>, HashWidth>>>()
+                .cast::<mem::MaybeUninit<SparseChunk<Entry<A>, HashWidth>>>()
                 .as_mut()
                 .unwrap(),
         )

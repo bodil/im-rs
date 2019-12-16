@@ -698,6 +698,7 @@ where
     ///
     /// [slice::split_at]: https://doc.rust-lang.org/std/primitive.slice.html#method.split_at
     /// [Vector::split_at]: enum.Vector.html#method.split_at
+    #[allow(clippy::redundant_clone)]
     pub fn split_at(self, index: usize) -> (Self, Self) {
         if index > self.len() {
             panic!("vector::FocusMut::split_at: index out of bounds");

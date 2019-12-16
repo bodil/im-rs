@@ -5,7 +5,6 @@
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::mem;
-use std::mem::MaybeUninit;
 use std::ops::{Bound, RangeBounds};
 
 use sized_chunks::Chunk;
@@ -43,14 +42,16 @@ pub struct Node<A> {
     children: Chunk<Option<PoolRef<Node<A>>>, Add1<NodeSize>>,
 }
 
+#[cfg(feature = "pool")]
 #[allow(unsafe_code)]
-unsafe fn cast_uninit<A>(target: &mut A) -> &mut MaybeUninit<A> {
-    &mut *(target as *mut A as *mut MaybeUninit<A>)
+unsafe fn cast_uninit<A>(target: &mut A) -> &mut mem::MaybeUninit<A> {
+    &mut *(target as *mut A as *mut mem::MaybeUninit<A>)
 }
 
 #[allow(unsafe_code)]
 impl<A> PoolDefault for Node<A> {
-    unsafe fn default_uninit(target: &mut std::mem::MaybeUninit<Self>) {
+    #[cfg(feature = "pool")]
+    unsafe fn default_uninit(target: &mut mem::MaybeUninit<Self>) {
         let ptr: *mut Self = target.as_mut_ptr();
         Chunk::default_uninit(cast_uninit(&mut (*ptr).keys));
         Chunk::default_uninit(cast_uninit(&mut (*ptr).children));
@@ -63,7 +64,8 @@ impl<A> PoolClone for Node<A>
 where
     A: Clone,
 {
-    unsafe fn clone_uninit(&self, target: &mut std::mem::MaybeUninit<Self>) {
+    #[cfg(feature = "pool")]
+    unsafe fn clone_uninit(&self, target: &mut mem::MaybeUninit<Self>) {
         self.keys
             .clone_uninit(cast_uninit(&mut (*target.as_mut_ptr()).keys));
         self.children
