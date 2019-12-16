@@ -152,7 +152,6 @@ pub enum Vector<A> {
 
 #[doc(hidden)]
 pub struct RRB<A> {
-    #[cfg(feature = "pool")]
     length: usize,
     middle_level: usize,
     outer_f: PoolRef<Chunk<A>>,
@@ -181,7 +180,7 @@ impl<A: Clone> Vector<A> {
     ///
     /// Note that if you didn't specifically construct it with a pool, you'll
     /// get back a reference to a pool of size 0.
-    #[cfg(feature = "pool")]
+    #[cfg_attr(not(feature = "pool"), doc = "hidden")]
     pub fn pool(&self) -> &RRBPool<A> {
         match self {
             Inline(ref pool, _) => pool,
@@ -201,7 +200,6 @@ impl<A: Clone> Vector<A> {
     }
 
     /// Promote an inline to a single.
-    #[cfg(feature = "pool")]
     fn promote_inline(&mut self) {
         if let Inline(pool, chunk) = self {
             *self = Single(pool.clone(), PoolRef::new(&pool.value_pool, chunk.into()));

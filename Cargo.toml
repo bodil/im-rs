@@ -24,7 +24,6 @@ circle-ci = { repository = "bodil/im-rs" }
 version_check = "0.9"
 
 [features]
-default = ["pool"]
 pool = ["refpool", "refpool/sync", "sized-chunks/refpool"]
 
 [dependencies]
