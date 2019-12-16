@@ -20,6 +20,9 @@ path = "./src/lib.rs"
 [badges]
 circle-ci = { repository = "bodil/im-rs" }
 
+[package.metadata.docs.rs]
+all-features = true
+
 [build-dependencies]
 version_check = "0.9"
 

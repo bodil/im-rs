@@ -19,6 +19,9 @@ path = "../src/lib.rs"
 [badges]
 travis-ci = { repository = "bodil/im-rs" }
 
+[package.metadata.docs.rs]
+all-features = true
+
 [build-dependencies]
 version_check = "0.9"
 
