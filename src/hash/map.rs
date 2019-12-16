@@ -211,6 +211,9 @@ impl<K, V, S> HashMap<K, V, S> {
     }
 
     /// Get a reference to the memory pool used by this map.
+    ///
+    /// Note that if you didn't specifically construct it with a pool, you'll
+    /// get back a reference to a pool of size 0.
     #[cfg(feature = "pool")]
     pub fn pool(&self) -> &HashMapPool<K, V> {
         &self.pool

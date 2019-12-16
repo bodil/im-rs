@@ -15,4 +15,6 @@ pub type OrdChunkSize = U64; // Must be an even number!
 pub type HashLevelSize = U5;
 
 /// The size of per-instance memory pools if the `pool` feature is enabled.
-pub const POOL_SIZE: usize = 1024;
+/// This is set to 0, meaning you have to opt in to using a pool by constructing
+/// with eg. `Vector::with_pool(pool)` even if the `pool` feature is enabled.
+pub const POOL_SIZE: usize = 0;
