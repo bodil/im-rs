@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic
 Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- If you enable the `pool` feature flag, im now supports constructing data types
+  using [`refpool`](https://crates.io/crates/refpool) to speed up chunk
+  allocation. The performance boost will vary between use cases and operating
+  systems, but generally at least a 10% speedup can be expected when
+  constructing a data type from an iterator, and the more complex an operation
+  is, the more likely it is to benefit from being able to quickly reallocate
+  chunks. Note that in order to use this feature, you have to construct your
+  data types using the `with_pool(&pool)` constructor, it's not enough just to
+  enable the feature flag.
+
 ## [14.0.0] - 2019-11-19
 
 ### Changed
