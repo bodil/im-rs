@@ -8,7 +8,7 @@ extern crate im;
 extern crate rand;
 extern crate test;
 
-use rand::{rngs::SmallRng, SeedableRng, Rng};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 use std::collections::BTreeSet;
 use std::iter::FromIterator;
 use test::Bencher;
@@ -111,6 +111,48 @@ fn ordmap_insert_mut_100(b: &mut Bencher) {
 #[bench]
 fn ordmap_insert_mut_1000(b: &mut Bencher) {
     ordmap_insert_mut_n(1000, b)
+}
+
+#[bench]
+fn ordmap_insert_mut_10000(b: &mut Bencher) {
+    ordmap_insert_mut_n(10000, b)
+}
+
+#[cfg(feature = "pool")]
+fn ordmap_insert_mut_pooled_n(size: usize, b: &mut Bencher) {
+    let keys = random_keys(size);
+    let pool = im::ordmap::OrdMapPool::new(16384);
+    pool.fill();
+    b.iter(|| {
+        let mut m = OrdMap::with_pool(&pool);
+        for i in keys.clone() {
+            m.insert(i, i);
+        }
+    })
+}
+
+#[cfg(feature = "pool")]
+#[bench]
+fn ordmap_insert_mut_pooled_10(b: &mut Bencher) {
+    ordmap_insert_mut_pooled_n(10, b)
+}
+
+#[cfg(feature = "pool")]
+#[bench]
+fn ordmap_insert_mut_pooled_100(b: &mut Bencher) {
+    ordmap_insert_mut_pooled_n(100, b)
+}
+
+#[cfg(feature = "pool")]
+#[bench]
+fn ordmap_insert_mut_pooled_1000(b: &mut Bencher) {
+    ordmap_insert_mut_pooled_n(1000, b)
+}
+
+#[cfg(feature = "pool")]
+#[bench]
+fn ordmap_insert_mut_pooled_10000(b: &mut Bencher) {
+    ordmap_insert_mut_pooled_n(10000, b)
 }
 
 fn ordmap_remove_n(size: usize, b: &mut Bencher) {
