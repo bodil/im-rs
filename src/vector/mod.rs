@@ -2196,6 +2196,7 @@ impl<'a, A: Clone> FusedIterator for ChunksMut<'a, A> {}
 
 #[cfg(all(threadsafe, any(test, feature = "rayon")))]
 pub mod rayon {
+    //! Parallel iterators.
     use super::*;
 
     use ::rayon::iter::plumbing::{
@@ -2418,6 +2419,7 @@ impl<A: Arbitrary + Sync + Clone> Arbitrary for Vector<A> {
 
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
+    //! Proptest strategies.
     use super::*;
     use ::proptest::collection::vec;
     use ::proptest::strategy::{BoxedStrategy, Strategy, ValueTree};

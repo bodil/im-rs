@@ -2027,6 +2027,7 @@ impl<K: Hash + Eq + Arbitrary + Sync, V: Arbitrary + Sync> Arbitrary for HashMap
 
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
+    //! Proptest strategies.
     use super::*;
     use ::proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
     use std::ops::Range;

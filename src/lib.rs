@@ -303,10 +303,11 @@
 //!
 //! | Feature | Description |
 //! | ------- | ----------- |
+//! | [`pool`](https://crates.io/crates/refpool) | Constructors and pool types for [`refpool`](https://crates.io/crates/refpool) memory pools (recommended only for `im-rc`) |
 //! | [`proptest`](https://crates.io/crates/proptest) | Strategies for all `im` datatypes under a `proptest` namespace, eg. `im::vector::proptest::vector()` |
-//! | [`quickcheck`](https://crates.io/crates/quickcheck) | `Arbitrary` implementations for all `im` datatypes (not available in `im-rc`) |
-//! | [`rayon`](https://crates.io/crates/rayon) | parallel iterator implementations for `Vector` (not available in `im-rc`) |
-//! | [`serde`](https://crates.io/crates/serde) | `Serialize` and `Deserialize` implementations for all `im` datatypes |
+//! | [`quickcheck`](https://crates.io/crates/quickcheck) | [`Arbitrary`](https://docs.rs/quickcheck/latest/quickcheck/trait.Arbitrary.html) implementations for all `im` datatypes (not available in `im-rc`) |
+//! | [`rayon`](https://crates.io/crates/rayon) | parallel iterator implementations for [`Vector`][vector::Vector] (not available in `im-rc`) |
+//! | [`serde`](https://crates.io/crates/serde) | [`Serialize`](https://docs.rs/serde/latest/serde/trait.Serialize.html) and [`Deserialize`](https://docs.rs/serde/latest/serde/trait.Deserialize.html) implementations for all `im` datatypes |
 //!
 //! [std::collections]: https://doc.rust-lang.org/std/collections/index.html
 //! [std::collections::VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
@@ -364,6 +365,7 @@ pub mod vector;
 pub mod iter;
 
 #[cfg(any(test, feature = "serde"))]
+#[doc(hidden)]
 pub mod ser;
 
 #[cfg(not(feature = "pool"))]

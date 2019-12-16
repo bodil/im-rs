@@ -1950,6 +1950,7 @@ impl<K: Ord + Clone + Arbitrary + Sync, V: Clone + Arbitrary + Sync> Arbitrary f
 
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
+    //! Proptest strategies.
     use super::*;
     use ::proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
     use std::ops::Range;
