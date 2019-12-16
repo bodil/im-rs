@@ -178,6 +178,9 @@ impl<A> Clone for RRB<A> {
 
 impl<A: Clone> Vector<A> {
     /// Get a reference to the memory pool this `Vector` is using.
+    ///
+    /// Note that if you didn't specifically construct it with a pool, you'll
+    /// get back a reference to a pool of size 0.
     #[cfg(feature = "pool")]
     pub fn pool(&self) -> &RRBPool<A> {
         match self {
