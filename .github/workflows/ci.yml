@@ -28,6 +28,7 @@ jobs:
         run: |
           cd dist/${{ matrix.crate }}
           cargo test --all-features
+          cargo test --no-default-features
 
   clippy:
     runs-on: ubuntu-latest
