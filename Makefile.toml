@@ -215,6 +215,7 @@ fn main() {
     out["dependencies"] = src["dependencies"].clone();
     out["dev-dependencies"] = src["dev-dependencies"].clone();
     out["build-dependencies"] = src["build-dependencies"].clone();
+    out["package.metadata.docs.rs"] = src["build-dependencies"].clone();
     write("./rc/Cargo.toml", out.to_string()).expect("unable to write rc/Cargo.toml!");
   } else if &command == "check" {
     if !compare(&src["package"]["version"], &out["package"]["version"])
