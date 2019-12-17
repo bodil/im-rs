@@ -10,7 +10,11 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use crate::nodes::chunk::Chunk;
 use crate::sync::Lock;
 use crate::util::{to_range, PoolRef, Ref};
-use crate::vector::{Iter, IterMut, RRBPool, Vector, RRB};
+use crate::vector::{
+    Iter, IterMut, RRBPool, Vector,
+    VectorInner::{Full, Inline, Single},
+    RRB,
+};
 
 /// Focused indexing over a [`Vector`][Vector].
 ///
@@ -94,10 +98,10 @@ where
     ///
     /// [Vector]: enum.Vector.html
     pub fn new(vector: &'a Vector<A>) -> Self {
-        match vector {
-            Vector::Inline(_, chunk) => Focus::Single(chunk),
-            Vector::Single(_, chunk) => Focus::Single(chunk),
-            Vector::Full(_, tree) => Focus::Full(TreeFocus::new(tree)),
+        match &vector.vector {
+            Inline(_, chunk) => Focus::Single(chunk),
+            Single(_, chunk) => Focus::Single(chunk),
+            Full(_, tree) => Focus::Full(TreeFocus::new(tree)),
         }
     }
 
@@ -469,13 +473,13 @@ where
 {
     /// Construct a `FocusMut` for a `Vector`.
     pub fn new(vector: &'a mut Vector<A>) -> Self {
-        match vector {
-            Vector::Inline(pool, chunk) => FocusMut::Single(pool.clone(), chunk),
-            Vector::Single(pool, chunk) => FocusMut::Single(
+        match &mut vector.vector {
+            Inline(pool, chunk) => FocusMut::Single(pool.clone(), chunk),
+            Single(pool, chunk) => FocusMut::Single(
                 pool.clone(),
                 PoolRef::make_mut(&pool.value_pool, chunk).as_mut_slice(),
             ),
-            Vector::Full(pool, tree) => FocusMut::Full(pool.clone(), TreeFocusMut::new(tree)),
+            Full(pool, tree) => FocusMut::Full(pool.clone(), TreeFocusMut::new(tree)),
         }
     }
 

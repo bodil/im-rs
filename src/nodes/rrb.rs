@@ -142,18 +142,18 @@ impl Size {
     }
 }
 
-pub enum PushResult<A> {
+pub(crate) enum PushResult<A> {
     Full(A, usize),
     Done,
 }
 
-pub enum PopResult<A> {
+pub(crate) enum PopResult<A> {
     Done(A),
     Drained(A),
     Empty,
 }
 
-pub enum SplitResult {
+pub(crate) enum SplitResult {
     Dropped(usize),
     OutOfBounds,
 }
@@ -244,7 +244,7 @@ impl<A: Clone> Entry<A> {
 
 // Node
 
-pub struct Node<A> {
+pub(crate) struct Node<A> {
     children: Entry<A>,
 }
 
@@ -263,11 +263,11 @@ impl<A: Clone> Default for Node<A> {
 }
 
 impl<A: Clone> Node<A> {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Node { children: Empty }
     }
 
-    pub fn parent(pool: &RRBPool<A>, level: usize, children: Chunk<Self>) -> Self {
+    pub(crate) fn parent(pool: &RRBPool<A>, level: usize, children: Chunk<Self>) -> Self {
         let size = {
             let mut size = Size::Size(0);
             let mut it = children.iter().peekable();
@@ -292,18 +292,18 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn clear_node(&mut self) {
+    pub(crate) fn clear_node(&mut self) {
         self.children = Empty;
     }
 
-    pub fn from_chunk(pool: &RRBPool<A>, level: usize, chunk: PoolRef<Chunk<A>>) -> Self {
+    pub(crate) fn from_chunk(pool: &RRBPool<A>, level: usize, chunk: PoolRef<Chunk<A>>) -> Self {
         let node = Node {
             children: Values(chunk),
         };
         node.elevate(pool, level)
     }
 
-    pub fn single_parent(pool: &RRBPool<A>, node: Self) -> Self {
+    pub(crate) fn single_parent(pool: &RRBPool<A>, node: Self) -> Self {
         let size = if node.is_dense() {
             Size::Size(node.len())
         } else {
@@ -316,7 +316,7 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn join_dense(pool: &RRBPool<A>, left: Self, right: Self) -> Self {
+    pub(crate) fn join_dense(pool: &RRBPool<A>, left: Self, right: Self) -> Self {
         let left_len = left.len();
         let right_len = right.len();
         Node {
@@ -327,7 +327,7 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn elevate(self, pool: &RRBPool<A>, level_increment: usize) -> Self {
+    pub(crate) fn elevate(self, pool: &RRBPool<A>, level_increment: usize) -> Self {
         if level_increment > 0 {
             Self::single_parent(pool, self.elevate(pool, level_increment - 1))
         } else {
@@ -335,7 +335,7 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn join_branches(self, pool: &RRBPool<A>, right: Self, level: usize) -> Self {
+    pub(crate) fn join_branches(self, pool: &RRBPool<A>, right: Self, level: usize) -> Self {
         let left_len = self.len();
         let right_len = right.len();
         let size = if self.is_completely_dense(level) && right.is_dense() {
@@ -352,7 +352,7 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         match self.children {
             Entry::Nodes(Size::Size(size), _) => size,
             Entry::Nodes(Size::Table(ref size_table), _) => *(size_table.last().unwrap_or(&0)),
@@ -361,23 +361,24 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    pub fn is_single(&self) -> bool {
+    pub(crate) fn is_single(&self) -> bool {
         self.children.len() == 1
     }
 
-    pub fn is_full(&self) -> bool {
+    pub(crate) fn is_full(&self) -> bool {
         self.children.is_full()
     }
 
-    pub fn number_of_children(&self) -> usize {
+    #[allow(dead_code)] // this is only used by tests
+    pub(crate) fn number_of_children(&self) -> usize {
         self.children.len()
     }
 
-    pub fn first_child(&self) -> &Self {
+    pub(crate) fn first_child(&self) -> &Self {
         self.children.unwrap_nodes().first().unwrap()
     }
 
@@ -459,7 +460,7 @@ impl<A: Clone> Node<A> {
         Some(target_idx)
     }
 
-    pub fn index(&self, level: usize, index: usize) -> &A {
+    pub(crate) fn index(&self, level: usize, index: usize) -> &A {
         if level == 0 {
             &self.children.unwrap_values()[index]
         } else {
@@ -469,7 +470,7 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn index_mut(&mut self, pool: &RRBPool<A>, level: usize, index: usize) -> &mut A {
+    pub(crate) fn index_mut(&mut self, pool: &RRBPool<A>, level: usize, index: usize) -> &mut A {
         if level == 0 {
             &mut self.children.unwrap_values_mut(pool)[index]
         } else {
@@ -480,7 +481,7 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn lookup_chunk(
+    pub(crate) fn lookup_chunk(
         &self,
         level: usize,
         base: usize,
@@ -501,7 +502,7 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn lookup_chunk_mut(
+    pub(crate) fn lookup_chunk_mut(
         &mut self,
         pool: &RRBPool<A>,
         level: usize,
@@ -539,7 +540,7 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn push_chunk(
+    pub(crate) fn push_chunk(
         &mut self,
         pool: &RRBPool<A>,
         level: usize,
@@ -689,7 +690,7 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn pop_chunk(
+    pub(crate) fn pop_chunk(
         &mut self,
         pool: &RRBPool<A>,
         level: usize,
@@ -751,7 +752,7 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn split(
+    pub(crate) fn split(
         &mut self,
         pool: &RRBPool<A>,
         level: usize,
@@ -976,7 +977,7 @@ impl<A: Clone> Node<A> {
         Node::parent(pool, level + 1, root)
     }
 
-    pub fn merge(pool: &RRBPool<A>, mut left: Self, mut right: Self, level: usize) -> Self {
+    pub(crate) fn merge(pool: &RRBPool<A>, mut left: Self, mut right: Self, level: usize) -> Self {
         if level == 0 {
             Self::merge_leaves(pool, left, right)
         } else {
@@ -1013,7 +1014,7 @@ impl<A: Clone> Node<A> {
         }
     }
 
-    pub fn assert_invariants(&self, level: usize) -> usize {
+    pub(crate) fn assert_invariants(&self, level: usize) -> usize {
         // Verifies that the size table matches reality.
         match self.children {
             Entry::Empty => 0,
@@ -1110,7 +1111,7 @@ pub struct ConsumingIter<A> {
 }
 
 impl<A: Clone> ConsumingIter<A> {
-    pub fn new(pool: RRBPool<A>, root: Node<A>, level: usize) -> Self {
+    pub(crate) fn new(pool: RRBPool<A>, root: Node<A>, level: usize) -> Self {
         ConsumingIter {
             pool,
             remaining: root.len(),

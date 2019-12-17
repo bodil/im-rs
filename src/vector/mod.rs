@@ -61,7 +61,7 @@ use crate::nodes::rrb::{
 use crate::sort;
 use crate::util::{clone_ref, swap_indices, to_range, Pool, PoolDefault, PoolRef, Ref, Side};
 
-use self::Vector::{Full, Inline, Single};
+use self::VectorInner::{Full, Inline, Single};
 
 mod focus;
 
@@ -141,12 +141,13 @@ macro_rules! vector {
 /// [chunkedseq]: http://deepsea.inria.fr/pasl/chunkedseq.pdf
 /// [Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 /// [VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
-pub enum Vector<A> {
-    #[doc(hidden)]
+pub struct Vector<A> {
+    vector: VectorInner<A>,
+}
+
+enum VectorInner<A> {
     Inline(RRBPool<A>, InlineArray<A, RRB<A>>),
-    #[doc(hidden)]
     Single(RRBPool<A>, PoolRef<Chunk<A>>),
-    #[doc(hidden)]
     Full(RRBPool<A>, RRB<A>),
 }
 
@@ -182,7 +183,7 @@ impl<A: Clone> Vector<A> {
     /// get back a reference to a pool of size 0.
     #[cfg_attr(not(feature = "pool"), doc = "hidden")]
     pub fn pool(&self) -> &RRBPool<A> {
-        match self {
+        match self.vector {
             Inline(ref pool, _) => pool,
             Single(ref pool, _) => pool,
             Full(ref pool, _) => pool,
@@ -192,7 +193,7 @@ impl<A: Clone> Vector<A> {
     /// True if a vector is a full inline or single chunk, ie. must be promoted
     /// to grow further.
     fn needs_promotion(&self) -> bool {
-        match self {
+        match &self.vector {
             Inline(_, chunk) if chunk.is_full() => true,
             Single(_, chunk) if chunk.is_full() => true,
             _ => false,
@@ -201,15 +202,15 @@ impl<A: Clone> Vector<A> {
 
     /// Promote an inline to a single.
     fn promote_inline(&mut self) {
-        if let Inline(pool, chunk) = self {
-            *self = Single(pool.clone(), PoolRef::new(&pool.value_pool, chunk.into()));
+        if let Inline(pool, chunk) = &mut self.vector {
+            self.vector = Single(pool.clone(), PoolRef::new(&pool.value_pool, chunk.into()));
         }
     }
 
     /// Promote a single to a full, with the single chunk becoming inner_f, or
     /// promote an inline to a single.
     fn promote_front(&mut self) {
-        *self = match self {
+        self.vector = match &mut self.vector {
             Inline(pool, chunk) => {
                 Single(pool.clone(), PoolRef::new(&pool.value_pool, chunk.into()))
             }
@@ -235,7 +236,7 @@ impl<A: Clone> Vector<A> {
     /// Promote a single to a full, with the single chunk becoming inner_b, or
     /// promote an inline to a single.
     fn promote_back(&mut self) {
-        *self = match self {
+        self.vector = match &mut self.vector {
             Inline(pool, chunk) => {
                 Single(pool.clone(), PoolRef::new(&pool.value_pool, chunk.into()))
             }
@@ -261,14 +262,18 @@ impl<A: Clone> Vector<A> {
     /// Construct an empty vector.
     #[must_use]
     pub fn new() -> Self {
-        Inline(RRBPool::default(), InlineArray::new())
+        Self {
+            vector: Inline(RRBPool::default(), InlineArray::new()),
+        }
     }
 
     /// Construct an empty vector using a specific memory pool.
     #[cfg(feature = "pool")]
     #[must_use]
     pub fn with_pool(pool: &RRBPool<A>) -> Self {
-        Inline(pool.clone(), InlineArray::new())
+        Self {
+            vector: Inline(pool.clone(), InlineArray::new()),
+        }
     }
 
     /// Get the length of a vector.
@@ -284,7 +289,7 @@ impl<A: Clone> Vector<A> {
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
-        match self {
+        match &self.vector {
             Inline(_, chunk) => chunk.len(),
             Single(_, chunk) => chunk.len(),
             Full(_, tree) => tree.length,
@@ -401,7 +406,7 @@ impl<A: Clone> Vector<A> {
             return None;
         }
 
-        match self {
+        match &self.vector {
             Inline(_, chunk) => chunk.get(index),
             Single(_, chunk) => chunk.get(index),
             Full(_, tree) => {
@@ -458,7 +463,7 @@ impl<A: Clone> Vector<A> {
             return None;
         }
 
-        match self {
+        match &mut self.vector {
             Inline(_, chunk) => chunk.get_mut(index),
             Single(pool, chunk) => PoolRef::make_mut(&pool.value_pool, chunk).get_mut(index),
             Full(pool, tree) => {
@@ -639,7 +644,7 @@ impl<A: Clone> Vector<A> {
     /// Time: O(n)
     pub fn clear(&mut self) {
         if !self.is_empty() {
-            *self = Inline(self.pool().clone(), InlineArray::new());
+            self.vector = Inline(self.pool().clone(), InlineArray::new());
         }
     }
 
@@ -742,10 +747,14 @@ impl<A: Clone> Vector<A> {
         if InlineArray::<A, RRB<A>>::CAPACITY > 0 {
             let mut array = InlineArray::new();
             array.push(a);
-            Inline(pool, array)
+            Self {
+                vector: Inline(pool, array),
+            }
         } else {
             let chunk = PoolRef::new(&pool.value_pool, Chunk::unit(a));
-            Single(pool, chunk)
+            Self {
+                vector: Single(pool, chunk),
+            }
         }
     }
 
@@ -806,7 +815,7 @@ impl<A: Clone> Vector<A> {
         if self.needs_promotion() {
             self.promote_back();
         }
-        match self {
+        match &mut self.vector {
             Inline(_, chunk) => {
                 chunk.insert(0, value);
             }
@@ -832,7 +841,7 @@ impl<A: Clone> Vector<A> {
         if self.needs_promotion() {
             self.promote_front();
         }
-        match self {
+        match &mut self.vector {
             Inline(_, chunk) => {
                 chunk.push(value);
             }
@@ -858,7 +867,7 @@ impl<A: Clone> Vector<A> {
         if self.is_empty() {
             None
         } else {
-            match self {
+            match &mut self.vector {
                 Inline(_, chunk) => chunk.remove(0),
                 Single(pool, chunk) => Some(PoolRef::make_mut(&pool.value_pool, chunk).pop_front()),
                 Full(pool, tree) => tree.pop_front(pool),
@@ -883,7 +892,7 @@ impl<A: Clone> Vector<A> {
         if self.is_empty() {
             None
         } else {
-            match self {
+            match &mut self.vector {
                 Inline(_, chunk) => chunk.pop(),
                 Single(pool, chunk) => Some(PoolRef::make_mut(&pool.value_pool, chunk).pop_back()),
                 Full(pool, tree) => tree.pop_back(pool),
@@ -922,10 +931,10 @@ impl<A: Clone> Vector<A> {
             .checked_add(other.len())
             .expect("Vector length overflow");
 
-        match self {
+        match &mut self.vector {
             Inline(_, _) => unreachable!("inline vecs should have been promoted"),
             Single(pool, left) => {
-                match other {
+                match &mut other.vector {
                     Inline(_, _) => unreachable!("inline vecs should have been promoted"),
                     // If both are single chunks and left has room for right: directly
                     // memcpy right into left
@@ -936,8 +945,8 @@ impl<A: Clone> Vector<A> {
                     }
                     // If only left is a single chunk and has room for right: push
                     // right's elements into left
-                    ref mut right if total_length <= CHUNK_SIZE => {
-                        while let Some(value) = right.pop_front() {
+                    _ if total_length <= CHUNK_SIZE => {
+                        while let Some(value) = other.pop_front() {
                             PoolRef::make_mut(&pool.value_pool, left).push_back(value);
                         }
                         return;
@@ -946,7 +955,7 @@ impl<A: Clone> Vector<A> {
                 }
             }
             Full(pool, left) => {
-                if let Full(_, mut right) = other {
+                if let Full(_, mut right) = other.vector {
                     // If left and right are trees with empty middles, left has no back
                     // buffers, and right has no front buffers: copy right's back
                     // buffers over to left
@@ -1085,15 +1094,19 @@ impl<A: Clone> Vector<A> {
     pub fn split_off(&mut self, index: usize) -> Self {
         assert!(index <= self.len());
 
-        match self {
-            Inline(pool, chunk) => Inline(pool.clone(), chunk.split_off(index)),
-            Single(pool, chunk) => Single(
-                pool.clone(),
-                PoolRef::new(
-                    &pool.value_pool,
-                    PoolRef::make_mut(&pool.value_pool, chunk).split_off(index),
+        match &mut self.vector {
+            Inline(pool, chunk) => Self {
+                vector: Inline(pool.clone(), chunk.split_off(index)),
+            },
+            Single(pool, chunk) => Self {
+                vector: Single(
+                    pool.clone(),
+                    PoolRef::new(
+                        &pool.value_pool,
+                        PoolRef::make_mut(&pool.value_pool, chunk).split_off(index),
+                    ),
                 ),
-            ),
+            },
             Full(pool, tree) => {
                 let mut local_index = index;
 
@@ -1111,7 +1124,9 @@ impl<A: Clone> Vector<A> {
                     };
                     tree.length = index;
                     tree.middle_level = 0;
-                    return Full(pool.clone(), right);
+                    return Self {
+                        vector: Full(pool.clone(), right),
+                    };
                 }
 
                 local_index -= tree.outer_f.len();
@@ -1131,7 +1146,9 @@ impl<A: Clone> Vector<A> {
                     tree.length = index;
                     tree.middle_level = 0;
                     swap(&mut tree.outer_b, &mut tree.inner_f);
-                    return Full(pool.clone(), right);
+                    return Self {
+                        vector: Full(pool.clone(), right),
+                    };
                 }
 
                 local_index -= tree.inner_f.len();
@@ -1179,7 +1196,9 @@ impl<A: Clone> Vector<A> {
                     tree.length = index;
                     tree.prune();
                     right.prune();
-                    return Full(pool.clone(), right);
+                    return Self {
+                        vector: Full(pool.clone(), right),
+                    };
                 }
 
                 local_index -= tree.middle.len();
@@ -1195,7 +1214,9 @@ impl<A: Clone> Vector<A> {
                     };
                     tree.length = index;
                     swap(&mut tree.outer_b, &mut tree.inner_b);
-                    return Full(pool.clone(), right);
+                    return Self {
+                        vector: Full(pool.clone(), right),
+                    };
                 }
 
                 local_index -= tree.inner_b.len();
@@ -1203,7 +1224,9 @@ impl<A: Clone> Vector<A> {
                 let ob2 =
                     PoolRef::make_mut(&pool.value_pool, &mut tree.outer_b).split_off(local_index);
                 tree.length = index;
-                Single(pool.clone(), PoolRef::new(&pool.value_pool, ob2))
+                Self {
+                    vector: Single(pool.clone(), PoolRef::new(&pool.value_pool, ob2)),
+                }
             }
         }
     }
@@ -1288,14 +1311,14 @@ impl<A: Clone> Vector<A> {
             return self.push_back(value);
         }
         assert!(index < self.len());
-        if if let Inline(_, chunk) = self {
+        if if let Inline(_, chunk) = &self.vector {
             chunk.is_full()
         } else {
             false
         } {
             self.promote_inline();
         }
-        match self {
+        match &mut self.vector {
             Inline(_, chunk) => {
                 chunk.insert(index, value);
             }
@@ -1329,7 +1352,7 @@ impl<A: Clone> Vector<A> {
     /// [slice]: #method.slice
     pub fn remove(&mut self, index: usize) -> A {
         assert!(index < self.len());
-        match self {
+        match &mut self.vector {
             Inline(_, chunk) => chunk.remove(index).unwrap(),
             Single(pool, chunk) => PoolRef::make_mut(&pool.value_pool, chunk).remove(index),
             _ => {
@@ -1419,7 +1442,7 @@ impl<A: Clone> Vector<A> {
 
     #[allow(dead_code)]
     pub(crate) fn assert_invariants(&self) {
-        if let Vector::Full(_, ref tree) = self {
+        if let Full(_, ref tree) = self.vector {
             tree.assert_invariants();
         }
     }
@@ -1618,10 +1641,12 @@ impl<A: Clone> Default for Vector<A> {
 
 impl<A: Clone> Clone for Vector<A> {
     fn clone(&self) -> Self {
-        match self {
-            Inline(pool, chunk) => Inline(pool.clone(), chunk.clone()),
-            Single(pool, chunk) => Single(pool.clone(), chunk.clone()),
-            Full(pool, tree) => Full(pool.clone(), tree.clone()),
+        Self {
+            vector: match &self.vector {
+                Inline(pool, chunk) => Inline(pool.clone(), chunk.clone()),
+                Single(pool, chunk) => Single(pool.clone(), chunk.clone()),
+                Full(pool, tree) => Full(pool.clone(), tree.clone()),
+            },
         }
     }
 }
@@ -1657,7 +1682,7 @@ impl<A: Clone + PartialEq> PartialEq for Vector<A> {
 #[cfg(has_specialisation)]
 impl<A: Clone + Eq> PartialEq for Vector<A> {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
+        match (&self.vector, &other.vector) {
             (Full(_, left), Full(_, right)) => {
                 if left.length != right.length {
                     return false;
@@ -1678,7 +1703,7 @@ impl<A: Clone + Eq> PartialEq for Vector<A> {
                 }
                 self.iter().eq(other.iter())
             }
-            (left, right) => left.len() == right.len() && left.iter().eq(right.iter()),
+            _ => self.len() == other.len() && self.iter().eq(other.iter()),
         }
     }
 }
@@ -2024,7 +2049,7 @@ pub enum ConsumingIter<A> {
 
 impl<A: Clone> ConsumingIter<A> {
     fn new(seq: Vector<A>) -> Self {
-        match seq {
+        match seq.vector {
             Inline(_, chunk) => ConsumingIter::Inline(chunk.into_iter()),
             Single(_, chunk) => ConsumingIter::Single(PoolRef::unwrap_or_clone(chunk).into_iter()),
             Full(pool, tree) => ConsumingIter::Full(tree.into_iter(pool)),
@@ -2549,16 +2574,16 @@ mod test {
         // At this point middle contains three chunks of size 64, 64 and 1
         // respectively. Previously the next `push_back()` would append another
         // zero-sized chunk to middle even though there is enough space left.
-        match x {
-            Vector::Full(_, ref tree) => {
+        match x.vector {
+            VectorInner::Full(_, ref tree) => {
                 assert_eq!(129, tree.middle.len());
                 assert_eq!(3, tree.middle.number_of_children());
             }
             _ => unreachable!(),
         }
         x.push_back(0);
-        match x {
-            Vector::Full(_, ref tree) => {
+        match x.vector {
+            VectorInner::Full(_, ref tree) => {
                 assert_eq!(131, tree.middle.len());
                 assert_eq!(3, tree.middle.number_of_children())
             }
@@ -2610,8 +2635,8 @@ mod test {
         // to middle. The first element will be merged into the second node, the
         // remaining 63 elements will end up in a new node.
         x.push_back(0u32);
-        match x {
-            Vector::Full(_, tree) => {
+        match x.vector {
+            VectorInner::Full(_, tree) => {
                 assert_eq!(3, tree.middle.number_of_children());
                 assert_eq!(
                     2 * NODE_SIZE * CHUNK_SIZE + CHUNK_SIZE - 1,

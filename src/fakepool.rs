@@ -11,24 +11,24 @@ use std::sync::Arc as RArc;
 
 use crate::nodes::chunk::Chunk;
 
-pub trait PoolDefault: Default {}
-pub trait PoolClone: Clone {}
+pub(crate) trait PoolDefault: Default {}
+pub(crate) trait PoolClone: Clone {}
 
 impl<A> PoolDefault for Chunk<A> {}
 impl<A> PoolClone for Chunk<A> where A: Clone {}
 
-pub struct Pool<A>(PhantomData<A>);
+pub(crate) struct Pool<A>(PhantomData<A>);
 
 impl<A> Pool<A> {
-    pub fn new(_size: usize) -> Self {
+    pub(crate) fn new(_size: usize) -> Self {
         Pool(PhantomData)
     }
 
-    pub fn get_pool_size(&self) -> usize {
+    pub(crate) fn get_pool_size(&self) -> usize {
         0
     }
 
-    pub fn fill(&self) {}
+    pub(crate) fn fill(&self) {}
 }
 
 impl<A> Clone for Pool<A> {
@@ -40,11 +40,11 @@ impl<A> Clone for Pool<A> {
 // Rc
 
 #[derive(Default)]
-pub struct Rc<A>(RRc<A>);
+pub(crate) struct Rc<A>(RRc<A>);
 
 impl<A> Rc<A> {
     #[inline(always)]
-    pub fn default(_pool: &Pool<A>) -> Self
+    pub(crate) fn default(_pool: &Pool<A>) -> Self
     where
         A: PoolDefault,
     {
@@ -52,12 +52,12 @@ impl<A> Rc<A> {
     }
 
     #[inline(always)]
-    pub fn new(_pool: &Pool<A>, value: A) -> Self {
+    pub(crate) fn new(_pool: &Pool<A>, value: A) -> Self {
         Rc(RRc::new(value))
     }
 
     #[inline(always)]
-    pub fn clone_from(_pool: &Pool<A>, value: &A) -> Self
+    pub(crate) fn clone_from(_pool: &Pool<A>, value: &A) -> Self
     where
         A: PoolClone,
     {
@@ -65,7 +65,7 @@ impl<A> Rc<A> {
     }
 
     #[inline(always)]
-    pub fn make_mut<'a>(_pool: &Pool<A>, this: &'a mut Self) -> &'a mut A
+    pub(crate) fn make_mut<'a>(_pool: &Pool<A>, this: &'a mut Self) -> &'a mut A
     where
         A: PoolClone,
     {
@@ -73,11 +73,11 @@ impl<A> Rc<A> {
     }
 
     #[inline(always)]
-    pub fn ptr_eq(left: &Self, right: &Self) -> bool {
+    pub(crate) fn ptr_eq(left: &Self, right: &Self) -> bool {
         RRc::ptr_eq(&left.0, &right.0)
     }
 
-    pub fn unwrap_or_clone(this: Self) -> A
+    pub(crate) fn unwrap_or_clone(this: Self) -> A
     where
         A: PoolClone,
     {
@@ -117,7 +117,7 @@ where
     A: std::fmt::Debug,
 {
     #[inline(always)]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.0.fmt(f)
     }
 }
@@ -125,11 +125,11 @@ where
 // Arc
 
 #[derive(Default)]
-pub struct Arc<A>(RArc<A>);
+pub(crate) struct Arc<A>(RArc<A>);
 
 impl<A> Arc<A> {
     #[inline(always)]
-    pub fn default(_pool: &Pool<A>) -> Self
+    pub(crate) fn default(_pool: &Pool<A>) -> Self
     where
         A: PoolDefault,
     {
@@ -137,12 +137,12 @@ impl<A> Arc<A> {
     }
 
     #[inline(always)]
-    pub fn new(_pool: &Pool<A>, value: A) -> Self {
+    pub(crate) fn new(_pool: &Pool<A>, value: A) -> Self {
         Self(RArc::new(value))
     }
 
     #[inline(always)]
-    pub fn clone_from(_pool: &Pool<A>, value: &A) -> Self
+    pub(crate) fn clone_from(_pool: &Pool<A>, value: &A) -> Self
     where
         A: PoolClone,
     {
@@ -150,7 +150,7 @@ impl<A> Arc<A> {
     }
 
     #[inline(always)]
-    pub fn make_mut<'a>(_pool: &Pool<A>, this: &'a mut Self) -> &'a mut A
+    pub(crate) fn make_mut<'a>(_pool: &Pool<A>, this: &'a mut Self) -> &'a mut A
     where
         A: PoolClone,
     {
@@ -158,11 +158,11 @@ impl<A> Arc<A> {
     }
 
     #[inline(always)]
-    pub fn ptr_eq(left: &Self, right: &Self) -> bool {
+    pub(crate) fn ptr_eq(left: &Self, right: &Self) -> bool {
         RArc::ptr_eq(&left.0, &right.0)
     }
 
-    pub fn unwrap_or_clone(this: Self) -> A
+    pub(crate) fn unwrap_or_clone(this: Self) -> A
     where
         A: PoolClone,
     {
@@ -202,7 +202,7 @@ where
     A: std::fmt::Debug,
 {
     #[inline(always)]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.0.fmt(f)
     }
 }

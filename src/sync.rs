@@ -54,7 +54,7 @@ mod lock {
         }
 
         #[inline]
-        pub(crate) fn lock(&mut self) -> Option<RefMut<A>> {
+        pub(crate) fn lock(&mut self) -> Option<RefMut<'_, A>> {
             self.lock.try_borrow_mut().ok()
         }
     }

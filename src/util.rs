@@ -49,7 +49,7 @@ where
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Side {
+pub(crate) enum Side {
     Left,
     Right,
 }

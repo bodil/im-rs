@@ -37,7 +37,7 @@ pub trait BTreeValue {
     fn cmp_values(&self, other: &Self) -> Ordering;
 }
 
-pub struct Node<A> {
+pub(crate) struct Node<A> {
     keys: Chunk<A, NodeSize>,
     children: Chunk<Option<PoolRef<Node<A>>>, Add1<NodeSize>>,
 }
@@ -73,10 +73,9 @@ where
     }
 }
 
-pub enum Insert<A> {
+pub(crate) enum Insert<A> {
     Added,
     Replaced(A),
-    Update(Node<A>),
     Split(Node<A>, A, Node<A>),
 }
 
@@ -87,7 +86,7 @@ enum InsertAction<A> {
     InsertSplit(Node<A>, A, Node<A>),
 }
 
-pub enum Remove<A> {
+pub(crate) enum Remove<A> {
     NoChange,
     Removed(A),
     Update(A, Node<A>),
@@ -141,12 +140,7 @@ impl<A> Node<A> {
     }
 
     #[inline]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    #[inline]
-    pub fn unit(value: A) -> Self {
+    pub(crate) fn unit(value: A) -> Self {
         Node {
             keys: Chunk::unit(value),
             children: Chunk::pair(None, None),
@@ -154,7 +148,12 @@ impl<A> Node<A> {
     }
 
     #[inline]
-    pub fn new_from_split(pool: &Pool<Node<A>>, left: Node<A>, median: A, right: Node<A>) -> Self {
+    pub(crate) fn new_from_split(
+        pool: &Pool<Node<A>>,
+        left: Node<A>,
+        median: A,
+        right: Node<A>,
+    ) -> Self {
         Node {
             keys: Chunk::unit(median),
             children: Chunk::pair(
@@ -164,14 +163,14 @@ impl<A> Node<A> {
         }
     }
 
-    pub fn min(&self) -> Option<&A> {
+    pub(crate) fn min(&self) -> Option<&A> {
         match self.children.first().unwrap() {
             None => self.keys.first(),
             Some(ref child) => child.min(),
         }
     }
 
-    pub fn max(&self) -> Option<&A> {
+    pub(crate) fn max(&self) -> Option<&A> {
         match self.children.last().unwrap() {
             None => self.keys.last(),
             Some(ref child) => child.max(),
@@ -192,7 +191,7 @@ impl<A: BTreeValue> Node<A> {
         }
     }
 
-    pub fn lookup<BK>(&self, key: &BK) -> Option<&A>
+    pub(crate) fn lookup<BK>(&self, key: &BK) -> Option<&A>
     where
         BK: Ord + ?Sized,
         A::Key: Borrow<BK>,
@@ -212,7 +211,7 @@ impl<A: BTreeValue> Node<A> {
         }
     }
 
-    pub fn lookup_mut<BK>(&mut self, pool: &Pool<Node<A>>, key: &BK) -> Option<&mut A>
+    pub(crate) fn lookup_mut<BK>(&mut self, pool: &Pool<Node<A>>, key: &BK) -> Option<&mut A>
     where
         A: Clone,
         BK: Ord + ?Sized,
@@ -236,7 +235,7 @@ impl<A: BTreeValue> Node<A> {
         }
     }
 
-    pub fn path_first<'a, BK>(
+    pub(crate) fn path_first<'a, BK>(
         &'a self,
         mut path: Vec<(&'a Node<A>, usize)>,
     ) -> Vec<(&'a Node<A>, usize)>
@@ -260,7 +259,7 @@ impl<A: BTreeValue> Node<A> {
         }
     }
 
-    pub fn path_last<'a, BK>(
+    pub(crate) fn path_last<'a, BK>(
         &'a self,
         mut path: Vec<(&'a Node<A>, usize)>,
     ) -> Vec<(&'a Node<A>, usize)>
@@ -285,7 +284,7 @@ impl<A: BTreeValue> Node<A> {
         }
     }
 
-    pub fn path_next<'a, BK>(
+    pub(crate) fn path_next<'a, BK>(
         &'a self,
         key: &BK,
         mut path: Vec<(&'a Node<A>, usize)>,
@@ -319,7 +318,7 @@ impl<A: BTreeValue> Node<A> {
         }
     }
 
-    pub fn path_prev<'a, BK>(
+    pub(crate) fn path_prev<'a, BK>(
         &'a self,
         key: &BK,
         mut path: Vec<(&'a Node<A>, usize)>,
@@ -464,7 +463,7 @@ impl<A: BTreeValue> Node<A> {
         self.children.push_back(child);
     }
 
-    pub fn insert(&mut self, pool: &Pool<Node<A>>, value: A) -> Insert<A>
+    pub(crate) fn insert(&mut self, pool: &Pool<Node<A>>, value: A) -> Insert<A>
     where
         A: Clone,
     {
@@ -490,7 +489,6 @@ impl<A: BTreeValue> Node<A> {
                         match child.insert(pool, value.clone()) {
                             Insert::Added => AddedAction,
                             Insert::Replaced(value) => ReplacedAction(value),
-                            Insert::Update(_) => unreachable!(),
                             Insert::Split(left, median, right) => InsertSplit(left, median, right),
                         }
                     }
@@ -526,7 +524,7 @@ impl<A: BTreeValue> Node<A> {
         self.split(pool, median, left, right)
     }
 
-    pub fn remove<BK>(&mut self, pool: &Pool<Node<A>>, key: &BK) -> Remove<A>
+    pub(crate) fn remove<BK>(&mut self, pool: &Pool<Node<A>>, key: &BK) -> Remove<A>
     where
         A: Clone,
         BK: Ord + ?Sized,
@@ -823,8 +821,8 @@ pub struct Iter<'a, A> {
     pub(crate) remaining: usize,
 }
 
-impl<'a, A: 'a + BTreeValue> Iter<'a, A> {
-    pub fn new<R, BK>(root: &'a Node<A>, size: usize, range: R) -> Self
+impl<'a, A: BTreeValue> Iter<'a, A> {
+    pub(crate) fn new<R, BK>(root: &'a Node<A>, size: usize, range: R) -> Self
     where
         R: RangeBounds<BK>,
         A::Key: Borrow<BK>,
@@ -1013,7 +1011,7 @@ pub struct ConsumingIter<A> {
 }
 
 impl<A: Clone> ConsumingIter<A> {
-    pub fn new(root: &Node<A>, total: usize) -> Self {
+    pub(crate) fn new(root: &Node<A>, total: usize) -> Self {
         ConsumingIter {
             fwd_last: None,
             fwd_stack: vec![ConsumingIterItem::Consider(root.clone())],
@@ -1146,7 +1144,7 @@ enum IterItem<'a, A> {
 }
 
 impl<'a, A: 'a> DiffIter<'a, A> {
-    pub fn new(old: &'a Node<A>, new: &'a Node<A>) -> Self {
+    pub(crate) fn new(old: &'a Node<A>, new: &'a Node<A>) -> Self {
         DiffIter {
             old_stack: if old.keys.is_empty() {
                 Vec::new()

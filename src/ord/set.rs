@@ -444,7 +444,6 @@ where
                     self.size += 1;
                     return None;
                 }
-                Insert::Update(root) => PoolRef::new(&self.pool.0, root),
                 Insert::Split(left, median, right) => PoolRef::new(
                     &self.pool.0,
                     Node::new_from_split(&self.pool.0, left, median, right),
