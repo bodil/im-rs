@@ -795,7 +795,7 @@ where
     A: Hash + Eq + Debug,
     S: BuildHasher,
 {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_set().entries(self.iter()).finish()
     }
 }

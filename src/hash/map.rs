@@ -1401,9 +1401,9 @@ where
 /// An entry for a mapping that does not already exist in the map.
 pub struct VacantEntry<'a, K, V, S>
 where
-    K:  Hash + Eq + Clone,
-    V:  Clone,
-    S:  BuildHasher,
+    K: Hash + Eq + Clone,
+    V: Clone,
+    S: BuildHasher,
 {
     map: &'a mut HashMap<K, V, S>,
     hash: HashBits,
@@ -1671,7 +1671,7 @@ where
     V: Debug,
     S: BuildHasher,
 {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let mut d = f.debug_map();
         for (k, v) in self {
             d.entry(k, v);
