@@ -24,7 +24,7 @@ impl<A> Debug for Actions<A>
 where
     A: Hash + Eq + Debug + Clone,
 {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let mut out = String::new();
         let mut expected = NatSet::new();
         writeln!(out, "let mut set = HashSet::new();")?;

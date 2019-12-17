@@ -323,7 +323,7 @@ where
 
     // Create an iterator over the contents of the set.
     #[must_use]
-    pub fn iter(&self) -> Iter<A> {
+    pub fn iter(&self) -> Iter<'_, A> {
         Iter {
             it: NodeIter::new(&self.root, self.size, ..),
         }
@@ -331,7 +331,7 @@ where
 
     // Create an iterator over a range inside the set.
     #[must_use]
-    pub fn range<R, BA>(&self, range: R) -> RangedIter<A>
+    pub fn range<R, BA>(&self, range: R) -> RangedIter<'_, A>
     where
         R: RangeBounds<BA>,
         A: Borrow<BA>,
@@ -354,7 +354,7 @@ where
     /// the two sets, minus the number of elements belonging to nodes
     /// shared between them)
     #[must_use]
-    pub fn diff<'a>(&'a self, other: &'a Self) -> DiffIter<A> {
+    pub fn diff<'a>(&'a self, other: &'a Self) -> DiffIter<'_, A> {
         DiffIter {
             it: NodeDiffIter::new(&self.root, &other.root),
         }
@@ -874,7 +874,7 @@ where
 }
 
 impl<A: Ord + Debug> Debug for OrdSet<A> {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_set().entries(self.iter()).finish()
     }
 }
@@ -882,10 +882,7 @@ impl<A: Ord + Debug> Debug for OrdSet<A> {
 // Iterators
 
 // An iterator over the elements of a set.
-pub struct Iter<'a, A>
-where
-    A: 'a,
-{
+pub struct Iter<'a, A> {
     it: NodeIter<'a, Value<A>>,
 }
 
@@ -923,10 +920,7 @@ impl<'a, A> ExactSizeIterator for Iter<'a, A> where A: 'a + Ord {}
 // The only difference from `Iter` is that this one doesn't implement
 // `ExactSizeIterator` because we can't know the size of the range without first
 // iterating over it to count.
-pub struct RangedIter<'a, A>
-where
-    A: 'a,
-{
+pub struct RangedIter<'a, A> {
     it: NodeIter<'a, Value<A>>,
 }
 
@@ -977,13 +971,13 @@ where
 }
 
 // An iterator over the difference between two sets.
-pub struct DiffIter<'a, A: 'a> {
+pub struct DiffIter<'a, A> {
     it: NodeDiffIter<'a, Value<A>>,
 }
 
 impl<'a, A> Iterator for DiffIter<'a, A>
 where
-    A: 'a + Ord + PartialEq,
+    A: Ord + PartialEq,
 {
     type Item = DiffItem<'a, A>;
 

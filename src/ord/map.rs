@@ -341,7 +341,7 @@ where
 
     /// Get an iterator over the key/value pairs of a map.
     #[must_use]
-    pub fn iter(&self) -> Iter<(K, V)> {
+    pub fn iter(&self) -> Iter<'_, (K, V)> {
         Iter {
             it: RangedIter::new(&self.root, self.size, ..),
         }
@@ -349,7 +349,7 @@ where
 
     // Create an iterator over a range of key/value pairs.
     #[must_use]
-    pub fn range<R, BK>(&self, range: R) -> RangedIter<(K, V)>
+    pub fn range<R, BK>(&self, range: R) -> RangedIter<'_, (K, V)>
     where
         R: RangeBounds<BK>,
         K: Borrow<BK>,
@@ -1304,8 +1304,8 @@ where
 /// A handle for a key and its associated value.
 pub enum Entry<'a, K, V>
 where
-    K: 'a + Ord + Clone,
-    V: 'a + Clone,
+    K: Ord + Clone,
+    V: Clone,
 {
     Occupied(OccupiedEntry<'a, K, V>),
     Vacant(VacantEntry<'a, K, V>),
@@ -1313,8 +1313,8 @@ where
 
 impl<'a, K, V> Entry<'a, K, V>
 where
-    K: 'a + Ord + Clone,
-    V: 'a + Clone,
+    K: Ord + Clone,
+    V: Clone,
 {
     /// Insert the default value provided if there was no value
     /// already, and return a mutable reference to the value.
@@ -1370,8 +1370,8 @@ where
 /// An entry for a mapping that already exists in the map.
 pub struct OccupiedEntry<'a, K, V>
 where
-    K: 'a + Ord + Clone,
-    V: 'a + Clone,
+    K: Ord + Clone,
+    V: Clone,
 {
     map: &'a mut OrdMap<K, V>,
     key: K,
@@ -1427,8 +1427,8 @@ where
 /// An entry for a mapping that does not already exist in the map.
 pub struct VacantEntry<'a, K, V>
 where
-    K: 'a + Ord + Clone,
-    V: 'a + Clone,
+    K: Ord + Clone,
+    V: Clone,
 {
     map: &'a mut OrdMap<K, V>,
     key: K,
@@ -1635,7 +1635,7 @@ where
     K: Ord + Debug,
     V: Debug,
 {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let mut d = f.debug_map();
         for (k, v) in self {
             d.entry(k, v);
@@ -1646,7 +1646,7 @@ where
 
 // Iterators
 
-pub struct Iter<'a, A: 'a> {
+pub struct Iter<'a, A> {
     it: RangedIter<'a, A>,
 }
 
@@ -1676,7 +1676,7 @@ where
 
 impl<'a, A> ExactSizeIterator for Iter<'a, A> where A: 'a + BTreeValue {}
 
-pub struct Keys<'a, K: 'a, V: 'a> {
+pub struct Keys<'a, K, V> {
     it: Iter<'a, (K, V)>,
 }
 
@@ -1719,7 +1719,7 @@ where
 {
 }
 
-pub struct Values<'a, K: 'a, V: 'a> {
+pub struct Values<'a, K, V> {
     it: Iter<'a, (K, V)>,
 }
 

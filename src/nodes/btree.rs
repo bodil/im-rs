@@ -817,7 +817,7 @@ impl<A: BTreeValue> Node<A> {
 
 // Iterator
 
-pub struct Iter<'a, A: 'a> {
+pub struct Iter<'a, A> {
     fwd_path: Vec<(&'a Node<A>, usize)>,
     back_path: Vec<(&'a Node<A>, usize)>,
     pub(crate) remaining: usize,
@@ -1128,19 +1128,19 @@ impl<A: BTreeValue + Clone> ExactSizeIterator for ConsumingIter<A> {}
 
 // DiffIter
 
-pub struct DiffIter<'a, A: 'a> {
+pub struct DiffIter<'a, A> {
     old_stack: Vec<IterItem<'a, A>>,
     new_stack: Vec<IterItem<'a, A>>,
 }
 
 #[derive(PartialEq, Eq)]
-pub enum DiffItem<'a, A: 'a> {
+pub enum DiffItem<'a, A> {
     Add(&'a A),
     Update { old: &'a A, new: &'a A },
     Remove(&'a A),
 }
 
-enum IterItem<'a, A: 'a> {
+enum IterItem<'a, A> {
     Consider(&'a Node<A>),
     Yield(&'a A),
 }

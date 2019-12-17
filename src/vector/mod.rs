@@ -315,7 +315,7 @@ impl<A: Clone> Vector<A> {
     /// Time: O(1)
     #[inline]
     #[must_use]
-    pub fn iter(&self) -> Iter<A> {
+    pub fn iter(&self) -> Iter<'_, A> {
         Iter::new(self)
     }
 
@@ -324,7 +324,7 @@ impl<A: Clone> Vector<A> {
     /// Time: O(1)
     #[inline]
     #[must_use]
-    pub fn iter_mut(&mut self) -> IterMut<A> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, A> {
         IterMut::new(self)
     }
 
@@ -1627,7 +1627,7 @@ impl<A: Clone> Clone for Vector<A> {
 }
 
 impl<A: Clone + Debug> Debug for Vector<A> {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_list().entries(self.iter()).finish()
         // match self {
         //     Full(rrb) => {
@@ -1862,7 +1862,7 @@ impl<'a, A: Clone> From<&'a Vec<A>> for Vector<A> {
 /// To obtain one, use [`Vector::iter()`][iter].
 ///
 /// [iter]: enum.Vector.html#method.iter
-pub struct Iter<'a, A: 'a> {
+pub struct Iter<'a, A> {
     focus: Focus<'a, A>,
     front_index: usize,
     back_index: usize,
@@ -1933,10 +1933,7 @@ impl<'a, A: Clone> FusedIterator for Iter<'a, A> {}
 /// To obtain one, use [`Vector::iter_mut()`][iter_mut].
 ///
 /// [iter_mut]: enum.Vector.html#method.iter_mut
-pub struct IterMut<'a, A>
-where
-    A: 'a,
-{
+pub struct IterMut<'a, A> {
     focus: FocusMut<'a, A>,
     front_index: usize,
     back_index: usize,
@@ -1944,7 +1941,7 @@ where
 
 impl<'a, A> IterMut<'a, A>
 where
-    A: 'a + Clone,
+    A: Clone,
 {
     fn new(seq: &'a mut Vector<A>) -> Self {
         let focus = seq.focus_mut();
@@ -2080,7 +2077,7 @@ impl<A: Clone> FusedIterator for ConsumingIter<A> {}
 /// To obtain one, use [`Vector::chunks()`][chunks].
 ///
 /// [chunks]: enum.Vector.html#method.chunks
-pub struct Chunks<'a, A: 'a> {
+pub struct Chunks<'a, A> {
     focus: Focus<'a, A>,
     front_index: usize,
     back_index: usize,
@@ -2138,7 +2135,7 @@ impl<'a, A: Clone> FusedIterator for Chunks<'a, A> {}
 /// To obtain one, use [`Vector::chunks_mut()`][chunks_mut].
 ///
 /// [chunks_mut]: enum.Vector.html#method.chunks_mut
-pub struct ChunksMut<'a, A: 'a> {
+pub struct ChunksMut<'a, A> {
     focus: FocusMut<'a, A>,
     front_index: usize,
     back_index: usize,
@@ -2237,7 +2234,7 @@ pub mod rayon {
 
     pub struct ParIter<'a, A>
     where
-        A: Clone + Send + Sync + 'a,
+        A: Clone + Send + Sync,
     {
         focus: Focus<'a, A>,
     }
@@ -2281,7 +2278,7 @@ pub mod rayon {
 
     pub struct ParIterMut<'a, A>
     where
-        A: Clone + Send + Sync + 'a,
+        A: Clone + Send + Sync,
     {
         focus: FocusMut<'a, A>,
     }
@@ -2325,7 +2322,7 @@ pub mod rayon {
 
     struct VectorProducer<'a, A>
     where
-        A: Clone + Send + Sync + 'a,
+        A: Clone + Send + Sync,
     {
         focus: Focus<'a, A>,
     }
@@ -2352,7 +2349,7 @@ pub mod rayon {
 
     struct VectorMutProducer<'a, A>
     where
-        A: Clone + Send + Sync + 'a,
+        A: Clone + Send + Sync,
     {
         focus: FocusMut<'a, A>,
     }

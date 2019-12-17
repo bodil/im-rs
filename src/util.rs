@@ -9,39 +9,39 @@ use std::ops::{Bound, IndexMut, Range, RangeBounds};
 use std::ptr;
 
 #[cfg(feature = "pool")]
-pub use refpool::{PoolClone, PoolDefault};
+pub(crate) use refpool::{PoolClone, PoolDefault};
 
 // The `Ref` type is an alias for either `Rc` or `Arc`, user's choice.
 
 // `Arc` without refpool
 #[cfg(all(threadsafe, not(feature = "pool")))]
-pub use crate::fakepool::{Arc as PoolRef, Pool, PoolClone, PoolDefault};
+pub(crate) use crate::fakepool::{Arc as PoolRef, Pool, PoolClone, PoolDefault};
 
 // `Arc` with refpool
 #[cfg(all(threadsafe, feature = "pool"))]
-pub type PoolRef<A> = refpool::PoolRef<A, refpool::PoolSync>;
+pub(crate) type PoolRef<A> = refpool::PoolRef<A, refpool::PoolSync>;
 #[cfg(all(threadsafe, feature = "pool"))]
-pub type Pool<A> = refpool::Pool<A, refpool::PoolSync>;
+pub(crate) type Pool<A> = refpool::Pool<A, refpool::PoolSync>;
 
 // `Ref` == `Arc` when threadsafe
 #[cfg(threadsafe)]
-pub type Ref<A> = std::sync::Arc<A>;
+pub(crate) type Ref<A> = std::sync::Arc<A>;
 
 // `Rc` without refpool
 #[cfg(all(not(threadsafe), not(feature = "pool")))]
-pub use crate::fakepool::{Pool, PoolClone, PoolDefault, Rc as PoolRef};
+pub(crate) use crate::fakepool::{Pool, PoolClone, PoolDefault, Rc as PoolRef};
 
 // `Rc` with refpool
 #[cfg(all(not(threadsafe), feature = "pool"))]
-pub type PoolRef<A> = refpool::PoolRef<A, refpool::PoolUnsync>;
+pub(crate) type PoolRef<A> = refpool::PoolRef<A, refpool::PoolUnsync>;
 #[cfg(all(not(threadsafe), feature = "pool"))]
-pub type Pool<A> = refpool::Pool<A, refpool::PoolUnsync>;
+pub(crate) type Pool<A> = refpool::Pool<A, refpool::PoolUnsync>;
 
 // `Ref` == `Rc` when not threadsafe
 #[cfg(not(threadsafe))]
-pub type Ref<A> = std::rc::Rc<A>;
+pub(crate) type Ref<A> = std::rc::Rc<A>;
 
-pub fn clone_ref<A>(r: Ref<A>) -> A
+pub(crate) fn clone_ref<A>(r: Ref<A>) -> A
 where
     A: Clone,
 {
@@ -58,7 +58,7 @@ pub enum Side {
 ///
 /// Like `slice::swap`, but more generic.
 #[allow(unsafe_code)]
-pub fn swap_indices<V>(vector: &mut V, a: usize, b: usize)
+pub(crate) fn swap_indices<V>(vector: &mut V, a: usize, b: usize)
 where
     V: IndexMut<usize>,
     V::Output: Sized,
@@ -76,7 +76,7 @@ where
 }
 
 #[allow(dead_code)]
-pub fn linear_search_by<'a, A, I, F>(iterable: I, mut cmp: F) -> Result<usize, usize>
+pub(crate) fn linear_search_by<'a, A, I, F>(iterable: I, mut cmp: F) -> Result<usize, usize>
 where
     A: 'a,
     I: IntoIterator<Item = &'a A>,
@@ -94,7 +94,7 @@ where
     Err(pos)
 }
 
-pub fn to_range<R>(range: &R, right_unbounded: usize) -> Range<usize>
+pub(crate) fn to_range<R>(range: &R, right_unbounded: usize) -> Range<usize>
 where
     R: RangeBounds<usize>,
 {

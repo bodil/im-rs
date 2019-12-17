@@ -14,8 +14,8 @@ fn gen_range<R: RngCore>(rng: &mut R, min: usize, max: usize) -> usize {
 // Ported from the Java version at:
 //    http://www.cs.princeton.edu/~rs/talks/QuicksortIsOptimal.pdf
 // Should be O(n) to O(n log n)
-pub fn do_quicksort<A, F, R>(
-    vector: &mut FocusMut<A>,
+fn do_quicksort<A, F, R>(
+    vector: &mut FocusMut<'_, A>,
     left: usize,
     right: usize,
     cmp: &F,
@@ -85,7 +85,7 @@ pub fn do_quicksort<A, F, R>(
     do_quicksort(vector, l1 as usize, right, cmp, rng);
 }
 
-pub fn quicksort<A, F>(vector: &mut FocusMut<A>, left: usize, right: usize, cmp: &F)
+pub(crate) fn quicksort<A, F>(vector: &mut FocusMut<'_, A>, left: usize, right: usize, cmp: &F)
 where
     A: Clone,
     F: Fn(&A, &A) -> Ordering,

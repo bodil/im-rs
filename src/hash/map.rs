@@ -303,7 +303,7 @@ impl<K, V, S> HashMap<K, V, S> {
     /// the same map.
     #[inline]
     #[must_use]
-    pub fn keys(&self) -> Keys<K, V> {
+    pub fn keys(&self) -> Keys<'_, K, V> {
         Keys {
             it: NodeIter::new(&self.root, self.size),
         }
@@ -318,7 +318,7 @@ impl<K, V, S> HashMap<K, V, S> {
     /// the same map.
     #[inline]
     #[must_use]
-    pub fn values(&self) -> Values<K, V> {
+    pub fn values(&self) -> Values<'_, K, V> {
         Values {
             it: NodeIter::new(&self.root, self.size),
         }
@@ -1264,9 +1264,9 @@ where
 /// generally perform similarly otherwise.
 pub enum Entry<'a, K, V, S>
 where
-    K: 'a + Hash + Eq + Clone,
-    V: 'a + Clone,
-    S: 'a + BuildHasher,
+    K: Hash + Eq + Clone,
+    V: Clone,
+    S: BuildHasher,
 {
     Occupied(OccupiedEntry<'a, K, V, S>),
     Vacant(VacantEntry<'a, K, V, S>),
@@ -1332,9 +1332,9 @@ where
 /// An entry for a mapping that already exists in the map.
 pub struct OccupiedEntry<'a, K, V, S>
 where
-    K: 'a + Hash + Eq + Clone,
-    V: 'a + Clone,
-    S: 'a + BuildHasher,
+    K: Hash + Eq + Clone,
+    V: Clone,
+    S: BuildHasher,
 {
     map: &'a mut HashMap<K, V, S>,
     hash: HashBits,
@@ -1401,9 +1401,9 @@ where
 /// An entry for a mapping that does not already exist in the map.
 pub struct VacantEntry<'a, K, V, S>
 where
-    K: 'a + Hash + Eq + Clone,
-    V: 'a + Clone,
-    S: 'a + BuildHasher,
+    K:  Hash + Eq + Clone,
+    V:  Clone,
+    S:  BuildHasher,
 {
     map: &'a mut HashMap<K, V, S>,
     hash: HashBits,
@@ -1687,7 +1687,7 @@ where
     V: Debug,
     S: BuildHasher,
 {
-    default fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    default fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let mut d = f.debug_map();
         for (k, v) in self {
             d.entry(k, v);
@@ -1703,7 +1703,7 @@ where
     V: Debug,
     S: BuildHasher,
 {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let mut keys = collections::BTreeSet::new();
         keys.extend(self.keys());
         let mut d = f.debug_map();
@@ -1717,7 +1717,7 @@ where
 // // Iterators
 
 // An iterator over the elements of a map.
-pub struct Iter<'a, K: 'a, V: 'a> {
+pub struct Iter<'a, K, V> {
     it: NodeIter<'a, (K, V)>,
 }
 
@@ -1738,7 +1738,7 @@ impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {}
 impl<'a, K, V> FusedIterator for Iter<'a, K, V> {}
 
 // A mutable iterator over the values of a map.
-pub struct IterMut<'a, K: 'a, V: 'a>
+pub struct IterMut<'a, K, V>
 where
     K: Clone,
     V: Clone,
@@ -1801,7 +1801,7 @@ impl<A> ExactSizeIterator for ConsumingIter<A> where A: HashValue + Clone {}
 impl<A> FusedIterator for ConsumingIter<A> where A: HashValue + Clone {}
 
 // An iterator over the keys of a map.
-pub struct Keys<'a, K: 'a, V: 'a> {
+pub struct Keys<'a, K, V> {
     it: NodeIter<'a, (K, V)>,
 }
 
@@ -1822,7 +1822,7 @@ impl<'a, K, V> ExactSizeIterator for Keys<'a, K, V> {}
 impl<'a, K, V> FusedIterator for Keys<'a, K, V> {}
 
 // An iterator over the values of a map.
-pub struct Values<'a, K: 'a, V: 'a> {
+pub struct Values<'a, K, V> {
     it: NodeIter<'a, (K, V)>,
 }
 

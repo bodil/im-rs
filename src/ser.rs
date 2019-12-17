@@ -30,7 +30,7 @@ where
     S: From<Vec<A>>,
     A: Deserialize<'de>,
 {
-    pub fn new() -> SeqVisitor<'de, S, A> {
+    pub(crate) fn new() -> SeqVisitor<'de, S, A> {
         SeqVisitor {
             phantom_s: PhantomData,
             phantom_a: PhantomData,
@@ -46,7 +46,7 @@ where
 {
     type Value = S;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("a sequence")
     }
 
@@ -83,7 +83,7 @@ where
     K: Deserialize<'de>,
     V: Deserialize<'de>,
 {
-    pub fn new() -> MapVisitor<'de, S, K, V> {
+    pub(crate) fn new() -> MapVisitor<'de, S, K, V> {
         MapVisitor {
             phantom_s: PhantomData,
             phantom_k: PhantomData,
@@ -101,7 +101,7 @@ where
 {
     type Value = S;
 
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("a sequence")
     }
 

@@ -15,7 +15,7 @@ use crate::vector::RRBPool;
 
 use self::Entry::*;
 
-pub const NODE_SIZE: usize = CHUNK_SIZE;
+pub(crate) const NODE_SIZE: usize = CHUNK_SIZE;
 
 #[derive(Debug)]
 enum Size {

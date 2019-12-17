@@ -23,7 +23,7 @@ impl<A> Debug for Actions<A>
 where
     A: Ord + Debug + Clone,
 {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let mut out = String::new();
         let mut expected = BTreeSet::new();
         writeln!(out, "let mut set = OrdSet::new();")?;

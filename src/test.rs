@@ -7,7 +7,7 @@ use std::hash::{BuildHasher, Hasher};
 use std::marker::PhantomData;
 use typenum::{Unsigned, U64};
 
-pub fn is_sorted<A, I>(l: I) -> bool
+pub(crate) fn is_sorted<A, I>(l: I) -> bool
 where
     I: IntoIterator<Item = A>,
     A: Ord,
@@ -22,7 +22,7 @@ where
     }
 }
 
-pub struct LolHasher<N: Unsigned = U64> {
+pub(crate) struct LolHasher<N: Unsigned = U64> {
     state: u64,
     shift: usize,
     size: PhantomData<N>,
@@ -64,16 +64,16 @@ impl<N: Unsigned> Default for LolHasher<N> {
     }
 }
 
-pub struct MetroHashBuilder {
+pub(crate) struct MetroHashBuilder {
     seed: u64,
 }
 
 impl MetroHashBuilder {
-    pub fn new(seed: u64) -> Self {
+    pub(crate) fn new(seed: u64) -> Self {
         MetroHashBuilder { seed }
     }
 
-    pub fn seed(&self) -> u64 {
+    pub(crate) fn seed(&self) -> u64 {
         self.seed
     }
 }

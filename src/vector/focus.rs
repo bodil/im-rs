@@ -79,10 +79,7 @@ use crate::vector::{Iter, IterMut, RRBPool, Vector, RRB};
 /// [Iter]: struct.Iter.html
 /// [narrow]: #method.narrow
 /// [split_at]: #method.split_at
-pub enum Focus<'a, A>
-where
-    A: 'a,
-{
+pub enum Focus<'a, A> {
     #[doc(hidden)]
     Single(&'a [A]),
     #[doc(hidden)]
@@ -459,10 +456,7 @@ where
 /// ```
 ///
 /// [Focus]: enum.Focus.html
-pub enum FocusMut<'a, A>
-where
-    A: 'a,
-{
+pub enum FocusMut<'a, A> {
     #[doc(hidden)]
     Single(RRBPool<A>, &'a mut [A]),
     #[doc(hidden)]
@@ -760,10 +754,7 @@ where
     }
 }
 
-pub struct TreeFocusMut<'a, A>
-where
-    A: 'a,
-{
+pub struct TreeFocusMut<'a, A> {
     tree: Lock<&'a mut RRB<A>>,
     view: Range<usize>,
     middle_range: Range<usize>,

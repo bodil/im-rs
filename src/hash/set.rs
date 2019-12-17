@@ -806,7 +806,7 @@ where
     A: Hash + Eq + Debug,
     S: BuildHasher,
 {
-    default fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    default fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_set().entries(self.iter()).finish()
     }
 }
@@ -817,7 +817,7 @@ where
     A: Hash + Eq + Debug + Ord,
     S: BuildHasher,
 {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_set().entries(self.iter()).finish()
     }
 }
@@ -825,10 +825,7 @@ where
 // Iterators
 
 // An iterator over the elements of a set.
-pub struct Iter<'a, A>
-where
-    A: 'a,
-{
+pub struct Iter<'a, A> {
     it: NodeIter<'a, Value<A>>,
 }
 
@@ -852,10 +849,7 @@ impl<'a, A> ExactSizeIterator for Iter<'a, A> {}
 impl<'a, A> FusedIterator for Iter<'a, A> {}
 
 // A mutable iterator over the elements of a set.
-pub struct IterMut<'a, A>
-where
-    A: 'a,
-{
+pub struct IterMut<'a, A> {
     it: NodeIterMut<'a, Value<A>>,
 }
 

@@ -31,7 +31,7 @@ impl<A> Debug for Actions<A>
 where
     A: Debug + Clone,
 {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let mut out = String::new();
         let mut expected = vec![];
         writeln!(out, "let mut vec = Vector::new();")?;
