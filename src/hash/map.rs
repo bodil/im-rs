@@ -402,6 +402,32 @@ where
             .map(|&(_, ref v)| v)
     }
 
+    /// Get the key/value pair for a key from a hash map.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::hashmap::HashMap;
+    /// let map = hashmap!{123 => "lol"};
+    /// assert_eq!(
+    ///   map.get_key_value(&123),
+    ///   Some((&123, &"lol"))
+    /// );
+    /// ```
+    #[must_use]
+    pub fn get_key_value<BK>(&self, key: &BK) -> Option<(&K, &V)>
+    where
+        BK: Hash + Eq + ?Sized,
+        K: Borrow<BK>,
+    {
+        self.root
+            .get(hash_key(&*self.hasher, key), 0, key)
+            .map(|&(ref k, ref v)| (k, v))
+    }
+
     /// Test for the presence of a key in a hash map.
     ///
     /// Time: O(log n)

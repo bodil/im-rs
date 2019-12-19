@@ -410,6 +410,30 @@ where
         self.root.lookup(key).map(|(_, v)| v)
     }
 
+    /// Get the key/value pair for a key from a map.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// let map = ordmap!{123 => "lol"};
+    /// assert_eq!(
+    ///   map.get_key_value(&123),
+    ///   Some((&123, &"lol"))
+    /// );
+    /// ```
+    #[must_use]
+    pub fn get_key_value<BK>(&self, key: &BK) -> Option<(&K, &V)>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
+        self.root.lookup(key).map(|&(ref k, ref v)| (k, v))
+    }
+
     /// Test for the presence of a key in a map.
     ///
     /// Time: O(log n)
