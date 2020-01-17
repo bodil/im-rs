@@ -2039,11 +2039,16 @@ where
 
 // QuickCheck
 
-#[cfg(all(feature = "arc", any(test, feature = "quickcheck")))]
+#[cfg(all(threadsafe, feature = "quickcheck"))]
 use quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(feature = "arc", any(test, feature = "quickcheck")))]
-impl<K: Hash + Eq + Arbitrary + Sync, V: Arbitrary + Sync> Arbitrary for HashMap<K, V> {
+#[cfg(all(threadsafe, feature = "quickcheck"))]
+impl<K, V, S> Arbitrary for HashMap<K, V, S>
+where
+    K: Hash + Eq + Arbitrary + Sync,
+    V: Arbitrary + Sync,
+    S: BuildHasher + Default + Send + Sync + 'static,
+{
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         HashMap::from(Vec::<(K, V)>::arbitrary(g))
     }
