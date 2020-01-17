@@ -638,6 +638,10 @@ impl<A, S> Clone for HashSet<A, S>
 where
     A: Clone,
 {
+    /// Clone a set.
+    ///
+    /// Time: O(1)
+    #[inline]
     fn clone(&self) -> Self {
         HashSet {
             hasher: self.hasher.clone(),

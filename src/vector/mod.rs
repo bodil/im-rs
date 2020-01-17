@@ -1678,6 +1678,9 @@ impl<A: Clone> Default for Vector<A> {
 }
 
 impl<A: Clone> Clone for Vector<A> {
+    /// Clone a vector.
+    ///
+    /// Time: O(1), or O(n) with a very small, bounded *n* for an inline vector.
     fn clone(&self) -> Self {
         Self {
             vector: match &self.vector {

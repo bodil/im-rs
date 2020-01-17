@@ -1492,6 +1492,9 @@ where
     K: Clone,
     V: Clone,
 {
+    /// Clone a map.
+    ///
+    /// Time: O(1)
     #[inline]
     fn clone(&self) -> Self {
         HashMap {

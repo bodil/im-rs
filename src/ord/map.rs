@@ -1498,6 +1498,10 @@ where
 // Core traits
 
 impl<K, V> Clone for OrdMap<K, V> {
+    /// Clone a map.
+    ///
+    /// Time: O(1)
+    #[inline]
     fn clone(&self) -> Self {
         OrdMap {
             size: self.size,

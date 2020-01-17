@@ -783,6 +783,10 @@ where
 // Core traits
 
 impl<A> Clone for OrdSet<A> {
+    /// Clone a set.
+    ///
+    /// Time: O(1)
+    #[inline]
     fn clone(&self) -> Self {
         OrdSet {
             size: self.size,
