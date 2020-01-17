@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::iter::FusedIterator;
 use std::mem::replace;
 use std::ops::Range;
 
@@ -1098,95 +1097,3 @@ impl<A: Clone> Node<A> {
 //     }
 //     Ok(())
 // }
-
-// Consuming iterator
-
-pub struct ConsumingIter<A> {
-    pool: RRBPool<A>,
-    root: Node<A>,
-    level: usize,
-    front_chunk: Option<Chunk<A>>,
-    back_chunk: Option<Chunk<A>>,
-    remaining: usize,
-}
-
-impl<A: Clone> ConsumingIter<A> {
-    pub(crate) fn new(pool: RRBPool<A>, root: Node<A>, level: usize) -> Self {
-        ConsumingIter {
-            pool,
-            remaining: root.len(),
-            root,
-            level,
-            front_chunk: None,
-            back_chunk: None,
-        }
-    }
-}
-
-impl<A: Clone> Iterator for ConsumingIter<A> {
-    type Item = A;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.remaining == 0 {
-            return None;
-        }
-        if let Some(ref mut chunk) = self.front_chunk {
-            if !chunk.is_empty() {
-                self.remaining -= 1;
-                return Some(chunk.pop_front());
-            }
-        }
-        match self.root.pop_chunk(&self.pool, self.level, Side::Left) {
-            PopResult::Done(chunk) => self.front_chunk = Some(PoolRef::unwrap_or_clone(chunk)),
-            PopResult::Drained(chunk) => self.front_chunk = Some(PoolRef::unwrap_or_clone(chunk)),
-            PopResult::Empty => {
-                if let Some(ref mut chunk) = self.back_chunk {
-                    if !chunk.is_empty() {
-                        self.remaining -= 1;
-                        return Some(chunk.pop_front());
-                    } else {
-                        return None;
-                    }
-                }
-            }
-        }
-        self.next()
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.remaining, Some(self.remaining))
-    }
-}
-
-impl<A: Clone> DoubleEndedIterator for ConsumingIter<A> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.remaining == 0 {
-            return None;
-        }
-        if let Some(ref mut chunk) = self.back_chunk {
-            if !chunk.is_empty() {
-                self.remaining -= 1;
-                return Some(chunk.pop_back());
-            }
-        }
-        match self.root.pop_chunk(&self.pool, self.level, Side::Left) {
-            PopResult::Done(chunk) => self.front_chunk = Some(PoolRef::unwrap_or_clone(chunk)),
-            PopResult::Drained(chunk) => self.front_chunk = Some(PoolRef::unwrap_or_clone(chunk)),
-            PopResult::Empty => {
-                if let Some(ref mut chunk) = self.front_chunk {
-                    if !chunk.is_empty() {
-                        self.remaining -= 1;
-                        return Some(chunk.pop_back());
-                    } else {
-                        return None;
-                    }
-                }
-            }
-        }
-        self.next()
-    }
-}
-
-impl<A: Clone> ExactSizeIterator for ConsumingIter<A> {}
-
-impl<A: Clone> FusedIterator for ConsumingIter<A> {}

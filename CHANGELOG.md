@@ -17,6 +17,11 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 -   `HashMap` had lost its `Arbitrary` implementation for the `quickcheck` feature flag. It's now
     been restored. (#118)
 
+### Fixed
+
+-   Fixed a bug when reversing a consuming iterator over a `Vector` by replacing the consuming
+    iterator with a much simpler and slightly more efficient version. (#116)
+
 ## [14.1.0] - 2019-12-16
 
 ### Added

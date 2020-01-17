@@ -12,6 +12,5 @@ pub(crate) mod chunk {
     use typenum::Unsigned;
 
     pub(crate) type Chunk<A> = sc::sized_chunk::Chunk<A, VectorChunkSize>;
-    pub(crate) type Iter<A> = sc::sized_chunk::Iter<A, VectorChunkSize>;
     pub(crate) const CHUNK_SIZE: usize = VectorChunkSize::USIZE;
 }

@@ -48,16 +48,14 @@ use std::cmp::Ordering;
 use std::fmt::{Debug, Error, Formatter};
 use std::hash::{Hash, Hasher};
 use std::iter::Sum;
-use std::iter::{Chain, FromIterator, FusedIterator};
+use std::iter::{FromIterator, FusedIterator};
 use std::mem::{replace, swap};
 use std::ops::{Add, Index, IndexMut, RangeBounds};
 
-use sized_chunks::{inline_array::Iter as InlineIter, InlineArray};
+use sized_chunks::InlineArray;
 
-use crate::nodes::chunk::{Chunk, Iter as ChunkIter, CHUNK_SIZE};
-use crate::nodes::rrb::{
-    ConsumingIter as ConsumingNodeIter, Node, PopResult, PushResult, SplitResult,
-};
+use crate::nodes::chunk::{Chunk, CHUNK_SIZE};
+use crate::nodes::rrb::{Node, PopResult, PushResult, SplitResult};
 use crate::sort;
 use crate::util::{clone_ref, swap_indices, to_range, Pool, PoolDefault, PoolRef, Ref, Side};
 
@@ -1489,25 +1487,6 @@ impl<A: Clone> Vector<A> {
 // Implementation details
 
 impl<A: Clone> RRB<A> {
-    fn into_iter(
-        self,
-        pool: RRBPool<A>,
-    ) -> Chain<
-        Chain<Chain<Chain<ChunkIter<A>, ChunkIter<A>>, ConsumingNodeIter<A>>, ChunkIter<A>>,
-        ChunkIter<A>,
-    > {
-        let outer_f = PoolRef::unwrap_or_clone(self.outer_f).into_iter();
-        let inner_f = PoolRef::unwrap_or_clone(self.inner_f).into_iter();
-        let middle = ConsumingNodeIter::new(pool, clone_ref(self.middle), self.middle_level);
-        let inner_b = PoolRef::unwrap_or_clone(self.inner_b).into_iter();
-        let outer_b = PoolRef::unwrap_or_clone(self.outer_b).into_iter();
-        outer_f
-            .chain(inner_f)
-            .chain(middle)
-            .chain(inner_b)
-            .chain(outer_b)
-    }
-
     fn new(pool: &RRBPool<A>) -> Self {
         RRB {
             length: 0,
@@ -2082,24 +2061,13 @@ impl<'a, A: Clone> ExactSizeIterator for IterMut<'a, A> {}
 impl<'a, A: Clone> FusedIterator for IterMut<'a, A> {}
 
 /// A consuming iterator over vectors with values of type `A`.
-pub enum ConsumingIter<A> {
-    Inline(InlineIter<A, RRB<A>>),
-    Single(ChunkIter<A>),
-    Full(
-        Chain<
-            Chain<Chain<Chain<ChunkIter<A>, ChunkIter<A>>, ConsumingNodeIter<A>>, ChunkIter<A>>,
-            ChunkIter<A>,
-        >,
-    ),
+pub struct ConsumingIter<A> {
+    vector: Vector<A>,
 }
 
 impl<A: Clone> ConsumingIter<A> {
-    fn new(seq: Vector<A>) -> Self {
-        match seq.vector {
-            Inline(_, chunk) => ConsumingIter::Inline(chunk.into_iter()),
-            Single(_, chunk) => ConsumingIter::Single(PoolRef::unwrap_or_clone(chunk).into_iter()),
-            Full(pool, tree) => ConsumingIter::Full(tree.into_iter(pool)),
-        }
+    fn new(vector: Vector<A>) -> Self {
+        Self { vector }
     }
 }
 
@@ -2110,19 +2078,12 @@ impl<A: Clone> Iterator for ConsumingIter<A> {
     ///
     /// Time: O(1)*
     fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            ConsumingIter::Inline(iter) => iter.next(),
-            ConsumingIter::Single(iter) => iter.next(),
-            ConsumingIter::Full(iter) => iter.next(),
-        }
+        self.vector.pop_front()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            ConsumingIter::Inline(iter) => iter.size_hint(),
-            ConsumingIter::Single(iter) => iter.size_hint(),
-            ConsumingIter::Full(iter) => iter.size_hint(),
-        }
+        let len = self.vector.len();
+        (len, Some(len))
     }
 }
 
@@ -2131,11 +2092,7 @@ impl<A: Clone> DoubleEndedIterator for ConsumingIter<A> {
     ///
     /// Time: O(1)*
     fn next_back(&mut self) -> Option<Self::Item> {
-        match self {
-            ConsumingIter::Inline(iter) => iter.next_back(),
-            ConsumingIter::Single(iter) => iter.next_back(),
-            ConsumingIter::Full(iter) => iter.next_back(),
-        }
+        self.vector.pop_back()
     }
 }
 
@@ -2750,6 +2707,13 @@ mod test {
     fn collect_crash() {
         let _vector: Vector<i32> = (0..5953).collect();
         // let _vector: Vector<i32> = (0..16384).collect();
+    }
+
+    #[test]
+    fn issue_116() {
+        let vec = Vector::from_iter(0..300);
+        let rev_vec: Vector<u32> = vec.clone().into_iter().rev().collect();
+        assert_eq!(vec.len(), rev_vec.len());
     }
 
     proptest! {
