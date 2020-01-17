@@ -315,6 +315,44 @@ impl<A: Clone> Vector<A> {
         self.len() == 0
     }
 
+    /// Test whether two vectors refer to the same content in memory.
+    ///
+    /// This uses the following rules to determine equality:
+    /// * If the two sides are references to the same vector, return true.
+    /// * If the two sides are single chunk vectors pointing to the same chunk, return true.
+    /// * If the two sides are full trees pointing to the same chunks, return true.
+    ///
+    /// This would return true if you're comparing a vector to itself, or
+    /// if you're comparing a vector to a fresh clone of itself. The exception to this is
+    /// if you've cloned an inline array (ie. an array with so few elements they can fit
+    /// inside the space a `Vector` allocates for its pointers, so there are no heap allocations
+    /// to compare).
+    ///
+    /// Time: O(1), or O(n) for inline vectors
+    #[must_use]
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        fn cmp_chunk<A>(left: &PoolRef<Chunk<A>>, right: &PoolRef<Chunk<A>>) -> bool {
+            (left.is_empty() && right.is_empty()) || PoolRef::ptr_eq(left, right)
+        }
+
+        if std::ptr::eq(self, other) {
+            return true;
+        }
+
+        match (&self.vector, &other.vector) {
+            (Single(_, left), Single(_, right)) => cmp_chunk(left, right),
+            (Full(_, left), Full(_, right)) => {
+                cmp_chunk(&left.outer_f, &right.outer_f)
+                    && cmp_chunk(&left.inner_f, &right.inner_f)
+                    && cmp_chunk(&left.inner_b, &right.inner_b)
+                    && cmp_chunk(&left.outer_b, &right.outer_b)
+                    && (left.middle.is_empty() && right.middle.is_empty())
+                    || Ref::ptr_eq(&left.middle, &right.middle)
+            }
+            _ => false,
+        }
+    }
+
     /// Get an iterator over a vector.
     ///
     /// Time: O(1)
@@ -1682,14 +1720,19 @@ impl<A: Clone + PartialEq> PartialEq for Vector<A> {
 #[cfg(has_specialisation)]
 impl<A: Clone + Eq> PartialEq for Vector<A> {
     fn eq(&self, other: &Self) -> bool {
+        fn cmp_chunk<A>(left: &PoolRef<Chunk<A>>, right: &PoolRef<Chunk<A>>) -> bool {
+            (left.is_empty() && right.is_empty()) || PoolRef::ptr_eq(left, right)
+        }
+
+        if std::ptr::eq(self, other) {
+            return true;
+        }
+
         match (&self.vector, &other.vector) {
+            (Single(_, left), Single(_, right)) => cmp_chunk(left, right),
             (Full(_, left), Full(_, right)) => {
                 if left.length != right.length {
                     return false;
-                }
-
-                fn cmp_chunk<A>(left: &PoolRef<Chunk<A>>, right: &PoolRef<Chunk<A>>) -> bool {
-                    (left.is_empty() && right.is_empty()) || PoolRef::ptr_eq(left, right)
                 }
 
                 if cmp_chunk(&left.outer_f, &right.outer_f)

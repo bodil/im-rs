@@ -210,6 +210,19 @@ impl<K, V, S> HashMap<K, V, S> {
         self.size
     }
 
+    /// Test whether two maps refer to the same content in memory.
+    ///
+    /// This is true if the two sides are references to the same map,
+    /// or if the two maps refer to the same root node.
+    ///
+    /// This would return true if you're comparing a map to itself, or
+    /// if you're comparing a map to a fresh clone of itself.
+    ///
+    /// Time: O(1)
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self, other) || PoolRef::ptr_eq(&self.root, &other.root)
+    }
+
     /// Get a reference to the memory pool used by this map.
     ///
     /// Note that if you didn't specifically construct it with a pool, you'll

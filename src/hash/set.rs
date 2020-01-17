@@ -208,6 +208,19 @@ impl<A, S> HashSet<A, S> {
         self.size
     }
 
+    /// Test whether two sets refer to the same content in memory.
+    ///
+    /// This is true if the two sides are references to the same set,
+    /// or if the two sets refer to the same root node.
+    ///
+    /// This would return true if you're comparing a set to itself, or
+    /// if you're comparing a set to a fresh clone of itself.
+    ///
+    /// Time: O(1)
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self, other) || PoolRef::ptr_eq(&self.root, &other.root)
+    }
+
     /// Get a reference to the memory pool used by this set.
     ///
     /// Note that if you didn't specifically construct it with a pool, you'll

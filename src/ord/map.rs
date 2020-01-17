@@ -239,6 +239,19 @@ impl<K, V> OrdMap<K, V> {
         self.len() == 0
     }
 
+    /// Test whether two maps refer to the same content in memory.
+    ///
+    /// This is true if the two sides are references to the same map,
+    /// or if the two maps refer to the same root node.
+    ///
+    /// This would return true if you're comparing a map to itself, or
+    /// if you're comparing a map to a fresh clone of itself.
+    ///
+    /// Time: O(1)
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self, other) || PoolRef::ptr_eq(&self.root, &other.root)
+    }
+
     /// Get the size of a map.
     ///
     /// Time: O(1)

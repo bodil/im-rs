@@ -12,6 +12,8 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 -   Both map types now have the `get_key_value()` method, corresponding to the equivalent
     [additions](https://doc.rust-lang.org/std/collections/struct.BTreeMap.html#method.get_key_value)
     to the standard library.
+-   The `ptr_eq` method has been added to all data types, allowing you to test whether two values
+    refer to the same content in memory, by testing for pointer equality. (#117)
 -   `HashMap` had lost its `Arbitrary` implementation for the `quickcheck` feature flag. It's now
     been restored. (#118)
 
