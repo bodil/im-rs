@@ -1058,23 +1058,23 @@ where
 }
 
 // QuickCheck
-
 #[cfg(all(threadsafe, feature = "quickcheck"))]
-use quickcheck::{Arbitrary, Gen};
+mod quickcheck {
+    use super::*;
+    use ::quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(threadsafe, feature = "quickcheck"))]
-impl<A, S> Arbitrary for HashSet<A, S>
-where
-    A: Hash + Eq + Arbitrary + Sync,
-    S: BuildHasher + Default + Send + Sync + 'static,
-{
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
-        HashSet::from_iter(Vec::<A>::arbitrary(g))
+    impl<A, S> Arbitrary for HashSet<A, S>
+    where
+        A: Hash + Eq + Arbitrary + Sync,
+        S: BuildHasher + Default + Send + Sync + 'static,
+    {
+        fn arbitrary<G: Gen>(g: &mut G) -> Self {
+            HashSet::from_iter(Vec::<A>::arbitrary(g))
+        }
     }
 }
 
 // Proptest
-
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     //! Proptest strategies.

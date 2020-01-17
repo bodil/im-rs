@@ -1124,19 +1124,19 @@ impl<'a, A: Hash + Eq + Ord + Clone, S: BuildHasher> From<&'a HashSet<A, S>> for
 }
 
 // QuickCheck
-
 #[cfg(all(threadsafe, feature = "quickcheck"))]
-use quickcheck::{Arbitrary, Gen};
+mod quickcheck {
+    use super::*;
+    use ::quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(threadsafe, feature = "quickcheck"))]
-impl<A: Ord + Clone + Arbitrary + Sync> Arbitrary for OrdSet<A> {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
-        OrdSet::from_iter(Vec::<A>::arbitrary(g))
+    impl<A: Ord + Clone + Arbitrary + Sync> Arbitrary for OrdSet<A> {
+        fn arbitrary<G: Gen>(g: &mut G) -> Self {
+            OrdSet::from_iter(Vec::<A>::arbitrary(g))
+        }
     }
 }
 
 // Proptest
-
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     //! Proptest strategies.

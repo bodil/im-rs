@@ -2431,17 +2431,18 @@ pub mod rayon {
 
 // QuickCheck
 #[cfg(all(threadsafe, feature = "quickcheck"))]
-use quickcheck::{Arbitrary, Gen};
+mod quickcheck {
+    use super::*;
+    use ::quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(threadsafe, feature = "quickcheck"))]
-impl<A: Arbitrary + Sync + Clone> Arbitrary for Vector<A> {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
-        Vector::from_iter(Vec::<A>::arbitrary(g))
+    impl<A: Arbitrary + Sync + Clone> Arbitrary for Vector<A> {
+        fn arbitrary<G: Gen>(g: &mut G) -> Self {
+            Vector::from_iter(Vec::<A>::arbitrary(g))
+        }
     }
 }
 
 // Proptest
-
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     //! Proptest strategies.

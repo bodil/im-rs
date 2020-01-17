@@ -2054,24 +2054,24 @@ where
 // }
 
 // QuickCheck
-
 #[cfg(all(threadsafe, feature = "quickcheck"))]
-use quickcheck::{Arbitrary, Gen};
+mod quickcheck {
+    use super::*;
+    use ::quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(threadsafe, feature = "quickcheck"))]
-impl<K, V, S> Arbitrary for HashMap<K, V, S>
-where
-    K: Hash + Eq + Arbitrary + Sync,
-    V: Arbitrary + Sync,
-    S: BuildHasher + Default + Send + Sync + 'static,
-{
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
-        HashMap::from(Vec::<(K, V)>::arbitrary(g))
+    impl<K, V, S> Arbitrary for HashMap<K, V, S>
+    where
+        K: Hash + Eq + Arbitrary + Sync,
+        V: Arbitrary + Sync,
+        S: BuildHasher + Default + Send + Sync + 'static,
+    {
+        fn arbitrary<G: Gen>(g: &mut G) -> Self {
+            HashMap::from(Vec::<(K, V)>::arbitrary(g))
+        }
     }
 }
 
 // Proptest
-
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     //! Proptest strategies.

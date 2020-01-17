@@ -1977,17 +1977,18 @@ impl<'a, K: Ord + Hash + Eq + Clone, V: Clone, S: BuildHasher> From<&'a HashMap<
 // QuickCheck
 
 #[cfg(all(threadsafe, feature = "quickcheck"))]
-use quickcheck::{Arbitrary, Gen};
+mod quickcheck {
+    use super::*;
+    use ::quickcheck::{Arbitrary, Gen};
 
-#[cfg(all(threadsafe, feature = "quickcheck"))]
-impl<K: Ord + Clone + Arbitrary + Sync, V: Clone + Arbitrary + Sync> Arbitrary for OrdMap<K, V> {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
-        OrdMap::from_iter(Vec::<(K, V)>::arbitrary(g))
+    impl<K: Ord + Clone + Arbitrary + Sync, V: Clone + Arbitrary + Sync> Arbitrary for OrdMap<K, V> {
+        fn arbitrary<G: Gen>(g: &mut G) -> Self {
+            OrdMap::from_iter(Vec::<(K, V)>::arbitrary(g))
+        }
     }
 }
 
 // Proptest
-
 #[cfg(any(test, feature = "proptest"))]
 pub mod proptest {
     //! Proptest strategies.
