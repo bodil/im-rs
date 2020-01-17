@@ -16,6 +16,8 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
     refer to the same content in memory, by testing for pointer equality. (#117)
 -   `HashMap` had lost its `Arbitrary` implementation for the `quickcheck` feature flag. It's now
     been restored. (#118)
+-   Implementations for `Arbitrary` from the [`arbitrary`](https://crates.io/crates/arbitrary/)
+    crate have been added behind the `arbitrary` feature flag.
 
 ### Fixed
 
