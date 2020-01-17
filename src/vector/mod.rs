@@ -1156,7 +1156,7 @@ impl<A: Clone> Vector<A> {
                         middle_level: tree.middle_level,
                         outer_f: PoolRef::new(&pool.value_pool, of2),
                         inner_f: replace_pool_def(&pool.value_pool, &mut tree.inner_f),
-                        middle: replace_def(&mut tree.middle),
+                        middle: std::mem::take(&mut tree.middle),
                         inner_b: replace_pool_def(&pool.value_pool, &mut tree.inner_b),
                         outer_b: replace_pool_def(&pool.value_pool, &mut tree.outer_b),
                     };
@@ -1177,7 +1177,7 @@ impl<A: Clone> Vector<A> {
                         middle_level: tree.middle_level,
                         outer_f: PoolRef::new(&pool.value_pool, if2),
                         inner_f: PoolRef::<Chunk<A>>::default(&pool.value_pool),
-                        middle: replace_def(&mut tree.middle),
+                        middle: std::mem::take(&mut tree.middle),
                         inner_b: replace_pool_def(&pool.value_pool, &mut tree.inner_b),
                         outer_b: replace_pool_def(&pool.value_pool, &mut tree.outer_b),
                     };
@@ -1657,11 +1657,6 @@ impl<A: Clone> RRB<A> {
         };
         Some(chunk)
     }
-}
-
-#[inline]
-fn replace_def<A: Default>(dest: &mut A) -> A {
-    replace(dest, Default::default())
 }
 
 #[inline]
