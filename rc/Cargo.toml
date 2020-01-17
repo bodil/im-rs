@@ -1,6 +1,6 @@
 [package]
 name = "im-rc"
-version = "14.1.0"
+version = "14.2.0"
 edition = "2018"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 license = "MPL-2.0+"
@@ -36,6 +36,7 @@ proptest = { version = "0.9", optional = true }
 serde = { version = "1.0", optional = true }
 rayon = { version = "1.0", optional = true }
 refpool = { version = "0.2.2", optional = true }
+arbitrary = { version = "0.3", optional = true }
 
 [dev-dependencies]
 proptest = "0.9"

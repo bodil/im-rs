@@ -1,6 +1,6 @@
 [package]
 name = "im"
-version = "14.1.0"
+version = "14.2.0"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 edition = "2018"
 license = "MPL-2.0+"
@@ -20,14 +20,14 @@ exclude = [
     "proptest-regressions/**"
 ]
 
+[package.metadata.docs.rs]
+all-features = true
+
 [lib]
 path = "./src/lib.rs"
 
 [badges]
 circle-ci = { repository = "bodil/im-rs" }
-
-[package.metadata.docs.rs]
-all-features = true
 
 [build-dependencies]
 version_check = "0.9"
