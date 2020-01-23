@@ -1476,8 +1476,15 @@ impl<A: Clone> Vector<A> {
         }
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn assert_invariants(&self) {
+    /// Verify the internal consistency of a vector.
+    ///
+    /// This method walks the RRB tree making up the current `Vector`
+    /// (if it has one) and verifies that all the invariants hold.
+    /// If something is wrong, it will panic.
+    ///
+    /// This method requires the `debug` feature flag.
+    #[cfg(any(test, feature = "debug"))]
+    pub fn assert_invariants(&self) {
         if let Full(_, ref tree) = self.vector {
             tree.assert_invariants();
         }
@@ -1499,6 +1506,7 @@ impl<A: Clone> RRB<A> {
         }
     }
 
+    #[cfg(any(test, feature = "debug"))]
     fn assert_invariants(&self) {
         let ml = self.middle.assert_invariants(self.middle_level);
         assert_eq!(

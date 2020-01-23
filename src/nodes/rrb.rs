@@ -1013,6 +1013,7 @@ impl<A: Clone> Node<A> {
         }
     }
 
+    #[cfg(any(test, feature = "debug"))]
     pub(crate) fn assert_invariants(&self, level: usize) -> usize {
         // Verifies that the size table matches reality.
         match self.children {

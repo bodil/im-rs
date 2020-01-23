@@ -1,0 +1,33 @@
+[package]
+name = "im-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.2"
+arbitrary = { version = "0.3", features = ["derive"] }
+
+[dependencies.im]
+path = ".."
+features = ["debug"]
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "hashset"
+path = "fuzz_targets/hashset.rs"
+
+[[bin]]
+name = "ordset"
+path = "fuzz_targets/ordset.rs"
+
+[[bin]]
+name = "vector"
+path = "fuzz_targets/vector.rs"
