@@ -47,7 +47,7 @@ proptest = { version = "0.9", optional = true }
 serde = { version = "1.0", optional = true }
 rayon = { version = "1.0", optional = true }
 refpool = { version = "0.2.2", optional = true }
-arbitrary = { version = "0.3", optional = true }
+arbitrary = { version = "0.4", optional = true }
 
 [dev-dependencies]
 proptest = "0.9"

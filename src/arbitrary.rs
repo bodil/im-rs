@@ -51,8 +51,10 @@ impl<A: Arbitrary + Clone> Arbitrary for Vector<A> {
         u.arbitrary_take_rest_iter()?.collect()
     }
 
-    fn size_hint() -> (usize, Option<usize>) {
-        size_hint::and(<usize as Arbitrary>::size_hint(), (0, None))
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        size_hint::recursion_guard(depth, |depth| {
+            size_hint::and(<usize as Arbitrary>::size_hint(depth), (0, None))
+        })
     }
 
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
@@ -70,8 +72,10 @@ impl<K: Arbitrary + Ord + Clone, V: Arbitrary + Clone> Arbitrary for OrdMap<K, V
         u.arbitrary_take_rest_iter()?.collect()
     }
 
-    fn size_hint() -> (usize, Option<usize>) {
-        size_hint::and(<usize as Arbitrary>::size_hint(), (0, None))
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        size_hint::recursion_guard(depth, |depth| {
+            size_hint::and(<usize as Arbitrary>::size_hint(depth), (0, None))
+        })
     }
 
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
@@ -90,8 +94,10 @@ impl<A: Arbitrary + Ord + Clone> Arbitrary for OrdSet<A> {
         u.arbitrary_take_rest_iter()?.collect()
     }
 
-    fn size_hint() -> (usize, Option<usize>) {
-        size_hint::and(<usize as Arbitrary>::size_hint(), (0, None))
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        size_hint::recursion_guard(depth, |depth| {
+            size_hint::and(<usize as Arbitrary>::size_hint(depth), (0, None))
+        })
     }
 
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
@@ -114,8 +120,10 @@ where
         u.arbitrary_take_rest_iter()?.collect()
     }
 
-    fn size_hint() -> (usize, Option<usize>) {
-        size_hint::and(<usize as Arbitrary>::size_hint(), (0, None))
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        size_hint::recursion_guard(depth, |depth| {
+            size_hint::and(<usize as Arbitrary>::size_hint(depth), (0, None))
+        })
     }
 
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
@@ -138,8 +146,10 @@ where
         u.arbitrary_take_rest_iter()?.collect()
     }
 
-    fn size_hint() -> (usize, Option<usize>) {
-        size_hint::and(<usize as Arbitrary>::size_hint(), (0, None))
+    fn size_hint(depth: usize) -> (usize, Option<usize>) {
+        size_hint::recursion_guard(depth, |depth| {
+            size_hint::and(<usize as Arbitrary>::size_hint(depth), (0, None))
+        })
     }
 
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
