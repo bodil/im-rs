@@ -1123,60 +1123,21 @@ impl<'a, A: Hash + Eq + Ord + Clone, S: BuildHasher> From<&'a HashSet<A, S>> for
     }
 }
 
-// QuickCheck
-#[cfg(all(threadsafe, feature = "quickcheck"))]
-mod quickcheck {
-    use super::*;
-    use ::quickcheck::{Arbitrary, Gen};
-
-    impl<A: Ord + Clone + Arbitrary + Sync> Arbitrary for OrdSet<A> {
-        fn arbitrary<G: Gen>(g: &mut G) -> Self {
-            OrdSet::from_iter(Vec::<A>::arbitrary(g))
-        }
-    }
-}
-
 // Proptest
 #[cfg(any(test, feature = "proptest"))]
+#[doc(hidden)]
 pub mod proptest {
-    //! Proptest strategies.
-    use super::*;
-    use ::proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
-    use std::ops::Range;
-
-    /// A strategy for a set of a given size.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// proptest! {
-    ///     #[test]
-    ///     fn proptest_a_set(ref s in set(".*", 10..100)) {
-    ///         assert!(s.len() < 100);
-    ///         assert!(s.len() >= 10);
-    ///     }
-    /// }
-    /// ```
-    pub fn ord_set<A: Strategy + 'static>(
-        element: A,
-        size: Range<usize>,
-    ) -> BoxedStrategy<OrdSet<<A::Tree as ValueTree>::Value>>
-    where
-        <A::Tree as ValueTree>::Value: Ord + Clone,
-    {
-        ::proptest::collection::vec(element, size.clone())
-            .prop_map(OrdSet::from)
-            .prop_filter("OrdSet minimum size".to_owned(), move |s| {
-                s.len() >= size.start
-            })
-            .boxed()
-    }
+    #[deprecated(
+        since = "14.3.0",
+        note = "proptest strategies have moved to im::proptest"
+    )]
+    pub use crate::proptest::ord_set;
 }
 
 #[cfg(test)]
 mod test {
-    use super::proptest::*;
     use super::*;
+    use crate::proptest::*;
     use ::proptest::proptest;
 
     #[test]

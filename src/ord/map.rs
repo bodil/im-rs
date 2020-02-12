@@ -1974,66 +1974,24 @@ impl<'a, K: Ord + Hash + Eq + Clone, V: Clone, S: BuildHasher> From<&'a HashMap<
     }
 }
 
-// QuickCheck
-
-#[cfg(all(threadsafe, feature = "quickcheck"))]
-mod quickcheck {
-    use super::*;
-    use ::quickcheck::{Arbitrary, Gen};
-
-    impl<K: Ord + Clone + Arbitrary + Sync, V: Clone + Arbitrary + Sync> Arbitrary for OrdMap<K, V> {
-        fn arbitrary<G: Gen>(g: &mut G) -> Self {
-            OrdMap::from_iter(Vec::<(K, V)>::arbitrary(g))
-        }
-    }
-}
-
 // Proptest
 #[cfg(any(test, feature = "proptest"))]
+#[doc(hidden)]
 pub mod proptest {
-    //! Proptest strategies.
-    use super::*;
-    use ::proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
-    use std::ops::Range;
-
-    /// A strategy for a map of a given size.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// proptest! {
-    ///     #[test]
-    ///     fn proptest_works(ref m in map(0..9999, ".*", 10..100)) {
-    ///         assert!(m.len() < 100);
-    ///         assert!(m.len() >= 10);
-    ///     }
-    /// }
-    /// ```
-    pub fn ord_map<K: Strategy + 'static, V: Strategy + 'static>(
-        key: K,
-        value: V,
-        size: Range<usize>,
-    ) -> BoxedStrategy<OrdMap<<K::Tree as ValueTree>::Value, <V::Tree as ValueTree>::Value>>
-    where
-        <K::Tree as ValueTree>::Value: Ord + Clone,
-        <V::Tree as ValueTree>::Value: Clone,
-    {
-        ::proptest::collection::vec((key, value), size.clone())
-            .prop_map(OrdMap::from)
-            .prop_filter("OrdMap minimum size".to_owned(), move |m| {
-                m.len() >= size.start
-            })
-            .boxed()
-    }
+    #[deprecated(
+        since = "14.3.0",
+        note = "proptest strategies have moved to im::proptest"
+    )]
+    pub use crate::proptest::ord_map;
 }
 
 // Tests
 
 #[cfg(test)]
 mod test {
-    use super::proptest::*;
     use super::*;
     use crate::nodes::btree::DiffItem;
+    use crate::proptest::*;
     use crate::test::is_sorted;
     use ::proptest::num::{i16, usize};
     use ::proptest::{bool, collection, proptest};

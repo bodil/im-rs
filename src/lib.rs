@@ -367,6 +367,9 @@ pub mod vector;
 
 pub mod iter;
 
+#[cfg(any(test, feature = "proptest"))]
+pub mod proptest;
+
 #[cfg(any(test, feature = "serde"))]
 #[doc(hidden)]
 pub mod ser;
@@ -374,6 +377,10 @@ pub mod ser;
 #[cfg(feature = "arbitrary")]
 #[doc(hidden)]
 pub mod arbitrary;
+
+#[cfg(feature = "quickcheck")]
+#[doc(hidden)]
+pub mod quickcheck;
 
 #[cfg(not(feature = "pool"))]
 mod fakepool;

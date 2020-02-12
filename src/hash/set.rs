@@ -1057,58 +1057,15 @@ where
     }
 }
 
-// QuickCheck
-#[cfg(all(threadsafe, feature = "quickcheck"))]
-mod quickcheck {
-    use super::*;
-    use ::quickcheck::{Arbitrary, Gen};
-
-    impl<A, S> Arbitrary for HashSet<A, S>
-    where
-        A: Hash + Eq + Arbitrary + Sync,
-        S: BuildHasher + Default + Send + Sync + 'static,
-    {
-        fn arbitrary<G: Gen>(g: &mut G) -> Self {
-            HashSet::from_iter(Vec::<A>::arbitrary(g))
-        }
-    }
-}
-
 // Proptest
 #[cfg(any(test, feature = "proptest"))]
+#[doc(hidden)]
 pub mod proptest {
-    //! Proptest strategies.
-    use super::*;
-    use ::proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
-    use std::ops::Range;
-
-    /// A strategy for a hash set of a given size.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// proptest! {
-    ///     #[test]
-    ///     fn proptest_a_set(ref s in hashset(".*", 10..100)) {
-    ///         assert!(s.len() < 100);
-    ///         assert!(s.len() >= 10);
-    ///     }
-    /// }
-    /// ```
-    pub fn hash_set<A: Strategy + 'static>(
-        element: A,
-        size: Range<usize>,
-    ) -> BoxedStrategy<HashSet<<A::Tree as ValueTree>::Value>>
-    where
-        <A::Tree as ValueTree>::Value: Hash + Eq + Clone,
-    {
-        ::proptest::collection::vec(element, size.clone())
-            .prop_map(HashSet::from)
-            .prop_filter("HashSet minimum size".to_owned(), move |s| {
-                s.len() >= size.start
-            })
-            .boxed()
-    }
+    #[deprecated(
+        since = "14.3.0",
+        note = "proptest strategies have moved to im::proptest"
+    )]
+    pub use crate::proptest::hash_set;
 }
 
 #[cfg(test)]

@@ -2053,61 +2053,15 @@ where
 //     }
 // }
 
-// QuickCheck
-#[cfg(all(threadsafe, feature = "quickcheck"))]
-mod quickcheck {
-    use super::*;
-    use ::quickcheck::{Arbitrary, Gen};
-
-    impl<K, V, S> Arbitrary for HashMap<K, V, S>
-    where
-        K: Hash + Eq + Arbitrary + Sync,
-        V: Arbitrary + Sync,
-        S: BuildHasher + Default + Send + Sync + 'static,
-    {
-        fn arbitrary<G: Gen>(g: &mut G) -> Self {
-            HashMap::from(Vec::<(K, V)>::arbitrary(g))
-        }
-    }
-}
-
 // Proptest
 #[cfg(any(test, feature = "proptest"))]
+#[doc(hidden)]
 pub mod proptest {
-    //! Proptest strategies.
-    use super::*;
-    use ::proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
-    use std::ops::Range;
-
-    /// A strategy for a hash map of a given size.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// proptest! {
-    ///     #[test]
-    ///     fn proptest_works(ref m in hash_map(0..9999, ".*", 10..100)) {
-    ///         assert!(m.len() < 100);
-    ///         assert!(m.len() >= 10);
-    ///     }
-    /// }
-    /// ```
-    pub fn hash_map<K: Strategy + 'static, V: Strategy + 'static>(
-        key: K,
-        value: V,
-        size: Range<usize>,
-    ) -> BoxedStrategy<HashMap<<K::Tree as ValueTree>::Value, <V::Tree as ValueTree>::Value>>
-    where
-        <K::Tree as ValueTree>::Value: Hash + Eq + Clone,
-        <V::Tree as ValueTree>::Value: Clone,
-    {
-        ::proptest::collection::vec((key, value), size.clone())
-            .prop_map(HashMap::from)
-            .prop_filter("Map minimum size".to_owned(), move |m| {
-                m.len() >= size.start
-            })
-            .boxed()
-    }
+    #[deprecated(
+        since = "14.3.0",
+        note = "proptest strategies have moved to im::proptest"
+    )]
+    pub use crate::proptest::hash_map;
 }
 
 // Tests
