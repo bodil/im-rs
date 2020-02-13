@@ -378,7 +378,7 @@ pub mod ser;
 #[doc(hidden)]
 pub mod arbitrary;
 
-#[cfg(feature = "quickcheck")]
+#[cfg(all(threadsafe, feature = "quickcheck"))]
 #[doc(hidden)]
 pub mod quickcheck;
 
