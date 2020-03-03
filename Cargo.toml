@@ -1,6 +1,6 @@
 [package]
 name = "im"
-version = "14.2.0"
+version = "14.3.0"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 edition = "2018"
 license = "MPL-2.0+"

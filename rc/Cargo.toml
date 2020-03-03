@@ -1,6 +1,6 @@
 [package]
 name = "im-rc"
-version = "14.2.0"
+version = "14.3.0"
 edition = "2018"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 license = "MPL-2.0+"
