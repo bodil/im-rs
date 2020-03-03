@@ -334,7 +334,7 @@ where
         self.root.max().map(Deref::deref)
     }
 
-    // Create an iterator over the contents of the set.
+    /// Create an iterator over the contents of the set.
     #[must_use]
     pub fn iter(&self) -> Iter<'_, A> {
         Iter {
@@ -342,7 +342,7 @@ where
         }
     }
 
-    // Create an iterator over a range inside the set.
+    /// Create an iterator over a range inside the set.
     #[must_use]
     pub fn range<R, BA>(&self, range: R) -> RangedIter<'_, A>
     where
@@ -897,7 +897,7 @@ impl<A: Ord + Debug> Debug for OrdSet<A> {
 
 // Iterators
 
-// An iterator over the elements of a set.
+/// An iterator over the elements of a set.
 pub struct Iter<'a, A> {
     it: NodeIter<'a, Value<A>>,
 }
@@ -931,11 +931,11 @@ where
 
 impl<'a, A> ExactSizeIterator for Iter<'a, A> where A: 'a + Ord {}
 
-// A ranged iterator over the elements of a set.
-//
-// The only difference from `Iter` is that this one doesn't implement
-// `ExactSizeIterator` because we can't know the size of the range without first
-// iterating over it to count.
+/// A ranged iterator over the elements of a set.
+///
+/// The only difference from `Iter` is that this one doesn't implement
+/// `ExactSizeIterator` because we can't know the size of the range without first
+/// iterating over it to count.
 pub struct RangedIter<'a, A> {
     it: NodeIter<'a, Value<A>>,
 }
@@ -967,7 +967,7 @@ where
     }
 }
 
-// A consuming iterator over the elements of a set.
+/// A consuming iterator over the elements of a set.
 pub struct ConsumingIter<A> {
     it: ConsumingNodeIter<Value<A>>,
 }
@@ -986,7 +986,7 @@ where
     }
 }
 
-// An iterator over the difference between two sets.
+/// An iterator over the difference between two sets.
 pub struct DiffIter<'a, A> {
     it: NodeDiffIter<'a, Value<A>>,
 }

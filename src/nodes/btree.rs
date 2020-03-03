@@ -815,6 +815,7 @@ impl<A: BTreeValue> Node<A> {
 
 // Iterator
 
+/// An iterator over an ordered set.
 pub struct Iter<'a, A> {
     fwd_path: Vec<(&'a Node<A>, usize)>,
     back_path: Vec<(&'a Node<A>, usize)>,
@@ -1002,6 +1003,7 @@ enum ConsumingIterItem<A> {
     Yield(A),
 }
 
+/// A consuming iterator over an ordered set.
 pub struct ConsumingIter<A> {
     fwd_last: Option<A>,
     fwd_stack: Vec<ConsumingIterItem<A>>,
@@ -1126,15 +1128,25 @@ impl<A: BTreeValue + Clone> ExactSizeIterator for ConsumingIter<A> {}
 
 // DiffIter
 
+/// An iterator over the differences between two ordered sets.
 pub struct DiffIter<'a, A> {
     old_stack: Vec<IterItem<'a, A>>,
     new_stack: Vec<IterItem<'a, A>>,
 }
 
+/// A description of a difference between two ordered sets.
 #[derive(PartialEq, Eq)]
 pub enum DiffItem<'a, A> {
+    /// This value has been added to the new set.
     Add(&'a A),
-    Update { old: &'a A, new: &'a A },
+    /// This value has been changed between the two sets.
+    Update {
+        /// The old value.
+        old: &'a A,
+        /// The new value.
+        new: &'a A,
+    },
+    /// This value has been removed from the new set.
     Remove(&'a A),
 }
 

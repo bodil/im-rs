@@ -337,7 +337,7 @@
 
 #![forbid(rust_2018_idioms)]
 #![deny(unsafe_code, nonstandard_style)]
-#![warn(unreachable_pub)]
+#![warn(unreachable_pub, missing_docs)]
 #![cfg_attr(has_specialisation, feature(specialization))]
 
 #[cfg(test)]

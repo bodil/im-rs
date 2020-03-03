@@ -360,7 +360,7 @@ where
         }
     }
 
-    // Create an iterator over a range of key/value pairs.
+    /// Create an iterator over a range of key/value pairs.
     #[must_use]
     pub fn range<R, BK>(&self, range: R) -> RangedIter<'_, (K, V)>
     where
@@ -1343,7 +1343,9 @@ where
     K: Ord + Clone,
     V: Clone,
 {
+    /// An entry which exists in the map.
     Occupied(OccupiedEntry<'a, K, V>),
+    /// An entry which doesn't exist in the map.
     Vacant(VacantEntry<'a, K, V>),
 }
 
@@ -1686,6 +1688,7 @@ where
 
 // Iterators
 
+/// An iterator over the key/value pairs of a map.
 pub struct Iter<'a, A> {
     it: RangedIter<'a, A>,
 }
@@ -1716,6 +1719,7 @@ where
 
 impl<'a, A> ExactSizeIterator for Iter<'a, A> where A: 'a + BTreeValue {}
 
+/// An iterator ove the keys of a map.
 pub struct Keys<'a, K, V> {
     it: Iter<'a, (K, V)>,
 }
@@ -1759,6 +1763,7 @@ where
 {
 }
 
+/// An iterator over the values of a map.
 pub struct Values<'a, K, V> {
     it: Iter<'a, (K, V)>,
 }

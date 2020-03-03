@@ -852,7 +852,7 @@ where
 
 // Iterators
 
-// An iterator over the elements of a set.
+/// An iterator over the elements of a set.
 pub struct Iter<'a, A> {
     it: NodeIter<'a, Value<A>>,
 }
@@ -876,7 +876,7 @@ impl<'a, A> ExactSizeIterator for Iter<'a, A> {}
 
 impl<'a, A> FusedIterator for Iter<'a, A> {}
 
-// A mutable iterator over the elements of a set.
+/// A mutable iterator over the elements of a set.
 pub struct IterMut<'a, A> {
     it: NodeIterMut<'a, Value<A>>,
 }
@@ -900,7 +900,7 @@ impl<'a, A> ExactSizeIterator for IterMut<'a, A> where A: Clone {}
 
 impl<'a, A> FusedIterator for IterMut<'a, A> where A: Clone {}
 
-// A consuming iterator over the elements of a set.
+/// A consuming iterator over the elements of a set.
 pub struct ConsumingIter<A>
 where
     A: Hash + Eq + Clone,

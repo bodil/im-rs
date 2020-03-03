@@ -1339,7 +1339,9 @@ where
     V: Clone,
     S: BuildHasher,
 {
+    /// An entry which exists in the map.
     Occupied(OccupiedEntry<'a, K, V, S>),
+    /// An entry which doesn't exist in the map.
     Vacant(VacantEntry<'a, K, V, S>),
 }
 
@@ -1790,7 +1792,7 @@ where
 
 // // Iterators
 
-// An iterator over the elements of a map.
+/// An iterator over the elements of a map.
 pub struct Iter<'a, K, V> {
     it: NodeIter<'a, (K, V)>,
 }
@@ -1811,7 +1813,7 @@ impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {}
 
 impl<'a, K, V> FusedIterator for Iter<'a, K, V> {}
 
-// A mutable iterator over the values of a map.
+/// A mutable iterator over the elements of a map.
 pub struct IterMut<'a, K, V>
 where
     K: Clone,
@@ -1850,7 +1852,7 @@ where
 {
 }
 
-// A consuming iterator over the elements of a map.
+/// A consuming iterator over the elements of a map.
 pub struct ConsumingIter<A: HashValue> {
     it: NodeDrain<A>,
 }
@@ -1874,7 +1876,7 @@ impl<A> ExactSizeIterator for ConsumingIter<A> where A: HashValue + Clone {}
 
 impl<A> FusedIterator for ConsumingIter<A> where A: HashValue + Clone {}
 
-// An iterator over the keys of a map.
+/// An iterator over the keys of a map.
 pub struct Keys<'a, K, V> {
     it: NodeIter<'a, (K, V)>,
 }
@@ -1895,7 +1897,7 @@ impl<'a, K, V> ExactSizeIterator for Keys<'a, K, V> {}
 
 impl<'a, K, V> FusedIterator for Keys<'a, K, V> {}
 
-// An iterator over the values of a map.
+/// An iterator over the values of a map.
 pub struct Values<'a, K, V> {
     it: NodeIter<'a, (K, V)>,
 }
