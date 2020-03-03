@@ -447,6 +447,56 @@ where
         self.root.lookup(key).map(|&(ref k, ref v)| (k, v))
     }
 
+    /// Get the closest smaller entry in a map to a given key
+    /// as a mutable reference.
+    ///
+    /// If the map contains the given key, this is returned.
+    /// Otherwise, the closest key in the map smaller than the
+    /// given value is returned. If the smallest key in the map
+    /// is larger than the given key, `None` is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[macro_use] extern crate im;
+    /// # use im::OrdMap;
+    /// let map = ordmap![1 => 1, 3 => 3, 5 => 5];
+    /// assert_eq!(Some((&3, &3)), map.get_prev(&4));
+    /// ```
+    #[must_use]
+    pub fn get_prev<BK>(&self, key: &BK) -> Option<(&K, &V)>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
+        self.root.lookup_prev(key).map(|(k, v)| (k, v))
+    }
+
+    /// Get the closest larger entry in a map to a given key
+    /// as a mutable reference.
+    ///
+    /// If the set contains the given value, this is returned.
+    /// Otherwise, the closest value in the set larger than the
+    /// given value is returned. If the largest value in the set
+    /// is smaller than the given value, `None` is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[macro_use] extern crate im;
+    /// # use im::OrdMap;
+    /// let map = ordmap![1 => 1, 3 => 3, 5 => 5];
+    /// assert_eq!(Some((&5, &5)), map.get_next(&4));
+    /// ```
+    #[must_use]
+    pub fn get_next<BK>(&self, key: &BK) -> Option<(&K, &V)>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
+        self.root.lookup_next(key).map(|(k, v)| (k, v))
+    }
+
     /// Test for the presence of a key in a map.
     ///
     /// Time: O(log n)
@@ -574,6 +624,68 @@ where
     {
         let root = PoolRef::make_mut(&self.pool.0, &mut self.root);
         root.lookup_mut(&self.pool.0, key).map(|(_, v)| v)
+    }
+
+    /// Get the closest smaller entry in a map to a given key
+    /// as a mutable reference.
+    ///
+    /// If the map contains the given key, this is returned.
+    /// Otherwise, the closest key in the map smaller than the
+    /// given value is returned. If the smallest key in the map
+    /// is larger than the given key, `None` is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[macro_use] extern crate im;
+    /// # use im::OrdMap;
+    /// let mut map = ordmap![1 => 1, 3 => 3, 5 => 5];
+    /// if let Some((key, value)) = map.get_prev_mut(&4) {
+    ///     *value = 4;
+    /// }
+    /// assert_eq!(ordmap![1 => 1, 3 => 4, 5 => 5], map);
+    /// ```
+    #[must_use]
+    pub fn get_prev_mut<BK>(&mut self, key: &BK) -> Option<(&K, &mut V)>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
+        let pool = &self.pool.0;
+        PoolRef::make_mut(pool, &mut self.root)
+            .lookup_prev_mut(pool, key)
+            .map(|(ref k, ref mut v)| (k, v))
+    }
+
+    /// Get the closest larger entry in a map to a given key
+    /// as a mutable reference.
+    ///
+    /// If the set contains the given value, this is returned.
+    /// Otherwise, the closest value in the set larger than the
+    /// given value is returned. If the largest value in the set
+    /// is smaller than the given value, `None` is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[macro_use] extern crate im;
+    /// # use im::OrdMap;
+    /// let mut map = ordmap![1 => 1, 3 => 3, 5 => 5];
+    /// if let Some((key, value)) = map.get_next_mut(&4) {
+    ///     *value = 4;
+    /// }
+    /// assert_eq!(ordmap![1 => 1, 3 => 3, 5 => 4], map);
+    /// ```
+    #[must_use]
+    pub fn get_next_mut<BK>(&mut self, key: &BK) -> Option<(&K, &mut V)>
+    where
+        BK: Ord + ?Sized,
+        K: Borrow<BK>,
+    {
+        let pool = &self.pool.0;
+        PoolRef::make_mut(pool, &mut self.root)
+            .lookup_next_mut(pool, key)
+            .map(|(ref k, ref mut v)| (k, v))
     }
 
     /// Insert a key/value mapping into a map.

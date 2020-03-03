@@ -396,6 +396,46 @@ where
         self.root.lookup(a).is_some()
     }
 
+    /// Get the closest smaller value in a set to a given value.
+    ///
+    /// If the set contains the given value, this is returned.
+    /// Otherwise, the closest value in the set smaller than the
+    /// given value is returned. If the smallest value in the set
+    /// is larger than the given value, `None` is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[macro_use] extern crate im;
+    /// # use im::OrdSet;
+    /// let set = ordset![1, 3, 5, 7, 9];
+    /// assert_eq!(Some(&5), set.get_prev(&6));
+    /// ```
+    #[must_use]
+    pub fn get_prev(&self, key: &A) -> Option<&A> {
+        self.root.lookup_prev(key).map(|v| &v.0)
+    }
+
+    /// Get the closest larger value in a set to a given value.
+    ///
+    /// If the set contains the given value, this is returned.
+    /// Otherwise, the closest value in the set larger than the
+    /// given value is returned. If the largest value in the set
+    /// is smaller than the given value, `None` is returned.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[macro_use] extern crate im;
+    /// # use im::OrdSet;
+    /// let set = ordset![1, 3, 5, 7, 9];
+    /// assert_eq!(Some(&5), set.get_next(&4));
+    /// ```
+    #[must_use]
+    pub fn get_next(&self, key: &A) -> Option<&A> {
+        self.root.lookup_next(key).map(|v| &v.0)
+    }
+
     /// Test whether a set is a subset of another set, meaning that
     /// all values in our set must also be in the other set.
     ///

@@ -235,6 +235,98 @@ impl<A: BTreeValue> Node<A> {
         }
     }
 
+    pub(crate) fn lookup_prev<'a, BK>(&'a self, key: &BK) -> Option<&A>
+    where
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
+        if self.keys.is_empty() {
+            return None;
+        }
+        match A::search_key(&self.keys, key) {
+            Ok(index) => Some(&self.keys[index]),
+            Err(index) => match self.children[index] {
+                None if index == 0 => None,
+                None => match self.keys.get(index - 1) {
+                    Some(_) => Some(&self.keys[index - 1]),
+                    None => None,
+                },
+                Some(ref node) => node.lookup_prev(key),
+            },
+        }
+    }
+
+    pub(crate) fn lookup_next<'a, BK>(&'a self, key: &BK) -> Option<&A>
+    where
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
+        if self.keys.is_empty() {
+            return None;
+        }
+        match A::search_key(&self.keys, key) {
+            Ok(index) => Some(&self.keys[index]),
+            Err(index) => match self.children[index] {
+                None => match self.keys.get(index) {
+                    Some(_) => Some(&self.keys[index]),
+                    None => None,
+                },
+                Some(ref node) => node.lookup_next(key),
+            },
+        }
+    }
+
+    pub(crate) fn lookup_prev_mut<'a, BK>(
+        &'a mut self,
+        pool: &Pool<Node<A>>,
+        key: &BK,
+    ) -> Option<&mut A>
+    where
+        A: Clone,
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
+        if self.keys.is_empty() {
+            return None;
+        }
+        match A::search_key(&self.keys, key) {
+            Ok(index) => Some(&mut self.keys[index]),
+            Err(index) => match self.children[index] {
+                None if index == 0 => None,
+                None => match self.keys.get(index - 1) {
+                    Some(_) => Some(&mut self.keys[index - 1]),
+                    None => None,
+                },
+                Some(ref mut node) => PoolRef::make_mut(pool, node).lookup_prev_mut(pool, key),
+            },
+        }
+    }
+
+    pub(crate) fn lookup_next_mut<'a, BK>(
+        &'a mut self,
+        pool: &Pool<Node<A>>,
+        key: &BK,
+    ) -> Option<&mut A>
+    where
+        A: Clone,
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
+        if self.keys.is_empty() {
+            return None;
+        }
+        match A::search_key(&self.keys, key) {
+            Ok(index) => Some(&mut self.keys[index]),
+            Err(index) => match self.children[index] {
+                None => match self.keys.get(index) {
+                    Some(_) => Some(&mut self.keys[index]),
+                    None => None,
+                },
+                Some(ref mut node) => PoolRef::make_mut(pool, node).lookup_next_mut(pool, key),
+            },
+        }
+    }
+
     pub(crate) fn path_first<'a, BK>(
         &'a self,
         mut path: Vec<(&'a Node<A>, usize)>,

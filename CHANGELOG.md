@@ -14,6 +14,9 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+-   `OrdSet` and `OrdMap` now have `get_prev` and `get_next` methods (with equivalent `get_prev_mut`
+    and `get_next_mut` methods for `OrdMap`) which will return the closest key match to the
+    requested key in the specified direction if the key isn't in the set. (#95)
 -   The `retain` method, inexplicably missing from `HashMap` but not `HashSet`, has been added.
     (#120)
 
