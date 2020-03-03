@@ -1,30 +1,36 @@
 language: rust
 rust:
-  - stable
-  - beta
-  - nightly
-cache:
-  directories:
-    - /home/travis/.rustup
-    - /home/travis/.cargo
-    - /home/travis/target
-
+    - stable
+    - beta
+    - nightly
+arch:
+    - amd64
+    - arm64
+    - ppc64le
+    - s390x
 env:
-  - CRATE=im
-  - CRATE=im-rc
+    - CRATE=im
+    - CRATE=im-rc
+
+cache:
+    directories:
+        - /home/travis/.rustup
+        - /home/travis/.cargo
+        - /home/travis/target
 
 install:
-  - rustup update
-  - mkdir -p .cargo && echo '[build]' > .cargo/config && echo 'target-dir = "/home/travis/target"' >> .cargo/config
-  - cargo install cargo-make; true
-  - cargo make prepare-release
+    - rustup update
+    - mkdir -p .cargo && echo '[build]' > .cargo/config && echo 'target-dir = "/home/travis/target"'
+      >> .cargo/config
+    - cargo install cargo-make; true
+    - cargo make prepare-release
 
 script: cd dist/$CRATE; cargo test
 
 matrix:
-  include:
-    - env: CLIPPY=1
-      rust: stable
-      install:
-        - rustup component add clippy; true
-      script: cargo clippy -- -D warnings
+    include:
+        - env: CLIPPY=1
+          rust: stable
+          install:
+              - rustup component add clippy; true
+          script: cargo clippy -- -D warnings
