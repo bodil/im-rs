@@ -19,6 +19,8 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
     requested key in the specified direction if the key isn't in the set. (#95)
 -   The `retain` method, inexplicably missing from `HashMap` but not `HashSet`, has been added.
     (#120)
+-   The `get_mut` method on `OrdMap` was, equally inexplicably, private. It has now been made
+    public.
 
 ## [14.2.0] - 2020-01-17
 

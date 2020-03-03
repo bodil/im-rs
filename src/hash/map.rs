@@ -590,10 +590,13 @@ where
     /// ```
     /// # #[macro_use] extern crate im;
     /// # use im::hashmap::HashMap;
-    /// let map = hashmap!{123 => "lol"};
+    /// let mut map = hashmap!{123 => "lol"};
+    /// if let Some(value) = map.get_mut(&123) {
+    ///     *value = "omg";
+    /// }
     /// assert_eq!(
     ///   map.get(&123),
-    ///   Some(&"lol")
+    ///   Some(&"omg")
     /// );
     /// ```
     #[must_use]

@@ -616,8 +616,26 @@ where
     K: Ord + Clone,
     V: Clone,
 {
+    /// Get a mutable reference to the value for a key from a map.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::ordmap::OrdMap;
+    /// let mut map = ordmap!{123 => "lol"};
+    /// if let Some(value) = map.get_mut(&123) {
+    ///     *value = "omg";
+    /// }
+    /// assert_eq!(
+    ///   map.get(&123),
+    ///   Some(&"omg")
+    /// );
+    /// ```
     #[must_use]
-    fn get_mut<BK>(&mut self, key: &BK) -> Option<&mut V>
+    pub fn get_mut<BK>(&mut self, key: &BK) -> Option<&mut V>
     where
         BK: Ord + ?Sized,
         K: Borrow<BK>,
