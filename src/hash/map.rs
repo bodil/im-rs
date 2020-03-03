@@ -854,6 +854,38 @@ where
         }
     }
 
+    /// Filter out values from a map which don't satisfy a predicate.
+    ///
+    /// This is slightly more efficient than filtering using an
+    /// iterator, in that it doesn't need to rehash the retained
+    /// values, but it still needs to reconstruct the entire tree
+    /// structure of the map.
+    ///
+    /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::HashMap;
+    /// let mut map = hashmap!{1 => 1, 2 => 2, 3 => 3};
+    /// map.retain(|k, v| *k > 1);
+    /// let expected = hashmap!{2 => 2, 3 => 3};
+    /// assert_eq!(expected, map);
+    /// ```
+    pub fn retain<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&K, &V) -> bool,
+    {
+        let old_root = self.root.clone();
+        let root = PoolRef::make_mut(&self.pool.0, &mut self.root);
+        for ((key, value), hash) in NodeIter::new(&old_root, self.size) {
+            if !f(key, value) && root.remove(&self.pool.0, hash, 0, key).is_some() {
+                self.size -= 1;
+            }
+        }
+    }
+
     /// Remove a key/value pair from a map, if it exists, and return
     /// the removed value as well as the updated map.
     ///

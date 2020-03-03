@@ -488,6 +488,17 @@ where
     /// structure of the set.
     ///
     /// Time: O(n log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::HashSet;
+    /// let mut set = hashset![1, 2, 3];
+    /// set.retain(|v| *v > 1);
+    /// let expected = hashset![2, 3];
+    /// assert_eq!(expected, set);
+    /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where
         F: FnMut(&A) -> bool,

@@ -12,6 +12,11 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 -   `proptest` strategies have been moved to `im::proptest`. The previous locations of the
     strategies (`im::vector::proptest` etc) are still available, but have been deprecated.
 
+### Added
+
+-   The `retain` method, inexplicably missing from `HashMap` but not `HashSet`, has been added.
+    (#120)
+
 ## [14.2.0] - 2020-01-17
 
 ### Added
