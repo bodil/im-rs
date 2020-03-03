@@ -7,7 +7,6 @@ arch:
     - amd64
     - arm64
     - ppc64le
-    - s390x
 env:
     - CRATE=im
     - CRATE=im-rc
