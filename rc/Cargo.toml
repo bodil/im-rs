@@ -22,6 +22,10 @@ path = "../src/lib.rs"
 [badges]
 travis-ci = { repository = "bodil/im-rs" }
 
+[features]
+pool = ["refpool", "refpool/sync", "sized-chunks/refpool"]
+debug = []
+
 [build-dependencies]
 version_check = "0.9"
 
