@@ -14,14 +14,8 @@ pub(crate) use refpool::{PoolClone, PoolDefault};
 // The `Ref` type is an alias for either `Rc` or `Arc`, user's choice.
 
 // `Arc` without refpool
-#[cfg(all(threadsafe, not(feature = "pool")))]
+#[cfg(all(threadsafe))]
 pub(crate) use crate::fakepool::{Arc as PoolRef, Pool, PoolClone, PoolDefault};
-
-// `Arc` with refpool
-#[cfg(all(threadsafe, feature = "pool"))]
-pub(crate) type PoolRef<A> = refpool::PoolRef<A, refpool::PoolSync>;
-#[cfg(all(threadsafe, feature = "pool"))]
-pub(crate) type Pool<A> = refpool::Pool<A, refpool::PoolSync>;
 
 // `Ref` == `Arc` when threadsafe
 #[cfg(threadsafe)]
@@ -33,9 +27,9 @@ pub(crate) use crate::fakepool::{Pool, PoolClone, PoolDefault, Rc as PoolRef};
 
 // `Rc` with refpool
 #[cfg(all(not(threadsafe), feature = "pool"))]
-pub(crate) type PoolRef<A> = refpool::PoolRef<A, refpool::PoolUnsync>;
+pub(crate) type PoolRef<A> = refpool::PoolRef<A>;
 #[cfg(all(not(threadsafe), feature = "pool"))]
-pub(crate) type Pool<A> = refpool::Pool<A, refpool::PoolUnsync>;
+pub(crate) type Pool<A> = refpool::Pool<A>;
 
 // `Ref` == `Rc` when not threadsafe
 #[cfg(not(threadsafe))]

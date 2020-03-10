@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+-   The `pool` feature flag has been removed from the `im` version of the crate, as `refpool` no
+    longer supports threadsafe pools.
+
 ### Added
 
 -   The `pool` feature flag was missing from the `im-rc` version of the crate, which is the version

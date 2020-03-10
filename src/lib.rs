@@ -303,7 +303,7 @@
 //!
 //! | Feature | Description |
 //! | ------- | ----------- |
-//! | [`pool`](https://crates.io/crates/refpool) | Constructors and pool types for [`refpool`](https://crates.io/crates/refpool) memory pools (recommended only for `im-rc`) |
+//! | [`pool`](https://crates.io/crates/refpool) | Constructors and pool types for [`refpool`](https://crates.io/crates/refpool) memory pools (only available in `im-rc`) |
 //! | [`proptest`](https://crates.io/crates/proptest) | Strategies for all `im` datatypes under a `proptest` namespace, eg. `im::vector::proptest::vector()` |
 //! | [`quickcheck`](https://crates.io/crates/quickcheck) | [`quickcheck::Arbitrary`](https://docs.rs/quickcheck/latest/quickcheck/trait.Arbitrary.html) implementations for all `im` datatypes (not available in `im-rc`) |
 //! | [`rayon`](https://crates.io/crates/rayon) | parallel iterator implementations for [`Vector`][vector::Vector] (not available in `im-rc`) |
@@ -382,8 +382,13 @@ pub mod arbitrary;
 #[doc(hidden)]
 pub mod quickcheck;
 
-#[cfg(not(feature = "pool"))]
+#[cfg(any(threadsafe, not(feature = "pool")))]
 mod fakepool;
+
+#[cfg(all(threadsafe, feature = "pool"))]
+compile_error!(
+    "The `pool` feature is not threadsafe but you've enabled it on a threadsafe version of `im`."
+);
 
 pub use crate::hashmap::HashMap;
 pub use crate::hashset::HashSet;
