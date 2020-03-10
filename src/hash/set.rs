@@ -31,9 +31,7 @@ use std::iter::FusedIterator;
 use std::iter::{FromIterator, IntoIterator, Sum};
 use std::ops::{Add, Deref, Mul};
 
-use crate::nodes::hamt::{
-    hash_key, Drain as NodeDrain, HashValue, Iter as NodeIter, IterMut as NodeIterMut, Node,
-};
+use crate::nodes::hamt::{hash_key, Drain as NodeDrain, HashValue, Iter as NodeIter, Node};
 use crate::ordset::OrdSet;
 use crate::util::{Pool, PoolRef, Ref};
 
@@ -395,20 +393,6 @@ where
     A: Hash + Eq + Clone,
     S: BuildHasher,
 {
-    /// Get a mutable iterator over the values in a hash set.
-    ///
-    /// Please note that the order is consistent between sets using the same
-    /// hasher, but no other ordering guarantee is offered.  Items will not come
-    /// out in insertion order or sort order.  They will, however, come out in
-    /// the same order every time for the same set.
-    #[must_use]
-    pub fn iter_mut(&mut self) -> IterMut<'_, A> {
-        let root = PoolRef::make_mut(&self.pool.0, &mut self.root);
-        IterMut {
-            it: NodeIterMut::new(&self.pool.0, root, self.size),
-        }
-    }
-
     /// Insert a value into a set.
     ///
     /// Time: O(log n)
@@ -871,30 +855,6 @@ where
 impl<'a, A> ExactSizeIterator for Iter<'a, A> {}
 
 impl<'a, A> FusedIterator for Iter<'a, A> {}
-
-/// A mutable iterator over the elements of a set.
-pub struct IterMut<'a, A> {
-    it: NodeIterMut<'a, Value<A>>,
-}
-
-impl<'a, A> Iterator for IterMut<'a, A>
-where
-    A: 'a + Clone,
-{
-    type Item = &'a mut A;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.it.next().map(|(v, _)| &mut v.0)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.it.size_hint()
-    }
-}
-
-impl<'a, A> ExactSizeIterator for IterMut<'a, A> where A: Clone {}
-
-impl<'a, A> FusedIterator for IterMut<'a, A> where A: Clone {}
 
 /// A consuming iterator over the elements of a set.
 pub struct ConsumingIter<A>

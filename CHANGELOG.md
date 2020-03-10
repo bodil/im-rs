@@ -11,6 +11,8 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 -   The `pool` feature flag has been removed from the `im` version of the crate, as `refpool` no
     longer supports threadsafe pools.
+-   `HashSet::iter_mut()` has been removed, because if you modify the hashed values in a hash set,
+    you break the hash set.
 
 ### Added
 
