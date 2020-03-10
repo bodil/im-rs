@@ -1600,9 +1600,7 @@ where
         if Ref::ptr_eq(&self.hasher, &other.hasher) {
             return self.iter().partial_cmp(other.iter());
         }
-        let m1: ::std::collections::HashMap<K, V> = self.iter().cloned().collect();
-        let m2: ::std::collections::HashMap<K, V> = other.iter().cloned().collect();
-        m1.iter().partial_cmp(m2.iter())
+        self.iter().partial_cmp(other.iter())
     }
 }
 
@@ -1616,9 +1614,7 @@ where
         if Ref::ptr_eq(&self.hasher, &other.hasher) {
             return self.iter().cmp(other.iter());
         }
-        let m1: ::std::collections::HashMap<K, V> = self.iter().cloned().collect();
-        let m2: ::std::collections::HashMap<K, V> = other.iter().cloned().collect();
-        m1.iter().cmp(m2.iter())
+        self.iter().cmp(other.iter())
     }
 }
 
