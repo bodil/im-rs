@@ -32,7 +32,9 @@ use crate::nodes::btree::{BTreeValue, Insert, Node, Remove};
 use crate::util::linear_search_by;
 use crate::util::{Pool, PoolRef};
 
-pub use crate::nodes::btree::{ConsumingIter, DiffItem, DiffIter, Iter as RangedIter};
+pub use crate::nodes::btree::{
+    ConsumingIter, DiffItem as NodeDiffItem, DiffIter as NodeDiffIter, Iter as RangedIter,
+};
 
 /// Construct a map from a sequence of key/value pairs.
 ///
@@ -354,7 +356,7 @@ where
 
     /// Get an iterator over the key/value pairs of a map.
     #[must_use]
-    pub fn iter(&self) -> Iter<'_, (K, V)> {
+    pub fn iter(&self) -> Iter<'_, K, V> {
         Iter {
             it: RangedIter::new(&self.root, self.size, ..),
         }
@@ -362,13 +364,15 @@ where
 
     /// Create an iterator over a range of key/value pairs.
     #[must_use]
-    pub fn range<R, BK>(&self, range: R) -> RangedIter<'_, (K, V)>
+    pub fn range<R, BK>(&self, range: R) -> Iter<'_, K, V>
     where
         R: RangeBounds<BK>,
         K: Borrow<BK>,
         BK: Ord + ?Sized,
     {
-        RangedIter::new(&self.root, self.size, range)
+        Iter {
+            it: RangedIter::new(&self.root, self.size, range),
+        }
     }
 
     /// Get an iterator over a map's keys.
@@ -395,8 +399,10 @@ where
     /// the two maps, minus the number of elements belonging to nodes
     /// shared between them)
     #[must_use]
-    pub fn diff<'a>(&'a self, other: &'a Self) -> DiffIter<'a, (K, V)> {
-        DiffIter::new(&self.root, &other.root)
+    pub fn diff<'a>(&'a self, other: &'a Self) -> DiffIter<'a, K, V> {
+        DiffIter {
+            it: NodeDiffIter::new(&self.root, &other.root),
+        }
     }
 
     /// Get the value for a key from a map.
@@ -1398,14 +1404,20 @@ where
     /// map.
     #[must_use]
     pub fn take(&self, n: usize) -> Self {
-        self.iter().take(n).cloned().collect()
+        self.iter()
+            .take(n)
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     /// Construct a map with the `n` smallest keys removed from a
     /// given map.
     #[must_use]
     pub fn skip(&self, n: usize) -> Self {
-        self.iter().skip(n).cloned().collect()
+        self.iter()
+            .skip(n)
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     /// Remove the smallest key from a map, and return its value as
@@ -1809,7 +1821,7 @@ where
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let mut d = f.debug_map();
-        for (k, v) in self {
+        for (k, v) in self.iter() {
             d.entry(k, v);
         }
         d.finish()
@@ -1819,18 +1831,18 @@ where
 // Iterators
 
 /// An iterator over the key/value pairs of a map.
-pub struct Iter<'a, A> {
-    it: RangedIter<'a, A>,
+pub struct Iter<'a, K, V> {
+    it: RangedIter<'a, (K, V)>,
 }
 
-impl<'a, A> Iterator for Iter<'a, A>
+impl<'a, K, V> Iterator for Iter<'a, K, V>
 where
-    A: 'a + BTreeValue,
+    (K, V): 'a + BTreeValue,
 {
-    type Item = &'a A;
+    type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.it.next()
+        self.it.next().map(|(k, v)| (k, v))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -1838,20 +1850,62 @@ where
     }
 }
 
-impl<'a, A> DoubleEndedIterator for Iter<'a, A>
+impl<'a, K, V> DoubleEndedIterator for Iter<'a, K, V>
 where
-    A: 'a + BTreeValue,
+    (K, V): 'a + BTreeValue,
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.it.next_back()
+        self.it.next_back().map(|(k, v)| (k, v))
     }
 }
 
-impl<'a, A> ExactSizeIterator for Iter<'a, A> where A: 'a + BTreeValue {}
+impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> where (K, V): 'a + BTreeValue {}
+
+/// An iterator over the differences between two maps.
+pub struct DiffIter<'a, K, V> {
+    it: NodeDiffIter<'a, (K, V)>,
+}
+
+/// A description of a difference between two ordered maps.
+#[derive(PartialEq, Eq, Debug)]
+pub enum DiffItem<'a, K, V> {
+    /// This value has been added to the new map.
+    Add(&'a K, &'a V),
+    /// This value has been changed between the two maps.
+    Update {
+        /// The old value.
+        old: (&'a K, &'a V),
+        /// The new value.
+        new: (&'a K, &'a V),
+    },
+    /// This value has been removed from the new map.
+    Remove(&'a K, &'a V),
+}
+
+impl<'a, K, V> Iterator for DiffIter<'a, K, V>
+where
+    (K, V): 'a + BTreeValue + PartialEq,
+{
+    type Item = DiffItem<'a, K, V>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.it.next().map(|item| match item {
+            NodeDiffItem::Add((k, v)) => DiffItem::Add(k, v),
+            NodeDiffItem::Update {
+                old: (oldk, oldv),
+                new: (newk, newv),
+            } => DiffItem::Update {
+                old: (oldk, oldv),
+                new: (newk, newv),
+            },
+            NodeDiffItem::Remove((k, v)) => DiffItem::Remove(k, v),
+        })
+    }
+}
 
 /// An iterator ove the keys of a map.
 pub struct Keys<'a, K, V> {
-    it: Iter<'a, (K, V)>,
+    it: Iter<'a, K, V>,
 }
 
 impl<'a, K, V> Iterator for Keys<'a, K, V>
@@ -1862,10 +1916,7 @@ where
     type Item = &'a K;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.it.next() {
-            None => None,
-            Some((k, _)) => Some(k),
-        }
+        self.it.next().map(|(k, _)| k)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -1895,7 +1946,7 @@ where
 
 /// An iterator over the values of a map.
 pub struct Values<'a, K, V> {
-    it: Iter<'a, (K, V)>,
+    it: Iter<'a, K, V>,
 }
 
 impl<'a, K, V> Iterator for Values<'a, K, V>
@@ -1906,10 +1957,7 @@ where
     type Item = &'a V;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.it.next() {
-            None => None,
-            Some((_, v)) => Some(v),
-        }
+        self.it.next().map(|(_, v)| v)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -1958,8 +2006,8 @@ impl<'a, K, V> IntoIterator for &'a OrdMap<K, V>
 where
     K: Ord,
 {
-    type Item = &'a (K, V);
-    type IntoIter = Iter<'a, (K, V)>;
+    type Item = (&'a K, &'a V);
+    type IntoIter = Iter<'a, K, V>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -2105,7 +2153,7 @@ impl<'a, K: Ord + Hash + Eq + Clone, V: Clone, S: BuildHasher> From<&'a HashMap<
     for OrdMap<K, V>
 {
     fn from(m: &'a HashMap<K, V, S>) -> Self {
-        m.iter().cloned().collect()
+        m.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 }
 
@@ -2125,7 +2173,6 @@ pub mod proptest {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::nodes::btree::DiffItem;
     use crate::proptest::*;
     use crate::test::is_sorted;
     use ::proptest::num::{i16, usize};
@@ -2145,15 +2192,15 @@ mod test {
             6 => 66
         };
         let mut it = map.iter();
-        assert_eq!(it.next(), Some(&(1, 11)));
-        assert_eq!(it.next(), Some(&(2, 22)));
-        assert_eq!(it.next(), Some(&(3, 33)));
-        assert_eq!(it.next(), Some(&(4, 44)));
-        assert_eq!(it.next(), Some(&(5, 55)));
-        assert_eq!(it.next(), Some(&(6, 66)));
-        assert_eq!(it.next(), Some(&(7, 77)));
-        assert_eq!(it.next(), Some(&(8, 88)));
-        assert_eq!(it.next(), Some(&(9, 99)));
+        assert_eq!(it.next(), Some((&1, &11)));
+        assert_eq!(it.next(), Some((&2, &22)));
+        assert_eq!(it.next(), Some((&3, &33)));
+        assert_eq!(it.next(), Some((&4, &44)));
+        assert_eq!(it.next(), Some((&5, &55)));
+        assert_eq!(it.next(), Some((&6, &66)));
+        assert_eq!(it.next(), Some((&7, &77)));
+        assert_eq!(it.next(), Some((&8, &88)));
+        assert_eq!(it.next(), Some((&9, &99)));
         assert_eq!(it.next(), None);
     }
 
@@ -2195,14 +2242,14 @@ mod test {
         let (popped, less) = map.extract(&5).unwrap();
         assert_eq!(popped, 55);
         let mut it = less.iter();
-        assert_eq!(it.next(), Some(&(1, 11)));
-        assert_eq!(it.next(), Some(&(2, 22)));
-        assert_eq!(it.next(), Some(&(3, 33)));
-        assert_eq!(it.next(), Some(&(4, 44)));
-        assert_eq!(it.next(), Some(&(6, 66)));
-        assert_eq!(it.next(), Some(&(7, 77)));
-        assert_eq!(it.next(), Some(&(8, 88)));
-        assert_eq!(it.next(), Some(&(9, 99)));
+        assert_eq!(it.next(), Some((&1, &11)));
+        assert_eq!(it.next(), Some((&2, &22)));
+        assert_eq!(it.next(), Some((&3, &33)));
+        assert_eq!(it.next(), Some((&4, &44)));
+        assert_eq!(it.next(), Some((&6, &66)));
+        assert_eq!(it.next(), Some((&7, &77)));
+        assert_eq!(it.next(), Some((&8, &88)));
+        assert_eq!(it.next(), Some((&9, &99)));
         assert_eq!(it.next(), None);
     }
 
@@ -2240,10 +2287,10 @@ mod test {
     fn double_ended_iterator_1() {
         let m = ordmap! {1 => 1, 2 => 2, 3 => 3, 4 => 4};
         let mut it = m.iter();
-        assert_eq!(Some(&(1, 1)), it.next());
-        assert_eq!(Some(&(4, 4)), it.next_back());
-        assert_eq!(Some(&(2, 2)), it.next());
-        assert_eq!(Some(&(3, 3)), it.next_back());
+        assert_eq!(Some((&1, &1)), it.next());
+        assert_eq!(Some((&4, &4)), it.next_back());
+        assert_eq!(Some((&2, &2)), it.next());
+        assert_eq!(Some((&3, &3)), it.next_back());
         assert_eq!(None, it.next());
     }
 
@@ -2251,10 +2298,10 @@ mod test {
     fn double_ended_iterator_2() {
         let m = ordmap! {1 => 1, 2 => 2, 3 => 3, 4 => 4};
         let mut it = m.iter();
-        assert_eq!(Some(&(1, 1)), it.next());
-        assert_eq!(Some(&(4, 4)), it.next_back());
-        assert_eq!(Some(&(2, 2)), it.next());
-        assert_eq!(Some(&(3, 3)), it.next_back());
+        assert_eq!(Some((&1, &1)), it.next());
+        assert_eq!(Some((&4, &4)), it.next_back());
+        assert_eq!(Some((&2, &2)), it.next());
+        assert_eq!(Some((&3, &3)), it.next_back());
         assert_eq!(None, it.next_back());
     }
 
@@ -2308,25 +2355,25 @@ mod test {
     #[test]
     fn ranged_iter() {
         let map: OrdMap<i32, i32> = ordmap![1=>2, 2=>3, 3=>4, 4=>5, 5=>6];
-        let range: Vec<(i32, i32)> = map.range(..).cloned().collect();
+        let range: Vec<(i32, i32)> = map.range(..).map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(1, 2), (2, 3), (3, 4), (4, 5), (5, 6)], range);
-        let range: Vec<(i32, i32)> = map.range(..).rev().cloned().collect();
+        let range: Vec<(i32, i32)> = map.range(..).rev().map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(5, 6), (4, 5), (3, 4), (2, 3), (1, 2)], range);
-        let range: Vec<(i32, i32)> = map.range(2..5).cloned().collect();
+        let range: Vec<(i32, i32)> = map.range(2..5).map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(2, 3), (3, 4), (4, 5)], range);
-        let range: Vec<(i32, i32)> = map.range(2..5).rev().cloned().collect();
+        let range: Vec<(i32, i32)> = map.range(2..5).rev().map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(4, 5), (3, 4), (2, 3)], range);
-        let range: Vec<(i32, i32)> = map.range(3..).cloned().collect();
+        let range: Vec<(i32, i32)> = map.range(3..).map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(3, 4), (4, 5), (5, 6)], range);
-        let range: Vec<(i32, i32)> = map.range(3..).rev().cloned().collect();
+        let range: Vec<(i32, i32)> = map.range(3..).rev().map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(5, 6), (4, 5), (3, 4)], range);
-        let range: Vec<(i32, i32)> = map.range(..4).cloned().collect();
+        let range: Vec<(i32, i32)> = map.range(..4).map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(1, 2), (2, 3), (3, 4)], range);
-        let range: Vec<(i32, i32)> = map.range(..4).rev().cloned().collect();
+        let range: Vec<(i32, i32)> = map.range(..4).rev().map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(3, 4), (2, 3), (1, 2)], range);
-        let range: Vec<(i32, i32)> = map.range(..=3).cloned().collect();
+        let range: Vec<(i32, i32)> = map.range(..=3).map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(1, 2), (2, 3), (3, 4)], range);
-        let range: Vec<(i32, i32)> = map.range(..=3).rev().cloned().collect();
+        let range: Vec<(i32, i32)> = map.range(..=3).rev().map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(3, 4), (2, 3), (1, 2)], range);
     }
 
@@ -2379,7 +2426,7 @@ mod test {
             ref ops in collection::vec((bool::ANY, usize::ANY, usize::ANY), 1..1000)
         ) {
             let mut map = input.clone();
-            let mut tree: collections::BTreeMap<usize, usize> = input.iter().cloned().collect();
+            let mut tree: collections::BTreeMap<usize, usize> = input.iter().map(|(k, v)| (*k, *v)).collect();
             for (ins, key, val) in ops {
                 if *ins {
                     tree.insert(*key, *val);
@@ -2434,7 +2481,7 @@ mod test {
         fn lookup(ref m in ord_map(i16::ANY, i16::ANY, 0..1000)) {
             let map: OrdMap<i16, i16> =
                 FromIterator::from_iter(m.iter().map(|(k, v)| (*k, *v)));
-            for (k, v) in m {
+            for (k, v) in m.iter() {
                 assert_eq!(Some(*v), map.get(k).cloned());
             }
         }
@@ -2518,51 +2565,32 @@ mod test {
         }
 
         #[test]
-        fn diff_added_values(a in ord_map(i16::ANY, i16::ANY, 0..1000), b in ord_map(i16::ANY, i16::ANY, 0..1000)) {
-            let ab = a.clone().union(b.clone());
-            assert!(a.diff(&ab).eq(b.iter().filter(|&(ref k, _)| !a.contains_key(k)).map(DiffItem::Add)));
+        fn diff_all_values(a in collection::vec((usize::ANY, usize::ANY), 1..1000), b in collection::vec((usize::ANY, usize::ANY), 1..1000)) {
+            let a: OrdMap<usize, usize> = OrdMap::from(a);
+            let b: OrdMap<usize, usize> = OrdMap::from(b);
+
+            let diff: Vec<_> = a.diff(&b).collect();
+            let union = b.clone().union(a.clone());
+            let expected: Vec<_> = union.iter().filter_map(|(k, v)| {
+                if a.contains_key(&k) {
+                    if b.contains_key(&k) {
+                        let old = a.get(&k).unwrap();
+                        if old != v	{
+                            Some(DiffItem::Update {
+                                old: (k, old),
+                                new: (k, v),
+                            })
+                        } else {
+                            None
+                        }
+                    } else {
+                        Some(DiffItem::Remove(k, v))
+                    }
+                } else {
+                    Some(DiffItem::Add(k, v))
+                }
+            }).collect();
+            assert_eq!(expected, diff);
         }
-
-        // fn diff_updated_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
-        //     let a: OrdMap<usize, usize> = OrdMap::from(a);
-        //     let b: OrdMap<usize, usize> = OrdMap::from(b);
-        //     let ab: OrdMap<usize, usize> = a.union(&b);
-        //     let ba: OrdMap<usize, usize> = ab.union_with(&b, |_, b| *b);
-        //     ab.diff(&ba).eq(b.iter().filter(|&(ref k, ref v)| ab.get(k) != Some(&v))
-        //                    .map(|(k, v)| DiffItem::Update {
-        //                        old: &(*k, *(ab.get(&k).unwrap())),
-        //                        new: &(*k, *v)
-        //                    }))
-        // }
-
-        #[test]
-        fn diff_removed_values(a in ord_map(i16::ANY, i16::ANY, 0..1000), b in ord_map(i16::ANY, i16::ANY, 0..1000)) {
-            let ab = a.clone().union(b.clone());
-            assert!(ab.diff(&a).eq(b.iter().filter(|&(ref k, _)| !a.contains_key(k)).map(DiffItem::Remove)));
-        }
-
-        // fn diff_all_values(a: Vec<(usize, usize)>, b: Vec<(usize, usize)>) -> bool {
-        //     let a: OrdMap<usize, usize> = OrdMap::from(a);
-        //     let b: OrdMap<usize, usize> = OrdMap::from(b);
-        //     a.diff(&b).eq(b.union(&a).iter().filter_map(|(k, v)| {
-        //         if a.contains_key(&k) {
-        //             if b.contains_key(&k) {
-        //                 let old = a.get(&k).unwrap();
-        //                 if old != v	{
-        //                     Some(DiffItem::Update {
-        //                         old: &(*k, *old),
-        //                         new: &(*k, *v),
-        //                     })
-        //                 } else {
-        //                     None
-        //                 }
-        //             } else {
-        //                 Some(DiffItem::Remove(&(*k, *v)))
-        //             }
-        //         } else {
-        //             Some(DiffItem::Add(&(*k, *v)))
-        //         }
-        //     }))
-        // }
     }
 }

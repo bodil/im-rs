@@ -1797,10 +1797,10 @@ pub struct Iter<'a, K, V> {
 }
 
 impl<'a, K, V> Iterator for Iter<'a, K, V> {
-    type Item = &'a (K, V);
+    type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.it.next().map(|(p, _)| p)
+        self.it.next().map(|((k, v), _)| (k, v))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -1826,10 +1826,10 @@ where
     K: Clone,
     V: Clone,
 {
-    type Item = &'a mut V;
+    type Item = (&'a K, &'a mut V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.it.next().map(|(entry, _)| &mut entry.1)
+        self.it.next().map(|((k, v), _)| (&*k, v))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -1922,7 +1922,7 @@ where
     K: Hash + Eq,
     S: BuildHasher,
 {
-    type Item = &'a (K, V);
+    type Item = (&'a K, &'a V);
     type IntoIter = Iter<'a, K, V>;
 
     #[inline]

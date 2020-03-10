@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+-   Map iterators now return `(&K, &V)` and `(&K, &mut V)` respectively, to be consistent with
+    `std::collections`'s API. `DiffIter` for `OrdMap` has also changed in the same manner. (#121)
+
 ### Removed
 
 -   The `pool` feature flag has been removed from the `im` version of the crate, as `refpool` no
@@ -18,6 +23,7 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 -   The `pool` feature flag was missing from the `im-rc` version of the crate, which is the version
     where it's actually useful. It's been added now.
+-   `DiffIter` now has a `Debug` implementation.
 
 ## [14.3.0] - 2020-03-03
 

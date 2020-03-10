@@ -1227,7 +1227,7 @@ pub struct DiffIter<'a, A> {
 }
 
 /// A description of a difference between two ordered sets.
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum DiffItem<'a, A> {
     /// This value has been added to the new set.
     Add(&'a A),
