@@ -27,7 +27,7 @@ all-features = true
 path = "./src/lib.rs"
 
 [badges]
-circle-ci = { repository = "bodil/im-rs" }
+travis-ci = { repository = "bodil/im-rs" }
 
 [build-dependencies]
 version_check = "0.9"
