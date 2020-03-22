@@ -217,3 +217,17 @@ proptest! {
         }
     }
 }
+
+#[test]
+fn test_inserts() {
+    const N: usize = 200_000;
+    let mut v = Vector::new();
+    for i in 0..N {
+        v.insert(v.len() / 2, i);
+        println!("{}", i);
+    }
+    let mut rv: Vec<usize> = Vec::new();
+    rv.extend((0..N).skip(1).step_by(2));
+    rv.extend((0..N).step_by(2).rev());
+    assert_eq!(Vector::from_iter(rv.iter().cloned()), v);
+}
