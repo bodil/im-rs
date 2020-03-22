@@ -35,7 +35,7 @@ impl Size {
     fn size(&self) -> usize {
         match self {
             Size::Size(s) => *s,
-            Size::Table(sizes) => sizes.iter().sum(),
+            Size::Table(sizes) => *sizes.last().unwrap_or(&0),
         }
     }
 
