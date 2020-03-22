@@ -49,11 +49,12 @@ impl Size {
     fn table_from_size(pool: &Pool<Chunk<usize>>, level: usize, size: usize) -> Self {
         let mut chunk = Chunk::new();
         let mut remaining = size;
-        let child_size = NODE_SIZE.pow(level as u32);
-        while remaining > child_size {
-            let next_value = chunk.last().unwrap_or(&0) + child_size;
-            chunk.push_back(next_value);
-            remaining -= child_size;
+        if let Some(child_size) = NODE_SIZE.checked_pow(level as u32) {
+            while remaining > child_size {
+                let next_value = chunk.last().unwrap_or(&0) + child_size;
+                chunk.push_back(next_value);
+                remaining -= child_size;
+            }
         }
         if remaining > 0 {
             let next_value = chunk.last().unwrap_or(&0) + remaining;
@@ -395,7 +396,13 @@ impl<A: Clone> Node<A> {
     fn is_completely_dense(&self, level: usize) -> bool {
         // Size of a full node is NODE_SIZE at level 0, NODE_SIZE² at
         // level 1, etc.
-        self.size() == NODE_SIZE.pow(level as u32 + 1)
+        if let Some(expected_size) = NODE_SIZE.checked_pow(level as u32 + 1) {
+            self.size() == expected_size
+        } else {
+            // We overflowed a usize, there's no way we can be completely dense as we know the size
+            // fits in a usize.
+            false
+        }
     }
 
     #[inline]
@@ -444,7 +451,11 @@ impl<A: Clone> Node<A> {
     }
 
     fn index_in(&self, level: usize, index: usize) -> Option<usize> {
-        let mut target_idx = index / NODE_SIZE.pow(level as u32);
+        let mut target_idx = if let Some(child_size) = NODE_SIZE.checked_pow(level as u32) {
+            index / child_size
+        } else {
+            0
+        };
         if target_idx >= self.children.len() {
             return None;
         }
