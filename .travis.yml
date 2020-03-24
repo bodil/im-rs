@@ -25,11 +25,3 @@ install:
     - cargo make prepare-release
 
 script: cd dist/$CRATE; cargo test
-
-matrix:
-    include:
-        - env: CLIPPY=1
-          rust: stable
-          install:
-              - rustup component add clippy; true
-          script: cargo clippy -- -D warnings
