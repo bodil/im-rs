@@ -1475,7 +1475,7 @@ impl<A: Clone> Vector<A> {
     {
         let len = self.len();
         if len > 1 {
-            sort::quicksort(&mut self.focus_mut(), 0, len - 1, &cmp);
+            sort::quicksort(self.focus_mut(), &cmp);
         }
     }
 
