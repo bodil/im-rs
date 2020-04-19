@@ -191,7 +191,7 @@ mod test {
 
     proptest! {
         #[test]
-        fn test_quicksort(ref input in vector(i32::ANY, 0..1000)) {
+        fn test_quicksort(ref input in vector(i32::ANY, 0..5000)) {
             let mut vec = input.clone();
             let len = vec.len();
             if len > 1 {
