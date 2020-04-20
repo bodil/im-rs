@@ -86,10 +86,10 @@ where
     let mut less_position = 0;
     let mut equal_position = 0;
     let mut greater_position = 0;
-    let mut equal_swap_side = None;
 
     while less_position != less_focus.len() || greater_position != greater_focus.len() {
         // At start of this loop, equal_position always points to an equal item
+        let mut equal_swap_side = None;
         let equal_item = equal_focus.index(equal_position);
 
         // Advance the less_position until we find an out of place item
@@ -191,7 +191,7 @@ mod test {
 
     proptest! {
         #[test]
-        fn test_quicksort(ref input in vector(i32::ANY, 0..5000)) {
+        fn test_quicksort(ref input in vector(i32::ANY, 0..10000)) {
             let mut vec = input.clone();
             let len = vec.len();
             if len > 1 {
