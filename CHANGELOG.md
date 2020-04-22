@@ -25,6 +25,11 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
     where it's actually useful. It's been added now.
 -   `DiffIter` now has a `Debug` implementation.
 
+### Fixed
+
+-   A smarter implementation of the sorting algorithm for `Vector` has improved the performance of
+    `Vector::sort` by approximately 2x. (#126)
+
 ## [14.3.0] - 2020-03-03
 
 ### Changed
