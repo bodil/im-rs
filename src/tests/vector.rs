@@ -93,7 +93,7 @@ where
                 }
                 Action::SplitLeft(ref index) => {
                     let index = cap_index(expected.len(), *index);
-                    expected.split_off(index);
+                    expected.truncate(index);
                     writeln!(out, "vec.split_off({:?});", index)?
                 }
                 Action::SplitRight(ref index) => {
