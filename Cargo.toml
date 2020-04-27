@@ -45,7 +45,7 @@ quickcheck = { version = "0.9", optional = true }
 proptest = { version = "0.9", optional = true }
 serde = { version = "1", optional = true }
 rayon = { version = "1", optional = true }
-refpool = { version = "0.3", optional = true }
+refpool = { version = "0.4", optional = true }
 arbitrary = { version = "0.4", optional = true }
 
 [dev-dependencies]
