@@ -324,11 +324,11 @@
 //! [std::hash::Hash]: https://doc.rust-lang.org/std/hash/trait.Hash.html
 //! [std::marker::Send]: https://doc.rust-lang.org/std/marker/trait.Send.html
 //! [std::marker::Sync]: https://doc.rust-lang.org/std/marker/trait.Sync.html
-//! [hashmap::HashMap]: ./hashmap/struct.HashMap.html
-//! [hashset::HashSet]: ./hashset/struct.HashSet.html
-//! [ordmap::OrdMap]: ./ordmap/struct.OrdMap.html
-//! [ordset::OrdSet]: ./ordset/struct.OrdSet.html
-//! [vector::Vector]: ./vector/enum.Vector.html
+//! [hashmap::HashMap]: ./struct.HashMap.html
+//! [hashset::HashSet]: ./struct.HashSet.html
+//! [ordmap::OrdMap]: ./struct.OrdMap.html
+//! [ordset::OrdSet]: ./struct.OrdSet.html
+//! [vector::Vector]: ./struct.Vector.html
 //! [vector::Vector::push_back]: ./vector/enum.Vector.html#method.push_back
 //! [rrb-tree]: https://infoscience.epfl.ch/record/213452/files/rrbvector.pdf
 //! [hamt]: https://en.wikipedia.org/wiki/Hash_array_mapped_trie
