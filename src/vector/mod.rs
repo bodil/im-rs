@@ -316,6 +316,31 @@ impl<A: Clone> Vector<A> {
         self.len() == 0
     }
 
+    /// Test whether a vector is currently inlined.
+    ///
+    /// Vectors small enough that their contents could be stored entirely inside
+    /// the space of `std::mem::size_of::<Vector<A>>()` bytes are stored inline on
+    /// the stack instead of allocating any chunks. This method returns `true` if
+    /// this vector is currently inlined, or `false` if it currently has chunks allocated
+    /// on the heap.
+    ///
+    /// This may be useful in conjunction with [`ptr_eq()`][ptr_eq], which checks if
+    /// two vectors' heap allocations are the same, and thus will never return `true`
+    /// for inlined vectors.
+    ///
+    /// Time: O(1)
+    ///
+    /// [ptr_eq]: #method.ptr_eq
+    #[inline]
+    #[must_use]
+    pub fn is_inline(&self) -> bool {
+        if let Inline(_, _) = &self.vector {
+            true
+        } else {
+            false
+        }
+    }
+
     /// Test whether two vectors refer to the same content in memory.
     ///
     /// This uses the following rules to determine equality:
@@ -2502,8 +2527,8 @@ mod test {
             let input = std::iter::repeat(42).take(len).collect::<Vector<_>>();
             let mut inp2 = input.clone();
             assert!(input.ptr_eq(&inp2));
-            inp2.set(len-1, 98);
-            assert_ne!(inp2.get(len-1), input.get(len-1));
+            inp2.set(len - 1, 98);
+            assert_ne!(inp2.get(len - 1), input.get(len - 1));
             assert!(!input.ptr_eq(&inp2), len);
         }
     }

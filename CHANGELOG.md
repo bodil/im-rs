@@ -24,6 +24,8 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 -   The `pool` feature flag was missing from the `im-rc` version of the crate, which is the version
     where it's actually useful. It's been added now.
 -   `DiffIter` now has a `Debug` implementation.
+-   There is now a `Vector::is_inline()` method to determine whether a `Vector` is currently
+    inlined. (#129)
 
 ### Fixed
 
