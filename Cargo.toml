@@ -56,4 +56,4 @@ rayon = "1"
 rand = { version = "0.7", features = ["small_rng"] }
 pretty_assertions = "0.6"
 metrohash = "1"
-proptest-derive = "0.1"
+proptest-derive = "0.2"
