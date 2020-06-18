@@ -1,5 +1,7 @@
 # im-rs
 
+[![Crate Status](https://img.shields.io/crates/v/im.svg)](https://crates.io/crates/im)
+
 Blazing fast immutable collection datatypes for Rust.
 
 Comes in two versions: [`im`](https://crates.io/crates/im) (thread safe) and
