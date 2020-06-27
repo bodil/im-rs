@@ -72,7 +72,7 @@ fn read_doc<P: AsRef<Path>>(name: P) -> Document {
 fn make_dist(root: &Path, target: &str, manifest: &str) -> PathBuf {
   let path = root.join(target);
   fs::create_dir_all(&path).unwrap();
-  let mut src = vec!["src".into(), "build.rs".into(), "proptest-regressions".into()];
+  let mut src = vec!["src".into(), "build.rs".into(), "proptest-regressions".into(), "non-proptest-regressions".into()];
   for item in glob::glob("*.md").unwrap() {
     if let Ok(path) = item {
       src.push(path);

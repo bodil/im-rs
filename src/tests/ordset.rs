@@ -2,6 +2,9 @@
 
 use std::collections::BTreeSet;
 use std::fmt::{Debug, Error, Formatter, Write};
+use std::fs::File;
+use std::io::Read;
+use std::path::PathBuf;
 
 use crate::OrdSet;
 
@@ -80,6 +83,25 @@ proptest! {
             assert_eq!(nat.len(), set.len());
             assert_eq!(OrdSet::from(nat.clone()), set);
             assert!(nat.iter().eq(set.iter()));
+        }
+    }
+}
+
+#[test]
+fn regression_ordset_removal_panic() { // issue 124
+    let mut set = OrdSet::new();
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("non-proptest-regressions/tests/ordset_removal_panic.txt");
+    let mut file = File::open(path).unwrap();
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).unwrap();
+
+    for line in contents.split('\n') {
+        if line.starts_with("insert ") {
+            set.insert(line[7..].parse::<u32>().unwrap());
+        } else if line.starts_with("remove ") {
+            set.remove(&line[7..].parse::<u32>().unwrap());
         }
     }
 }

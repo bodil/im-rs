@@ -644,7 +644,7 @@ impl<A: BTreeValue> Node<A> {
                     // If we're a leaf, just delete the entry.
                     (&None, &None) => RemoveAction::DeleteAt(index),
                     // If the left hand child has capacity, pull the predecessor up.
-                    (&Some(ref left), _) if !left.too_small() => {
+                    (&Some(ref left), &Some(ref right)) if !left.too_small() && right.has_room() => {
                         if left.is_leaf() {
                             RemoveAction::PullUp(left.keys.len() - 1, index, index)
                         } else {
@@ -652,7 +652,7 @@ impl<A: BTreeValue> Node<A> {
                         }
                     }
                     // If the right hand child has capacity, pull the successor up.
-                    (_, &Some(ref right)) if !right.too_small() => {
+                    (&Some(ref left), &Some(ref right)) if !right.too_small() && left.has_room() => {
                         if right.is_leaf() {
                             RemoveAction::PullUp(0, index, index + 1)
                         } else {
