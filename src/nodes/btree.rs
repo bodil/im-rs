@@ -135,11 +135,6 @@ impl<A> Node<A> {
     }
 
     #[inline]
-    fn is_leaf(&self) -> bool {
-        self.children[0].is_none()
-    }
-
-    #[inline]
     pub(crate) fn unit(value: A) -> Self {
         Node {
             keys: Chunk::unit(value),
