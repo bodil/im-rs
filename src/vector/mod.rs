@@ -983,7 +983,7 @@ impl<A: Clone> Vector<A> {
         }
 
         if self.is_empty() {
-            replace(self, other);
+            *self = other;
             return;
         }
 

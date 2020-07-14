@@ -2394,13 +2394,13 @@ mod test {
         #[test]
         fn length(ref input in collection::btree_map(i16::ANY, i16::ANY, 0..1000)) {
             let map: OrdMap<i32, i32> = OrdMap::from(input.clone());
-            input.len() == map.len()
+            assert_eq!(input.len(), map.len());
         }
 
         #[test]
         fn order(ref input in collection::hash_map(i16::ANY, i16::ANY, 0..1000)) {
             let map: OrdMap<i32, i32> = OrdMap::from(input.clone());
-            is_sorted(map.keys())
+            assert!(is_sorted(map.keys()));
         }
 
         #[test]
