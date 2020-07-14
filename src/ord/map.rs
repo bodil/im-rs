@@ -2382,6 +2382,7 @@ mod test {
         let mut map = OrdMap::new();
         let contents = include_str!("test-fixtures/issue_124.txt");
         for line in contents.split('\n') {
+            let line = line.trim();
             if line.starts_with("insert ") {
                 map.insert(line[7..].parse::<u32>().unwrap(), 0);
             } else if line.starts_with("remove ") {
