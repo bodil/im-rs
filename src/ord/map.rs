@@ -2377,6 +2377,19 @@ mod test {
         assert_eq!(vec![(3, 4), (2, 3), (1, 2)], range);
     }
 
+    #[test]
+    fn issue_124() {
+        let mut map = OrdMap::new();
+        let contents = include_str!("../../test-fixtures/issue_124.txt");
+        for line in contents.split('\n') {
+            if line.starts_with("insert ") {
+                map.insert(line[7..].parse::<u32>().unwrap(), 0);
+            } else if line.starts_with("remove ") {
+                map.remove(&line[7..].parse::<u32>().unwrap());
+            }
+        }
+    }
+
     proptest! {
         #[test]
         fn length(ref input in collection::btree_map(i16::ANY, i16::ANY, 0..1000)) {
