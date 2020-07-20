@@ -2354,19 +2354,19 @@ mod test {
 
     #[test]
     fn ranged_iter() {
-        let map: OrdMap<i32, i32> = ordmap![1=>2, 2=>3, 3=>4, 4=>5, 5=>6];
+        let map: OrdMap<i32, i32> = ordmap![1=>2, 2=>3, 3=>4, 4=>5, 5=>6, 7=>8];
         let range: Vec<(i32, i32)> = map.range(..).map(|(k, v)| (*k, *v)).collect();
-        assert_eq!(vec![(1, 2), (2, 3), (3, 4), (4, 5), (5, 6)], range);
+        assert_eq!(vec![(1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (7, 8)], range);
         let range: Vec<(i32, i32)> = map.range(..).rev().map(|(k, v)| (*k, *v)).collect();
-        assert_eq!(vec![(5, 6), (4, 5), (3, 4), (2, 3), (1, 2)], range);
+        assert_eq!(vec![(7, 8), (5, 6), (4, 5), (3, 4), (2, 3), (1, 2)], range);
         let range: Vec<(i32, i32)> = map.range(2..5).map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(2, 3), (3, 4), (4, 5)], range);
         let range: Vec<(i32, i32)> = map.range(2..5).rev().map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(4, 5), (3, 4), (2, 3)], range);
         let range: Vec<(i32, i32)> = map.range(3..).map(|(k, v)| (*k, *v)).collect();
-        assert_eq!(vec![(3, 4), (4, 5), (5, 6)], range);
+        assert_eq!(vec![(3, 4), (4, 5), (5, 6), (7, 8)], range);
         let range: Vec<(i32, i32)> = map.range(3..).rev().map(|(k, v)| (*k, *v)).collect();
-        assert_eq!(vec![(5, 6), (4, 5), (3, 4)], range);
+        assert_eq!(vec![(7, 8), (5, 6), (4, 5), (3, 4)], range);
         let range: Vec<(i32, i32)> = map.range(..4).map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(1, 2), (2, 3), (3, 4)], range);
         let range: Vec<(i32, i32)> = map.range(..4).rev().map(|(k, v)| (*k, *v)).collect();
@@ -2375,6 +2375,10 @@ mod test {
         assert_eq!(vec![(1, 2), (2, 3), (3, 4)], range);
         let range: Vec<(i32, i32)> = map.range(..=3).rev().map(|(k, v)| (*k, *v)).collect();
         assert_eq!(vec![(3, 4), (2, 3), (1, 2)], range);
+        let range: Vec<(i32, i32)> = map.range(..6).map(|(k, v)| (*k, *v)).collect();
+        assert_eq!(vec![(1, 2), (2, 3), (3, 4), (4, 5), (5, 6)], range);
+        let range: Vec<(i32, i32)> = map.range(..=6).map(|(k, v)| (*k, *v)).collect();
+        assert_eq!(vec![(1, 2), (2, 3), (3, 4), (4, 5), (5, 6)], range);
     }
 
     #[test]

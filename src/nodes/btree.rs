@@ -427,7 +427,7 @@ impl<A: BTreeValue> Node<A> {
                 None if index == 0 => Vec::new(),
                 None => match self.keys.get(index - 1) {
                     Some(_) => {
-                        path.push((self, index));
+                        path.push((self, index - 1));
                         path
                     }
                     None => Vec::new(),
@@ -638,7 +638,7 @@ impl<A: BTreeValue> Node<A> {
                 match (&self.children[index], &self.children[index + 1]) {
                     // If we're a leaf, just delete the entry.
                     (&None, &None) => RemoveAction::DeleteAt(index),
-                    // Right is empty. Attempt to steal from left if enough capacity, 
+                    // Right is empty. Attempt to steal from left if enough capacity,
                     // otherwise pull the predecessor up.
                     (&Some(ref left), &None) => {
                         if !left.too_small() {
@@ -656,7 +656,7 @@ impl<A: BTreeValue> Node<A> {
                             RemoveAction::PullUp(0, index, index + 1)
                         }
                     }
-                    // Both left and right are non empty. Attempt to steal from left or 
+                    // Both left and right are non empty. Attempt to steal from left or
                     // right if enough capacity, otherwise just merge the children.
                     (&Some(ref left), &Some(ref right)) => {
                         if left.has_room() && !right.too_small() {
