@@ -182,7 +182,7 @@ impl<A: Clone> Vector<A> {
     ///
     /// Note that if you didn't specifically construct it with a pool, you'll
     /// get back a reference to a pool of size 0.
-    #[cfg_attr(not(feature = "pool"), doc = "hidden")]
+    #[cfg_attr(not(feature = "pool"), doc(hidden))]
     pub fn pool(&self) -> &RRBPool<A> {
         match self.vector {
             Inline(ref pool, _) => pool,
