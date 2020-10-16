@@ -656,10 +656,16 @@ impl<A: BTreeValue> Node<A> {
                             RemoveAction::PullUp(0, index, index + 1)
                         }
                     }
-                    // Both left and right are non empty. Attempt to steal from left or
-                    // right if enough capacity, otherwise just merge the children.
+                    // Both left and right are non empty.
+                    // First consider pulling either predecessor (from left) or successor (from right).
+                    // Then attempt to steal from left or right if enough capacity,
+                    // otherwise just merge the two small children.
                     (&Some(ref left), &Some(ref right)) => {
-                        if left.has_room() && !right.too_small() {
+                        if !left.too_small() {
+                            RemoveAction::PullUp(left.keys.len() - 1, index, index)
+                        } else if !right.too_small() {
+                            RemoveAction::PullUp(0, index, index + 1)
+                        } else if left.has_room() && !right.too_small() {
                             RemoveAction::StealFromRight(index)
                         } else if right.has_room() && !left.too_small() {
                             RemoveAction::StealFromLeft(index + 1)
