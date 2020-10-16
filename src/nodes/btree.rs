@@ -16,7 +16,7 @@ use crate::util::{Pool, PoolClone, PoolDefault, PoolRef};
 use self::Insert::*;
 use self::InsertAction::*;
 
-const NODE_SIZE: usize = NodeSize::USIZE;
+pub(crate) const NODE_SIZE: usize = NodeSize::USIZE;
 const MEDIAN: usize = (NODE_SIZE + 1) >> 1;
 
 pub trait BTreeValue {
@@ -395,7 +395,17 @@ impl<A: BTreeValue> Node<A> {
                         path.push((self, index));
                         path
                     }
-                    None => Vec::new(),
+                    None => {
+                        // go back up to find next
+                        while let Some((node, idx)) = path.last() {
+                            if node.keys.len() == *idx {
+                                path.pop();
+                            } else {
+                                break;
+                            }
+                        }
+                        path
+                    }
                 },
                 Some(ref node) => {
                     path.push((self, index));
@@ -424,14 +434,22 @@ impl<A: BTreeValue> Node<A> {
                 path
             }
             Err(index) => match self.children[index] {
-                None if index == 0 => Vec::new(),
-                None => match self.keys.get(index - 1) {
-                    Some(_) => {
-                        path.push((self, index - 1));
-                        path
+                None if index == 0 => {
+                    // go back up to find prev
+                    while let Some((_, idx)) = path.last_mut() {
+                        if *idx == 0 {
+                            path.pop();
+                        } else {
+                            *idx -= 1;
+                            break;
+                        }
                     }
-                    None => Vec::new(),
-                },
+                    path
+                }
+                None => {
+                    path.push((self, index - 1));
+                    path
+                }
                 Some(ref node) => {
                     path.push((self, index));
                     node.path_prev(key, path)
