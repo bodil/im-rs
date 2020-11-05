@@ -1792,6 +1792,7 @@ where
 // // Iterators
 
 /// An iterator over the elements of a map.
+#[derive(Clone)]
 pub struct Iter<'a, K, V> {
     it: NodeIter<'a, (K, V)>,
 }
