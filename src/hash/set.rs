@@ -834,6 +834,7 @@ where
 // Iterators
 
 /// An iterator over the elements of a set.
+#[derive(Clone)]
 pub struct Iter<'a, A> {
     it: NodeIter<'a, Value<A>>,
 }

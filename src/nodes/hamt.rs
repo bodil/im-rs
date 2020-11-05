@@ -472,6 +472,7 @@ impl<A: HashValue> CollisionNode<A> {
 
 // Ref iterator
 
+#[derive(Clone)]
 pub(crate) struct Iter<'a, A> {
     count: usize,
     stack: Vec<ChunkIter<'a, Entry<A>, HashWidth>>,

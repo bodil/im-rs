@@ -1948,6 +1948,7 @@ impl<'a, A: Clone> From<&'a Vec<A>> for Vector<A> {
 /// To obtain one, use [`Vector::iter()`][iter].
 ///
 /// [iter]: enum.Vector.html#method.iter
+#[derive(Clone)]
 pub struct Iter<'a, A> {
     focus: Focus<'a, A>,
     front_index: usize,

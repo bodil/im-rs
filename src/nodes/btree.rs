@@ -912,6 +912,7 @@ impl<A: BTreeValue> Node<A> {
 // Iterator
 
 /// An iterator over an ordered set.
+#[derive(Clone)]
 pub struct Iter<'a, A> {
     fwd_path: Vec<(&'a Node<A>, usize)>,
     back_path: Vec<(&'a Node<A>, usize)>,
