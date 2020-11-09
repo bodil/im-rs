@@ -279,10 +279,10 @@ impl<A> Clone for TreeFocus<A> {
 
 #[allow(unsafe_code)]
 #[cfg(threadsafe)]
-unsafe impl<A> Send for TreeFocus<A> {}
+unsafe impl<A: Send> Send for TreeFocus<A> {}
 #[allow(unsafe_code)]
 #[cfg(threadsafe)]
-unsafe impl<A> Sync for TreeFocus<A> {}
+unsafe impl<A: Sync> Sync for TreeFocus<A> {}
 
 #[inline]
 fn contains<A: Ord>(range: &Range<A>, index: &A) -> bool {
