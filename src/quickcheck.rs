@@ -1,4 +1,4 @@
-use crate::{HashMap, HashSet, OrdMap, OrdSet, Vector};
+use crate::{hashmap::HashMap, hashset::HashSet, OrdMap, OrdSet, Vector};
 use ::quickcheck::{Arbitrary, Gen};
 use std::hash::{BuildHasher, Hash};
 use std::iter::FromIterator;

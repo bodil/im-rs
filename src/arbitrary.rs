@@ -7,7 +7,7 @@ use std::iter;
 
 use ::arbitrary::{size_hint, Arbitrary, Result, Unstructured};
 
-use crate::{HashMap, HashSet, OrdMap, OrdSet, Vector};
+use crate::{hashmap::HashMap, hashset::HashSet, OrdMap, OrdSet, Vector};
 
 fn empty<T: 'static>() -> Box<dyn Iterator<Item = T>> {
     Box::new(iter::empty())
