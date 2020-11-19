@@ -33,8 +33,8 @@ use std::ops::{Add, Deref, Mul};
 
 use crate::nodes::hamt::{hash_key, Drain as NodeDrain, HashValue, Iter as NodeIter, Node};
 use crate::ordset::OrdSet;
-use crate::Vector;
 use crate::util::{Pool, PoolRef, Ref};
+use crate::Vector;
 
 /// Construct a set from a sequence of values.
 ///
@@ -52,10 +52,10 @@ use crate::util::{Pool, PoolRef, Ref};
 /// ```
 #[macro_export]
 macro_rules! hashset {
-    () => { $crate::hashset::HashSet::new() };
+    () => { $crate::HashSet::new() };
 
     ( $($x:expr),* ) => {{
-        let mut l = $crate::hashset::HashSet::new();
+        let mut l = $crate::HashSet::new();
         $(
             l.insert($x);
         )*
@@ -63,7 +63,7 @@ macro_rules! hashset {
     }};
 
     ( $($x:expr ,)* ) => {{
-        let mut l = $crate::hashset::HashSet::new();
+        let mut l = $crate::HashSet::new();
         $(
             l.insert($x);
         )*
@@ -125,7 +125,10 @@ where
     }
 }
 
-impl<A> HashSet<A, RandomState> {
+impl<A, S> HashSet<A, S>
+where
+    S: BuildHasher + Default,
+{
     /// Construct an empty set.
     #[must_use]
     pub fn new() -> Self {
@@ -145,9 +148,10 @@ impl<A> HashSet<A, RandomState> {
     }
 }
 
-impl<A> HashSet<A, RandomState>
+impl<A, S> HashSet<A, S>
 where
     A: Hash + Eq + Clone,
+    S: BuildHasher + Default,
 {
     /// Construct a set with a single value.
     ///
@@ -155,7 +159,7 @@ where
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::hashset::HashSet;
+    /// # use im::HashSet;
     /// # use std::sync::Arc;
     /// let set = HashSet::unit(123);
     /// assert!(set.contains(&123));

@@ -390,8 +390,10 @@ compile_error!(
     "The `pool` feature is not threadsafe but you've enabled it on a threadsafe version of `im`."
 );
 
-pub use crate::hashmap::HashMap;
-pub use crate::hashset::HashSet;
+/// HashMap with random state hasher
+pub type HashMap<K, V> = crate::hashmap::HashMap<K, V, std::collections::hash_map::RandomState>;
+/// HashSet with random state hasher
+pub type HashSet<A> = crate::hashset::HashSet<A, std::collections::hash_map::RandomState>;
 pub use crate::ordmap::OrdMap;
 pub use crate::ordset::OrdSet;
 #[doc(inline)]

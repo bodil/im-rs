@@ -57,10 +57,10 @@ use crate::util::{Pool, PoolRef, Ref};
 /// ```
 #[macro_export]
 macro_rules! hashmap {
-    () => { $crate::hashmap::HashMap::new() };
+    () => { $crate::HashMap::new() };
 
     ( $( $key:expr => $value:expr ),* ) => {{
-        let mut map = $crate::hashmap::HashMap::new();
+        let mut map = $crate::HashMap::new();
         $({
             map.insert($key, $value);
         })*;
@@ -68,7 +68,7 @@ macro_rules! hashmap {
     }};
 
     ( $( $key:expr => $value:expr ,)* ) => {{
-        let mut map = $crate::hashmap::HashMap::new();
+        let mut map = $crate::HashMap::new();
         $({
             map.insert($key, $value);
         })*;
@@ -119,7 +119,10 @@ where
     }
 }
 
-impl<K, V> HashMap<K, V, RandomState> {
+impl<K, V, S> HashMap<K, V, S>
+where
+    S: BuildHasher + Default,
+{
     /// Construct an empty hash map.
     #[inline]
     #[must_use]
@@ -141,10 +144,11 @@ impl<K, V> HashMap<K, V, RandomState> {
     }
 }
 
-impl<K, V> HashMap<K, V, RandomState>
+impl<K, V, S> HashMap<K, V, S>
 where
     K: Hash + Eq + Clone,
     V: Clone,
+    S: BuildHasher + Default,
 {
     /// Construct a hash map with a single mapping.
     ///
@@ -152,7 +156,7 @@ where
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::hashmap::HashMap;
+    /// # use im::HashMap;
     /// let map = HashMap::unit(123, "onetwothree");
     /// assert_eq!(
     ///   map.get(&123),
@@ -161,8 +165,8 @@ where
     /// ```
     #[inline]
     #[must_use]
-    pub fn unit(k: K, v: V) -> HashMap<K, V> {
-        HashMap::new().update(k, v)
+    pub fn unit(k: K, v: V) -> HashMap<K, V, S> {
+        HashMap::default().update(k, v)
     }
 }
 
@@ -175,7 +179,7 @@ impl<K, V, S> HashMap<K, V, S> {
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::hashmap::HashMap;
+    /// # use im::HashMap;
     /// assert!(
     ///   !hashmap!{1 => 2}.is_empty()
     /// );
@@ -2219,7 +2223,7 @@ mod test {
 
     #[test]
     fn large_map() {
-        let mut map = HashMap::new();
+        let mut map = crate::HashMap::new();
         let size = 32769;
         for i in 0..size {
             map.insert(i, i);
