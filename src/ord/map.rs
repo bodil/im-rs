@@ -981,11 +981,16 @@ where
     /// ```
     #[inline]
     #[must_use]
-    pub fn union(mut self, other: Self) -> Self {
-        for (k, v) in other {
-            self.entry(k).or_insert(v);
+    pub fn union(self, other: Self) -> Self {
+        let (mut to_mutate, to_consume) = if self.len() >= other.len() {
+            (self, other)
+        } else {
+            (other, self)
+        };
+        for (k, v) in to_consume {
+            to_mutate.entry(k).or_insert(v);
         }
-        self
+        to_mutate
     }
 
     /// Construct the union of two maps, using a function to decide
@@ -1031,7 +1036,20 @@ where
     /// ));
     /// ```
     #[must_use]
-    pub fn union_with_key<F>(mut self, other: Self, mut f: F) -> Self
+    pub fn union_with_key<F>(self, other: Self, mut f: F) -> Self
+    where
+        F: FnMut(&K, V, V) -> V,
+    {
+        if self.len() >= other.len() {
+            self.union_with_key_inner(other, f)
+        } else {
+            other.union_with_key_inner(self, |key, other_value, self_value| {
+                f(key, self_value, other_value)
+            })
+        }
+    }
+
+    fn union_with_key_inner<F>(mut self, other: Self, mut f: F) -> Self
     where
         F: FnMut(&K, V, V) -> V,
     {

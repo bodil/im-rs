@@ -33,8 +33,8 @@ use std::ops::{Add, Deref, Mul};
 
 use crate::nodes::hamt::{hash_key, Drain as NodeDrain, HashValue, Iter as NodeIter, Node};
 use crate::ordset::OrdSet;
-use crate::Vector;
 use crate::util::{Pool, PoolRef, Ref};
+use crate::Vector;
 
 /// Construct a set from a sequence of values.
 ///
@@ -512,11 +512,16 @@ where
     /// assert_eq!(expected, set1.union(set2));
     /// ```
     #[must_use]
-    pub fn union(mut self, other: Self) -> Self {
-        for value in other {
-            self.insert(value);
+    pub fn union(self, other: Self) -> Self {
+        let (mut to_mutate, to_consume) = if self.len() >= other.len() {
+            (self, other)
+        } else {
+            (other, self)
+        };
+        for value in to_consume {
+            to_mutate.insert(value);
         }
-        self
+        to_mutate
     }
 
     /// Construct the union of multiple sets.
