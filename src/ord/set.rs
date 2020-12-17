@@ -636,11 +636,16 @@ where
     /// assert_eq!(expected, set1.union(set2));
     /// ```
     #[must_use]
-    pub fn union(mut self, other: Self) -> Self {
-        for value in other {
-            self.insert(value);
+    pub fn union(self, other: Self) -> Self {
+        let (mut to_mutate, to_consume) = if self.len() >= other.len() {
+            (self, other)
+        } else {
+            (other, self)
+        };
+        for value in to_consume {
+            to_mutate.insert(value);
         }
-        self
+        to_mutate
     }
 
     /// Construct the union of multiple sets.
