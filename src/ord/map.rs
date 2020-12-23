@@ -399,7 +399,7 @@ where
     /// the two maps, minus the number of elements belonging to nodes
     /// shared between them)
     #[must_use]
-    pub fn diff<'a>(&'a self, other: &'a Self) -> DiffIter<'a, K, V> {
+    pub fn diff<'a, 'b>(&'a self, other: &'b Self) -> DiffIter<'a, 'b, K, V> {
         DiffIter {
             it: NodeDiffIter::new(&self.root, &other.root),
         }
@@ -1862,31 +1862,31 @@ where
 impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> where (K, V): 'a + BTreeValue {}
 
 /// An iterator over the differences between two maps.
-pub struct DiffIter<'a, K, V> {
-    it: NodeDiffIter<'a, (K, V)>,
+pub struct DiffIter<'a, 'b, K, V> {
+    it: NodeDiffIter<'a, 'b, (K, V)>,
 }
 
 /// A description of a difference between two ordered maps.
 #[derive(PartialEq, Eq, Debug)]
-pub enum DiffItem<'a, K, V> {
+pub enum DiffItem<'a, 'b, K, V> {
     /// This value has been added to the new map.
-    Add(&'a K, &'a V),
+    Add(&'b K, &'b V),
     /// This value has been changed between the two maps.
     Update {
         /// The old value.
         old: (&'a K, &'a V),
         /// The new value.
-        new: (&'a K, &'a V),
+        new: (&'b K, &'b V),
     },
     /// This value has been removed from the new map.
     Remove(&'a K, &'a V),
 }
 
-impl<'a, K, V> Iterator for DiffIter<'a, K, V>
+impl<'a, 'b, K, V> Iterator for DiffIter<'a, 'b, K, V>
 where
-    (K, V): 'a + BTreeValue + PartialEq,
+    (K, V): 'a + 'b + BTreeValue + PartialEq,
 {
-    type Item = DiffItem<'a, K, V>;
+    type Item = DiffItem<'a, 'b, K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.it.next().map(|item| match item {

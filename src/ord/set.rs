@@ -367,7 +367,7 @@ where
     /// the two sets, minus the number of elements belonging to nodes
     /// shared between them)
     #[must_use]
-    pub fn diff<'a>(&'a self, other: &'a Self) -> DiffIter<'_, A> {
+    pub fn diff<'a, 'b>(&'a self, other: &'b Self) -> DiffIter<'a, 'b, A> {
         DiffIter {
             it: NodeDiffIter::new(&self.root, &other.root),
         }
@@ -1027,15 +1027,15 @@ where
 }
 
 /// An iterator over the difference between two sets.
-pub struct DiffIter<'a, A> {
-    it: NodeDiffIter<'a, Value<A>>,
+pub struct DiffIter<'a, 'b, A> {
+    it: NodeDiffIter<'a, 'b, Value<A>>,
 }
 
-impl<'a, A> Iterator for DiffIter<'a, A>
+impl<'a, 'b, A> Iterator for DiffIter<'a, 'b, A>
 where
     A: Ord + PartialEq,
 {
-    type Item = DiffItem<'a, A>;
+    type Item = DiffItem<'a, 'b, A>;
 
     /// Advance the iterator and return the next value.
     ///

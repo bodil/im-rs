@@ -1225,22 +1225,22 @@ impl<A: BTreeValue + Clone> ExactSizeIterator for ConsumingIter<A> {}
 // DiffIter
 
 /// An iterator over the differences between two ordered sets.
-pub struct DiffIter<'a, A> {
+pub struct DiffIter<'a, 'b, A> {
     old_stack: Vec<IterItem<'a, A>>,
-    new_stack: Vec<IterItem<'a, A>>,
+    new_stack: Vec<IterItem<'b, A>>,
 }
 
 /// A description of a difference between two ordered sets.
 #[derive(PartialEq, Eq, Debug)]
-pub enum DiffItem<'a, A> {
+pub enum DiffItem<'a, 'b, A> {
     /// This value has been added to the new set.
-    Add(&'a A),
+    Add(&'b A),
     /// This value has been changed between the two sets.
     Update {
         /// The old value.
         old: &'a A,
         /// The new value.
-        new: &'a A,
+        new: &'b A,
     },
     /// This value has been removed from the new set.
     Remove(&'a A),
@@ -1251,8 +1251,8 @@ enum IterItem<'a, A> {
     Yield(&'a A),
 }
 
-impl<'a, A: 'a> DiffIter<'a, A> {
-    pub(crate) fn new(old: &'a Node<A>, new: &'a Node<A>) -> Self {
+impl<'a, 'b, A: 'a + 'b> DiffIter<'a, 'b, A> {
+    pub(crate) fn new(old: &'a Node<A>, new: &'b Node<A>) -> Self {
         DiffIter {
             old_stack: if old.keys.is_empty() {
                 Vec::new()
@@ -1267,13 +1267,16 @@ impl<'a, A: 'a> DiffIter<'a, A> {
         }
     }
 
-    fn push_node(stack: &mut Vec<IterItem<'a, A>>, maybe_node: &'a Option<PoolRef<Node<A>>>) {
+    fn push_node<'either>(
+        stack: &mut Vec<IterItem<'either, A>>,
+        maybe_node: &'either Option<PoolRef<Node<A>>>,
+    ) {
         if let Some(ref node) = *maybe_node {
             stack.push(IterItem::Consider(&node))
         }
     }
 
-    fn push(stack: &mut Vec<IterItem<'a, A>>, node: &'a Node<A>) {
+    fn push<'either>(stack: &mut Vec<IterItem<'either, A>>, node: &'either Node<A>) {
         for n in 0..node.keys.len() {
             let i = node.keys.len() - n;
             Self::push_node(stack, &node.children[i]);
@@ -1283,11 +1286,11 @@ impl<'a, A: 'a> DiffIter<'a, A> {
     }
 }
 
-impl<'a, A> Iterator for DiffIter<'a, A>
+impl<'a, 'b, A> Iterator for DiffIter<'a, 'b, A>
 where
-    A: 'a + BTreeValue + PartialEq,
+    A: 'a + 'b + BTreeValue + PartialEq,
 {
-    type Item = DiffItem<'a, A>;
+    type Item = DiffItem<'a, 'b, A>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
