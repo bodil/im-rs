@@ -41,7 +41,7 @@ bitmaps = "2"
 sized-chunks = "0.6"
 rand_core = "0.5.1"
 rand_xoshiro = "0.4"
-quickcheck = { version = "0.9", optional = true }
+quickcheck = { version = "1.0", optional = true }
 proptest = { version = "0.10", optional = true }
 serde = { version = "1", optional = true }
 rayon = { version = "1", optional = true }
