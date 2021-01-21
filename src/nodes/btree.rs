@@ -16,7 +16,7 @@ use crate::util::{Pool, PoolClone, PoolDefault, PoolRef};
 use self::Insert::*;
 use self::InsertAction::*;
 
-const NODE_SIZE: usize = NodeSize::USIZE;
+pub(crate) const NODE_SIZE: usize = NodeSize::USIZE;
 const MEDIAN: usize = (NODE_SIZE + 1) >> 1;
 
 pub trait BTreeValue {
@@ -92,9 +92,14 @@ pub(crate) enum Remove<A> {
     Update(A, Node<A>),
 }
 
+enum Boundary {
+    Lowest,
+    Highest,
+}
+
 enum RemoveAction {
     DeleteAt(usize),
-    PullUp(usize, usize, usize),
+    PullUp(Boundary, usize, usize),
     Merge(usize),
     StealFromLeft(usize),
     StealFromRight(usize),
@@ -395,7 +400,17 @@ impl<A: BTreeValue> Node<A> {
                         path.push((self, index));
                         path
                     }
-                    None => Vec::new(),
+                    None => {
+                        // go back up to find next
+                        while let Some((node, idx)) = path.last() {
+                            if node.keys.len() == *idx {
+                                path.pop();
+                            } else {
+                                break;
+                            }
+                        }
+                        path
+                    }
                 },
                 Some(ref node) => {
                     path.push((self, index));
@@ -424,14 +439,22 @@ impl<A: BTreeValue> Node<A> {
                 path
             }
             Err(index) => match self.children[index] {
-                None if index == 0 => Vec::new(),
-                None => match self.keys.get(index - 1) {
-                    Some(_) => {
-                        path.push((self, index - 1));
-                        path
+                None if index == 0 => {
+                    // go back up to find prev
+                    while let Some((_, idx)) = path.last_mut() {
+                        if *idx == 0 {
+                            path.pop();
+                        } else {
+                            *idx -= 1;
+                            break;
+                        }
                     }
-                    None => Vec::new(),
-                },
+                    path
+                }
+                None => {
+                    path.push((self, index - 1));
+                    path
+                }
                 Some(ref node) => {
                     path.push((self, index));
                     node.path_prev(key, path)
@@ -618,14 +641,32 @@ impl<A: BTreeValue> Node<A> {
         A::Key: Borrow<BK>,
     {
         let index = A::search_key(&self.keys, key);
-        self.remove_index(pool, index, key)
+        self.remove_index(pool, index, Ok(key))
+    }
+
+    fn remove_target<BK>(
+        &mut self,
+        pool: &Pool<Node<A>>,
+        target: Result<&BK, Boundary>,
+    ) -> Remove<A>
+    where
+        A: Clone,
+        BK: Ord + ?Sized,
+        A::Key: Borrow<BK>,
+    {
+        let index = match target {
+            Ok(key) => A::search_key(&self.keys, key),
+            Err(Boundary::Lowest) => Err(0),
+            Err(Boundary::Highest) => Err(self.keys.len()),
+        };
+        self.remove_index(pool, index, target)
     }
 
     fn remove_index<BK>(
         &mut self,
         pool: &Pool<Node<A>>,
         index: Result<usize, usize>,
-        key: &BK,
+        target: Result<&BK, Boundary>,
     ) -> Remove<A>
     where
         A: Clone,
@@ -638,41 +679,30 @@ impl<A: BTreeValue> Node<A> {
                 match (&self.children[index], &self.children[index + 1]) {
                     // If we're a leaf, just delete the entry.
                     (&None, &None) => RemoveAction::DeleteAt(index),
-                    // Right is empty. Attempt to steal from left if enough capacity,
-                    // otherwise pull the predecessor up.
-                    (&Some(ref left), &None) => {
-                        if !left.too_small() {
-                            RemoveAction::StealFromLeft(index + 1)
-                        } else {
-                            RemoveAction::PullUp(left.keys.len() - 1, index, index)
-                        }
-                    }
-                    // Left is empty. Attempt to steal from right if enough capacity,
-                    // otherwise pull the successor up.
-                    (&None, &Some(ref right)) => {
-                        if !right.too_small() {
-                            RemoveAction::StealFromRight(index)
-                        } else {
-                            RemoveAction::PullUp(0, index, index + 1)
-                        }
-                    }
-                    // Both left and right are non empty. Attempt to steal from left or
-                    // right if enough capacity, otherwise just merge the children.
+                    // First consider pulling either predecessor (from left) or successor (from right).
+                    // otherwise just merge the two small children.
                     (&Some(ref left), &Some(ref right)) => {
-                        if left.has_room() && !right.too_small() {
-                            RemoveAction::StealFromRight(index)
-                        } else if right.has_room() && !left.too_small() {
-                            RemoveAction::StealFromLeft(index + 1)
+                        if !left.too_small() {
+                            RemoveAction::PullUp(Boundary::Highest, index, index)
+                        } else if !right.too_small() {
+                            RemoveAction::PullUp(Boundary::Lowest, index, index + 1)
                         } else {
                             RemoveAction::Merge(index)
                         }
                     }
+                    _ => unreachable!("Branch missing children"),
                 }
             }
-            // Key is adjacent to some key in node
+            // Target is adjacent to some key in node
             Err(index) => match self.children[index] {
-                // No child at location means key isn't in map.
-                None => return Remove::NoChange,
+                // We're deading with a leaf node
+                None => match target {
+                    // No child at location means key isn't in map.
+                    Ok(_key) => return Remove::NoChange,
+                    // Looking for the lowest or highest key
+                    Err(Boundary::Lowest) => RemoveAction::DeleteAt(0),
+                    Err(Boundary::Highest) => RemoveAction::DeleteAt(self.keys.len() - 1),
+                },
                 // Child at location, but it's at minimum capacity.
                 Some(ref child) if child.too_small() => {
                     let left = if index > 0 {
@@ -708,13 +738,13 @@ impl<A: BTreeValue> Node<A> {
                 self.children.remove(index);
                 Remove::Removed(pair)
             }
-            RemoveAction::PullUp(target_index, pull_to, child_index) => {
+            RemoveAction::PullUp(boundary, pull_to, child_index) => {
                 let children = &mut self.children;
                 let mut update = None;
                 let value;
                 if let Some(&mut Some(ref mut child_ref)) = children.get_mut(child_index) {
                     let child = PoolRef::make_mut(pool, child_ref);
-                    match child.remove_index(pool, Ok(target_index), key) {
+                    match child.remove_target(pool, Err(boundary)) {
                         Remove::NoChange => unreachable!(),
                         Remove::Removed(pulled_value) => {
                             value = self.keys.set(pull_to, pulled_value);
@@ -741,7 +771,7 @@ impl<A: BTreeValue> Node<A> {
                     PoolRef::unwrap_or_clone(left),
                     PoolRef::unwrap_or_clone(right),
                 );
-                let (removed, new_child) = match merged_child.remove(pool, key) {
+                let (removed, new_child) = match merged_child.remove_target(pool, target) {
                     Remove::NoChange => unreachable!(),
                     Remove::Removed(removed) => (removed, merged_child),
                     Remove::Update(removed, updated_child) => (removed, updated_child),
@@ -760,13 +790,7 @@ impl<A: BTreeValue> Node<A> {
                 {
                     let mut children = self.children.as_mut_slice()[index - 1..=index]
                         .iter_mut()
-                        .map(|n| {
-                            if let Some(ref mut o) = *n {
-                                o
-                            } else {
-                                unreachable!()
-                            }
-                        });
+                        .map(|n| n.as_mut().unwrap());
                     let left = PoolRef::make_mut(pool, children.next().unwrap());
                     let child = PoolRef::make_mut(pool, children.next().unwrap());
                     // Prepare the rebalanced node.
@@ -774,7 +798,7 @@ impl<A: BTreeValue> Node<A> {
                         left.children.last().unwrap().clone(),
                         self.keys[index - 1].clone(),
                     );
-                    match child.remove(pool, key) {
+                    match child.remove_target(pool, target) {
                         Remove::NoChange => {
                             // Key wasn't there, we need to revert the steal.
                             child.pop_min();
@@ -806,18 +830,12 @@ impl<A: BTreeValue> Node<A> {
                 {
                     let mut children = self.children.as_mut_slice()[index..index + 2]
                         .iter_mut()
-                        .map(|n| {
-                            if let Some(ref mut o) = *n {
-                                o
-                            } else {
-                                unreachable!()
-                            }
-                        });
+                        .map(|n| n.as_mut().unwrap());
                     let child = PoolRef::make_mut(pool, children.next().unwrap());
                     let right = PoolRef::make_mut(pool, children.next().unwrap());
                     // Prepare the rebalanced node.
                     child.push_max(right.children[0].clone(), self.keys[index].clone());
-                    match child.remove(pool, key) {
+                    match child.remove_target(pool, target) {
                         Remove::NoChange => {
                             // Key wasn't there, we need to revert the steal.
                             child.pop_max();
@@ -844,11 +862,17 @@ impl<A: BTreeValue> Node<A> {
                 Remove::Removed(out_value)
             }
             RemoveAction::MergeFirst(index) => {
-                if self.keys[index].cmp_keys(key) != Ordering::Equal
-                    && !self.child_contains(index, key)
-                    && !self.child_contains(index + 1, key)
-                {
-                    return Remove::NoChange;
+                if let Ok(key) = target {
+                    // Bail early if we're looking for a not existing key
+                    match self.keys[index].cmp_keys(key) {
+                        Ordering::Less if !self.child_contains(index + 1, key) => {
+                            return Remove::NoChange
+                        }
+                        Ordering::Greater if !self.child_contains(index, key) => {
+                            return Remove::NoChange
+                        }
+                        _ => (),
+                    }
                 }
                 let left = self.children.remove(index).unwrap();
                 let right = mem::replace(&mut self.children[index], None).unwrap();
@@ -860,7 +884,7 @@ impl<A: BTreeValue> Node<A> {
                 );
                 let update;
                 let out_value;
-                match merged.remove(pool, key) {
+                match merged.remove_target(pool, target) {
                     Remove::NoChange => {
                         panic!("nodes::btree::Node::remove: caught an absent key too late while merging");
                     }
@@ -887,7 +911,7 @@ impl<A: BTreeValue> Node<A> {
                 let out_value;
                 if let Some(&mut Some(ref mut child_ref)) = self.children.get_mut(index) {
                     let child = PoolRef::make_mut(pool, child_ref);
-                    match child.remove(pool, key) {
+                    match child.remove_target(pool, target) {
                         Remove::NoChange => return Remove::NoChange,
                         Remove::Removed(value) => {
                             out_value = value;

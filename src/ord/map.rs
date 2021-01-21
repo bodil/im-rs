@@ -2382,6 +2382,30 @@ mod test {
     }
 
     #[test]
+    fn range_iter_big() {
+        use crate::nodes::btree::NODE_SIZE;
+        use std::ops::Bound::Included;
+        const N: usize = NODE_SIZE * NODE_SIZE * 5; // enough for a sizeable 3 level tree
+
+        let data = (1usize..N).filter(|i| i % 2 == 0).map(|i| (i, ()));
+        let bmap = data
+            .clone()
+            .collect::<std::collections::BTreeMap<usize, ()>>();
+        let omap = data.collect::<OrdMap<usize, ()>>();
+
+        for i in (0..NODE_SIZE * 5).chain(N - NODE_SIZE * 5..=N + 1) {
+            assert_eq!(omap.range(i..).count(), bmap.range(i..).count());
+            assert_eq!(omap.range(..i).count(), bmap.range(..i).count());
+            assert_eq!(omap.range(i..i + 7).count(), bmap.range(i..i + 7).count());
+            assert_eq!(omap.range(i..=i + 7).count(), bmap.range(i..=i + 7).count());
+            assert_eq!(
+                omap.range((Included(i), Included(i + 7))).count(),
+                bmap.range((Included(i), Included(i + 7))).count(),
+            );
+        }
+    }
+
+    #[test]
     fn issue_124() {
         let mut map = OrdMap::new();
         let contents = include_str!("test-fixtures/issue_124.txt");
