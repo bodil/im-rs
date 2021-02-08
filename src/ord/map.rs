@@ -2386,10 +2386,10 @@ mod test {
         let mut map = OrdMap::new();
         let contents = include_str!("test-fixtures/issue_124.txt");
         for line in contents.lines() {
-            if line.starts_with("insert ") {
-                map.insert(line[7..].parse::<u32>().unwrap(), 0);
-            } else if line.starts_with("remove ") {
-                map.remove(&line[7..].parse::<u32>().unwrap());
+            if let Some(val) = line.strip_prefix("insert ") {
+                map.insert(val.parse::<u32>().unwrap(), 0);
+            } else if let Some(val) = line.strip_prefix("remove ") {
+                map.remove(&val.parse::<u32>().unwrap());
             }
         }
     }
