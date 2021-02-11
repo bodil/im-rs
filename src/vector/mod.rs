@@ -334,11 +334,7 @@ impl<A: Clone> Vector<A> {
     #[inline]
     #[must_use]
     pub fn is_inline(&self) -> bool {
-        if let Inline(_, _) = &self.vector {
-            true
-        } else {
-            false
-        }
+        matches!(&self.vector, Inline(_, _))
     }
 
     /// Test whether two vectors refer to the same content in memory.
@@ -2529,7 +2525,7 @@ mod test {
             assert!(input.ptr_eq(&inp2));
             inp2.set(len - 1, 98);
             assert_ne!(inp2.get(len - 1), input.get(len - 1));
-            assert!(!input.ptr_eq(&inp2), len);
+            assert!(!input.ptr_eq(&inp2), "len={}", len);
         }
     }
 

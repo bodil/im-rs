@@ -749,12 +749,12 @@ where
     }
 }
 
-impl<'a, A> Into<Focus<'a, A>> for FocusMut<'a, A>
+impl<'a, A> From<FocusMut<'a, A>> for Focus<'a, A>
 where
     A: Clone + 'a,
 {
-    fn into(self) -> Focus<'a, A> {
-        self.unmut()
+    fn from(input: FocusMut<'a, A>) -> Focus<'a, A> {
+        input.unmut()
     }
 }
 
