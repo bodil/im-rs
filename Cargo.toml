@@ -39,7 +39,7 @@ debug = []
 typenum = "1.12"
 bitmaps = "2"
 sized-chunks = "0.6"
-rand_core = "0.5.1"
+rand_core = "0.6.2"
 rand_xoshiro = "0.4"
 quickcheck = { version = "0.9", optional = true }
 proptest = { version = "0.10", optional = true }
