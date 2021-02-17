@@ -354,7 +354,7 @@ impl<A: Clone> Vector<A> {
     /// inside the space a `Vector` allocates for its pointers, so there are no heap allocations
     /// to compare).
     ///
-    /// Time: O(1), or O(n) for inline vectors
+    /// Time: O(1)
     #[must_use]
     pub fn ptr_eq(&self, other: &Self) -> bool {
         fn cmp_chunk<A>(left: &PoolRef<Chunk<A>>, right: &PoolRef<Chunk<A>>) -> bool {
