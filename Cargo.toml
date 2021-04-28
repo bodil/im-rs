@@ -37,7 +37,7 @@ debug = []
 
 [dependencies]
 typenum = "1.12"
-bitmaps = "2"
+bitmaps = "3"
 sized-chunks = "0.6"
 rand_core = "0.5.1"
 rand_xoshiro = "0.4"
