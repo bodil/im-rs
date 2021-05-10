@@ -14,7 +14,7 @@
 //! [`HashSet`][hashset::HashSet] has no guaranteed ordering.
 //!
 //! [1]: https://en.wikipedia.org/wiki/B-tree
-//! [hashset::HashSet]: ../hashset/struct.HashSet.html
+//! [hashset::HashSet]: ./struct.HashSet.html
 //! [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 
 use std::borrow::Borrow;
@@ -170,7 +170,7 @@ def_pool!(OrdSetPool<A>, Node<Value<A>>);
 /// [`HashSet`][hashset::HashSet] has no guaranteed ordering.
 ///
 /// [1]: https://en.wikipedia.org/wiki/B-tree
-/// [hashset::HashSet]: ../hashset/struct.HashSet.html
+/// [hashset::HashSet]: ./struct.HashSet.html
 /// [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 pub struct OrdSet<A> {
     size: usize,
