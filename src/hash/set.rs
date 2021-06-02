@@ -33,8 +33,8 @@ use std::ops::{Add, Deref, Mul};
 
 use crate::nodes::hamt::{hash_key, Drain as NodeDrain, HashValue, Iter as NodeIter, Node};
 use crate::ordset::OrdSet;
-use crate::Vector;
 use crate::util::{Pool, PoolRef, Ref};
+use crate::Vector;
 
 /// Construct a set from a sequence of values.
 ///
