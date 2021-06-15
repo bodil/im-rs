@@ -247,10 +247,7 @@ impl<A: BTreeValue> Node<A> {
             Ok(index) => Some(&self.keys[index]),
             Err(index) => match self.children[index] {
                 None if index == 0 => None,
-                None => match self.keys.get(index - 1) {
-                    Some(_) => Some(&self.keys[index - 1]),
-                    None => None,
-                },
+                None => self.keys.get(index - 1).map(|_| &self.keys[index - 1]),
                 Some(ref node) => node.lookup_prev(key),
             },
         }
@@ -267,10 +264,7 @@ impl<A: BTreeValue> Node<A> {
         match A::search_key(&self.keys, key) {
             Ok(index) => Some(&self.keys[index]),
             Err(index) => match self.children[index] {
-                None => match self.keys.get(index) {
-                    Some(_) => Some(&self.keys[index]),
-                    None => None,
-                },
+                None => self.keys.get(index).map(|_| &self.keys[index]),
                 Some(ref node) => node.lookup_next(key),
             },
         }
@@ -1293,7 +1287,7 @@ impl<'a, A: 'a> DiffIter<'a, A> {
 
     fn push_node(stack: &mut Vec<IterItem<'a, A>>, maybe_node: &'a Option<PoolRef<Node<A>>>) {
         if let Some(ref node) = *maybe_node {
-            stack.push(IterItem::Consider(&node))
+            stack.push(IterItem::Consider(node))
         }
     }
 
@@ -1318,11 +1312,11 @@ where
             match (self.old_stack.pop(), self.new_stack.pop()) {
                 (None, None) => return None,
                 (None, Some(new)) => match new {
-                    IterItem::Consider(new) => Self::push(&mut self.new_stack, &new),
+                    IterItem::Consider(new) => Self::push(&mut self.new_stack, new),
                     IterItem::Yield(new) => return Some(DiffItem::Add(new)),
                 },
                 (Some(old), None) => match old {
-                    IterItem::Consider(old) => Self::push(&mut self.old_stack, &old),
+                    IterItem::Consider(old) => Self::push(&mut self.old_stack, old),
                     IterItem::Yield(old) => return Some(DiffItem::Remove(old)),
                 },
                 (Some(old), Some(new)) => match (old, new) {
@@ -1330,29 +1324,29 @@ where
                         if !std::ptr::eq(old, new) {
                             match old.keys[0].cmp_values(&new.keys[0]) {
                                 Ordering::Less => {
-                                    Self::push(&mut self.old_stack, &old);
+                                    Self::push(&mut self.old_stack, old);
                                     self.new_stack.push(IterItem::Consider(new));
                                 }
                                 Ordering::Greater => {
                                     self.old_stack.push(IterItem::Consider(old));
-                                    Self::push(&mut self.new_stack, &new);
+                                    Self::push(&mut self.new_stack, new);
                                 }
                                 Ordering::Equal => {
-                                    Self::push(&mut self.old_stack, &old);
-                                    Self::push(&mut self.new_stack, &new);
+                                    Self::push(&mut self.old_stack, old);
+                                    Self::push(&mut self.new_stack, new);
                                 }
                             }
                         }
                     }
                     (IterItem::Consider(old), IterItem::Yield(new)) => {
-                        Self::push(&mut self.old_stack, &old);
+                        Self::push(&mut self.old_stack, old);
                         self.new_stack.push(IterItem::Yield(new));
                     }
                     (IterItem::Yield(old), IterItem::Consider(new)) => {
                         self.old_stack.push(IterItem::Yield(old));
-                        Self::push(&mut self.new_stack, &new);
+                        Self::push(&mut self.new_stack, new);
                     }
-                    (IterItem::Yield(old), IterItem::Yield(new)) => match old.cmp_values(&new) {
+                    (IterItem::Yield(old), IterItem::Yield(new)) => match old.cmp_values(new) {
                         Ordering::Less => {
                             self.new_stack.push(IterItem::Yield(new));
                             return Some(DiffItem::Remove(old));

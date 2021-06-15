@@ -449,7 +449,7 @@ where
         if other.len() < self.len() {
             return false;
         }
-        self.iter().all(|a| other.contains(&a))
+        self.iter().all(|a| other.contains(a))
     }
 
     /// Test whether a set is a proper subset of another set, meaning
@@ -604,7 +604,7 @@ where
     #[must_use]
     pub fn without_min(&self) -> (Option<A>, Self) {
         match self.get_min() {
-            Some(v) => (Some(v.clone()), self.without(&v)),
+            Some(v) => (Some(v.clone()), self.without(v)),
             None => (None, self.clone()),
         }
     }
@@ -616,7 +616,7 @@ where
     #[must_use]
     pub fn without_max(&self) -> (Option<A>, Self) {
         match self.get_max() {
-            Some(v) => (Some(v.clone()), self.without(&v)),
+            Some(v) => (Some(v.clone()), self.without(v)),
             None => (None, self.clone()),
         }
     }
@@ -1230,12 +1230,12 @@ mod test {
         fn long_ranged_iter(max in 1..1000) {
             let range = 0..max;
             let expected: Vec<i32> = range.clone().collect();
-            let set: OrdSet<i32> = OrdSet::from_iter(range.clone());
+            let set: OrdSet<i32> = range.clone().collect::<OrdSet<_>>();
             let result: Vec<i32> = set.range(..).cloned().collect();
             assert_eq!(expected, result);
 
             let expected: Vec<i32> = range.clone().rev().collect();
-            let set: OrdSet<i32> = OrdSet::from_iter(range);
+            let set: OrdSet<i32> = range.collect::<OrdSet<_>>();
             let result: Vec<i32> = set.range(..).rev().cloned().collect();
             assert_eq!(expected, result);
         }

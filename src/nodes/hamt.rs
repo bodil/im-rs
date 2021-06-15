@@ -100,10 +100,7 @@ impl<A: Clone> Clone for Entry<A> {
 
 impl<A> Entry<A> {
     fn is_value(&self) -> bool {
-        match self {
-            Entry::Value(_, _) => true,
-            _ => false,
-        }
+        matches!(self, Entry::Value(_, _))
     }
 
     fn unwrap_value(self) -> A {

@@ -337,7 +337,7 @@ where
         }
         let mut seen = collections::HashSet::new();
         for value in self.iter() {
-            if !other.contains(&value) {
+            if !other.contains(value) {
                 return false;
             }
             seen.insert(value);
@@ -372,7 +372,7 @@ where
         RS: Borrow<Self>,
     {
         let o = other.borrow();
-        self.iter().all(|a| o.contains(&a))
+        self.iter().all(|a| o.contains(a))
     }
 
     /// Test whether a set is a proper subset of another set, meaning
@@ -1103,7 +1103,7 @@ mod test {
         use crate::test::MetroHashBuilder;
         for i in 0..1000 {
             let mut lhs = vec![0, 1, 2];
-            lhs.sort();
+            lhs.sort_unstable();
 
             let hasher = Ref::from(MetroHashBuilder::new(i));
             let mut iset: HashSet<_, MetroHashBuilder> = HashSet::with_hasher(hasher.clone());
@@ -1112,7 +1112,7 @@ mod test {
             }
 
             let mut rhs: Vec<_> = iset.clone().into_iter().collect();
-            rhs.sort();
+            rhs.sort_unstable();
 
             if lhs != rhs {
                 println!("iteration: {}", i);

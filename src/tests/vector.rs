@@ -1,7 +1,6 @@
 #![allow(clippy::unit_arg)]
 
 use std::fmt::{Debug, Error, Formatter, Write};
-use std::iter::FromIterator;
 
 use crate::Vector;
 
@@ -173,7 +172,7 @@ proptest! {
                     assert_eq!(len - 1, vec.len());
                 }
                 Action::JoinLeft(mut new_nat) => {
-                    let mut new_vec = Vector::from_iter(new_nat.iter().cloned());
+                    let mut new_vec = new_nat.iter().cloned().collect::<Vector<_>>();
                     let add_len = new_nat.len();
                     let len = vec.len();
                     new_vec.append(vec);
@@ -183,7 +182,7 @@ proptest! {
                     assert_eq!(len + add_len, vec.len());
                 }
                 Action::JoinRight(mut new_nat) => {
-                    let new_vec = Vector::from_iter(new_nat.iter().cloned());
+                    let new_vec = new_nat.iter().cloned().collect::<Vector<_>>();
                     let add_len = new_nat.len();
                     let len = vec.len();
                     vec.append(new_vec);
@@ -197,7 +196,7 @@ proptest! {
                     let nat_right = nat.split_off(index);
                     assert_eq!(index, vec.len());
                     assert_eq!(len - index, vec_right.len());
-                    assert_eq!(Vector::from_iter(nat_right.iter().cloned()), vec_right);
+                    assert_eq!(nat_right.iter().cloned().collect::<Vector<_>>(), vec_right);
                 }
                 Action::SplitRight(index) => {
                     let index = cap_index(vec.len(), index);
@@ -206,14 +205,14 @@ proptest! {
                     let nat_right = nat.split_off(index);
                     assert_eq!(index, vec.len());
                     assert_eq!(len - index, vec_right.len());
-                    assert_eq!(Vector::from_iter(nat.iter().cloned()), vec);
+                    assert_eq!(nat.iter().cloned().collect::<Vector<_>>(), vec);
                     vec = vec_right;
                     nat = nat_right;
                 }
             }
             vec.assert_invariants();
             assert_eq!(nat.len(),vec.len());
-            assert_eq!(Vector::from_iter(nat.iter().cloned()), vec);
+            assert_eq!(nat.iter().cloned().collect::<Vector<_>>(), vec);
         }
     }
 }
@@ -228,5 +227,5 @@ fn test_inserts() {
     let mut rv: Vec<usize> = Vec::new();
     rv.extend((0..N).skip(1).step_by(2));
     rv.extend((0..N).step_by(2).rev());
-    assert_eq!(Vector::from_iter(rv.iter().cloned()), v);
+    assert_eq!(rv.iter().cloned().collect::<Vector<_>>(), v);
 }

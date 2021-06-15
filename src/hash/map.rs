@@ -376,7 +376,7 @@ where
         }
         let mut seen = collections::HashSet::new();
         for (key, value) in self.iter() {
-            if Some(value) != other.get(&key) {
+            if Some(value) != other.get(key) {
                 return false;
             }
             seen.insert(key);
@@ -2127,7 +2127,7 @@ mod test {
 
     #[test]
     fn safe_mutation() {
-        let v1: HashMap<usize, usize> = HashMap::from_iter((0..131_072).map(|i| (i, i)));
+        let v1: HashMap<usize, usize> = (0..131_072).map(|i| (i, i)).collect::<HashMap<_, _>>();
         let mut v2 = v1.clone();
         v2.insert(131_000, 23);
         assert_eq!(Some(&23), v2.get(&131_000));
@@ -2214,15 +2214,15 @@ mod test {
     #[test]
     fn entry_api() {
         let mut map = hashmap! {"bar" => 5};
-        map.entry(&"foo").and_modify(|v| *v += 5).or_insert(1);
+        map.entry("foo").and_modify(|v| *v += 5).or_insert(1);
         assert_eq!(1, map[&"foo"]);
-        map.entry(&"foo").and_modify(|v| *v += 5).or_insert(1);
+        map.entry("foo").and_modify(|v| *v += 5).or_insert(1);
         assert_eq!(6, map[&"foo"]);
-        map.entry(&"bar").and_modify(|v| *v += 5).or_insert(1);
+        map.entry("bar").and_modify(|v| *v += 5).or_insert(1);
         assert_eq!(10, map[&"bar"]);
         assert_eq!(
             10,
-            match map.entry(&"bar") {
+            match map.entry("bar") {
                 Entry::Occupied(entry) => entry.remove(),
                 _ => panic!(),
             }
