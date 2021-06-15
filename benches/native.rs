@@ -8,9 +8,8 @@ extern crate im;
 extern crate rand;
 extern crate test;
 
-use rand::{rngs::SmallRng, SeedableRng, Rng};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::iter::FromIterator;
 use test::Bencher;
 
 fn random_keys(size: usize) -> Vec<i64> {
@@ -165,7 +164,7 @@ fn vecdeque_push_back_mut_100000(b: &mut Bencher) {
 }
 
 fn vecdeque_pop_front_mut(b: &mut Bencher, count: usize) {
-    let l = VecDeque::<i32>::from_iter(0..count as i32);
+    let l = (0..count as i32).collect::<VecDeque<i32>>();
     b.iter(|| {
         let mut p = l.clone();
         for _ in 0..count {
@@ -195,7 +194,7 @@ fn vecdeque_pop_front_mut_100000(b: &mut Bencher) {
 }
 
 fn vecdeque_pop_back_mut(b: &mut Bencher, count: usize) {
-    let l = VecDeque::<i32>::from_iter(0..count as i32);
+    let l = (0..count as i32).collect::<VecDeque<i32>>();
     b.iter(|| {
         let mut p = l.clone();
         for _ in 0..count {
@@ -225,7 +224,7 @@ fn vecdeque_pop_back_mut_100000(b: &mut Bencher) {
 }
 
 fn vecdeque_split(b: &mut Bencher, count: usize) {
-    let vec = VecDeque::<i32>::from_iter(0..count as i32);
+    let vec = (0..count as i32).collect::<VecDeque<i32>>();
     b.iter(|| {
         let mut left = vec.clone();
         let _right = left.split_off(count / 2);
@@ -254,8 +253,8 @@ fn vecdeque_split_100000(b: &mut Bencher) {
 
 fn vecdeque_append(b: &mut Bencher, count: usize) {
     let count = count as i32;
-    let vec1 = VecDeque::<i32>::from_iter(0..count / 2);
-    let vec2 = VecDeque::<i32>::from_iter(count / 2..count);
+    let vec1 = (0..count / 2).collect::<VecDeque<i32>>();
+    let vec2 = (count / 2..count).collect::<VecDeque<i32>>();
     b.iter(|| {
         let mut vec = vec1.clone();
         vec.append(&mut vec2.clone());
@@ -288,7 +287,7 @@ fn vecdeque_append_100000(b: &mut Bencher) {
 }
 
 fn vec_split(b: &mut Bencher, count: usize) {
-    let vec = Vec::<i32>::from_iter(0..count as i32);
+    let vec = (0..count as i32).collect::<Vec<i32>>();
     b.iter(|| {
         let _left = vec[..count / 2].to_owned();
         let _right = vec[count / 2..].to_owned();
@@ -317,8 +316,8 @@ fn vec_split_100000(b: &mut Bencher) {
 
 fn vec_append(b: &mut Bencher, count: usize) {
     let count = count as i32;
-    let vec1 = Vec::<i32>::from_iter(0..count / 2);
-    let vec2 = Vec::<i32>::from_iter(count / 2..count);
+    let vec1 = (0..count / 2).collect::<Vec<i32>>();
+    let vec2 = (count / 2..count).collect::<Vec<i32>>();
     b.iter(|| {
         let mut vec = vec1.clone();
         vec.append(&mut vec2.clone());
@@ -380,7 +379,7 @@ fn vec_push_back_mut_100000(b: &mut Bencher) {
 }
 
 fn vec_pop_back_mut(b: &mut Bencher, count: usize) {
-    let l = Vec::<i32>::from_iter(0..count as i32);
+    let l = (0..count as i32).collect::<Vec<i32>>();
     b.iter(|| {
         let mut p = l.clone();
         for _ in 0..count {

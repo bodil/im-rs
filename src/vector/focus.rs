@@ -11,9 +11,8 @@ use crate::nodes::chunk::Chunk;
 use crate::sync::Lock;
 use crate::util::{to_range, PoolRef, Ref};
 use crate::vector::{
-    Iter, IterMut, RRBPool, Vector,
+    Iter, IterMut, RRBPool, Rrb, Vector,
     VectorInner::{Full, Inline, Single},
-    RRB,
 };
 
 /// Focused indexing over a [`Vector`][Vector].
@@ -257,7 +256,7 @@ where
 }
 
 pub struct TreeFocus<A> {
-    tree: RRB<A>,
+    tree: Rrb<A>,
     view: Range<usize>,
     middle_range: Range<usize>,
     target_range: Range<usize>,
@@ -293,7 +292,7 @@ impl<A> TreeFocus<A>
 where
     A: Clone,
 {
-    fn new(tree: &RRB<A>) -> Self {
+    fn new(tree: &Rrb<A>) -> Self {
         let middle_start = tree.outer_f.len() + tree.inner_f.len();
         let middle_end = middle_start + tree.middle.len();
         TreeFocus {
@@ -759,7 +758,7 @@ where
 }
 
 pub struct TreeFocusMut<'a, A> {
-    tree: Lock<&'a mut RRB<A>>,
+    tree: Lock<&'a mut Rrb<A>>,
     view: Range<usize>,
     middle_range: Range<usize>,
     target_range: Range<usize>,
@@ -770,7 +769,7 @@ impl<'a, A> TreeFocusMut<'a, A>
 where
     A: Clone + 'a,
 {
-    fn new(tree: &'a mut RRB<A>) -> Self {
+    fn new(tree: &'a mut Rrb<A>) -> Self {
         let middle_start = tree.outer_f.len() + tree.inner_f.len();
         let middle_end = middle_start + tree.middle.len();
         TreeFocusMut {
