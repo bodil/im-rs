@@ -1930,10 +1930,7 @@ where
     V: 'a,
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        match self.it.next_back() {
-            None => None,
-            Some((k, _)) => Some(k),
-        }
+        self.it.next_back().map(|(k, _)| k)
     }
 }
 
@@ -1971,10 +1968,7 @@ where
     V: 'a,
 {
     fn next_back(&mut self) -> Option<Self::Item> {
-        match self.it.next_back() {
-            None => None,
-            Some((_, v)) => Some(v),
-        }
+        self.it.next_back().map(|(_, v)| v)
     }
 }
 
@@ -2307,7 +2301,7 @@ mod test {
 
     #[test]
     fn safe_mutation() {
-        let v1 = OrdMap::from_iter((0..131_072).map(|i| (i, i)));
+        let v1 = (0..131_072).map(|i| (i, i)).collect::<OrdMap<_, _>>();
         let mut v2 = v1.clone();
         v2.insert(131_000, 23);
         assert_eq!(Some(&23), v2.get(&131_000));
@@ -2325,15 +2319,15 @@ mod test {
     #[test]
     fn entry_api() {
         let mut map = ordmap! {"bar" => 5};
-        map.entry(&"foo").and_modify(|v| *v += 5).or_insert(1);
+        map.entry("foo").and_modify(|v| *v += 5).or_insert(1);
         assert_eq!(1, map[&"foo"]);
-        map.entry(&"foo").and_modify(|v| *v += 5).or_insert(1);
+        map.entry("foo").and_modify(|v| *v += 5).or_insert(1);
         assert_eq!(6, map[&"foo"]);
-        map.entry(&"bar").and_modify(|v| *v += 5).or_insert(1);
+        map.entry("bar").and_modify(|v| *v += 5).or_insert(1);
         assert_eq!(10, map[&"bar"]);
         assert_eq!(
             10,
-            match map.entry(&"bar") {
+            match map.entry("bar") {
                 Entry::Occupied(entry) => entry.remove(),
                 _ => panic!(),
             }
@@ -2589,9 +2583,9 @@ mod test {
             let diff: Vec<_> = a.diff(&b).collect();
             let union = b.clone().union(a.clone());
             let expected: Vec<_> = union.iter().filter_map(|(k, v)| {
-                if a.contains_key(&k) {
-                    if b.contains_key(&k) {
-                        let old = a.get(&k).unwrap();
+                if a.contains_key(k) {
+                    if b.contains_key(k) {
+                        let old = a.get(k).unwrap();
                         if old != v	{
                             Some(DiffItem::Update {
                                 old: (k, old),

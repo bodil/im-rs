@@ -147,13 +147,13 @@ pub struct Vector<A> {
 }
 
 enum VectorInner<A> {
-    Inline(RRBPool<A>, InlineArray<A, RRB<A>>),
+    Inline(RRBPool<A>, InlineArray<A, Rrb<A>>),
     Single(RRBPool<A>, PoolRef<Chunk<A>>),
-    Full(RRBPool<A>, RRB<A>),
+    Full(RRBPool<A>, Rrb<A>),
 }
 
 #[doc(hidden)]
-pub struct RRB<A> {
+pub struct Rrb<A> {
     length: usize,
     middle_level: usize,
     outer_f: PoolRef<Chunk<A>>,
@@ -163,9 +163,9 @@ pub struct RRB<A> {
     outer_b: PoolRef<Chunk<A>>,
 }
 
-impl<A> Clone for RRB<A> {
+impl<A> Clone for Rrb<A> {
     fn clone(&self) -> Self {
-        RRB {
+        Rrb {
             length: self.length,
             middle_level: self.middle_level,
             outer_f: self.outer_f.clone(),
@@ -219,7 +219,7 @@ impl<A: Clone> Vector<A> {
                 let chunk = chunk.clone();
                 Full(
                     pool.clone(),
-                    RRB {
+                    Rrb {
                         length: chunk.len(),
                         middle_level: 0,
                         outer_f: PoolRef::default(&pool.value_pool),
@@ -245,7 +245,7 @@ impl<A: Clone> Vector<A> {
                 let chunk = chunk.clone();
                 Full(
                     pool.clone(),
-                    RRB {
+                    Rrb {
                         length: chunk.len(),
                         middle_level: 0,
                         outer_f: PoolRef::default(&pool.value_pool),
@@ -334,11 +334,7 @@ impl<A: Clone> Vector<A> {
     #[inline]
     #[must_use]
     pub fn is_inline(&self) -> bool {
-        if let Inline(_, _) = &self.vector {
-            true
-        } else {
-            false
-        }
+        matches!(&self.vector, Inline(_, _))
     }
 
     /// Test whether two vectors refer to the same content in memory.
@@ -808,7 +804,7 @@ impl<A: Clone> Vector<A> {
     #[must_use]
     pub fn unit(a: A) -> Self {
         let pool = RRBPool::default();
-        if InlineArray::<A, RRB<A>>::CAPACITY > 0 {
+        if InlineArray::<A, Rrb<A>>::CAPACITY > 0 {
             let mut array = InlineArray::new();
             array.push(a);
             Self {
@@ -1177,7 +1173,7 @@ impl<A: Clone> Vector<A> {
                 if local_index < tree.outer_f.len() {
                     let of2 = PoolRef::make_mut(&pool.value_pool, &mut tree.outer_f)
                         .split_off(local_index);
-                    let right = RRB {
+                    let right = Rrb {
                         length: tree.length - index,
                         middle_level: tree.middle_level,
                         outer_f: PoolRef::new(&pool.value_pool, of2),
@@ -1198,7 +1194,7 @@ impl<A: Clone> Vector<A> {
                 if local_index < tree.inner_f.len() {
                     let if2 = PoolRef::make_mut(&pool.value_pool, &mut tree.inner_f)
                         .split_off(local_index);
-                    let right = RRB {
+                    let right = Rrb {
                         length: tree.length - index,
                         middle_level: tree.middle_level,
                         outer_f: PoolRef::new(&pool.value_pool, if2),
@@ -1248,7 +1244,7 @@ impl<A: Clone> Vector<A> {
                         };
                         (c1, c2)
                     };
-                    let mut right = RRB {
+                    let mut right = Rrb {
                         length: tree.length - index,
                         middle_level: tree.middle_level,
                         outer_f: c2,
@@ -1270,11 +1266,11 @@ impl<A: Clone> Vector<A> {
                 if local_index < tree.inner_b.len() {
                     let ib2 = PoolRef::make_mut(&pool.value_pool, &mut tree.inner_b)
                         .split_off(local_index);
-                    let right = RRB {
+                    let right = Rrb {
                         length: tree.length - index,
                         outer_b: replace_pool_def(&pool.value_pool, &mut tree.outer_b),
                         outer_f: PoolRef::new(&pool.value_pool, ib2),
-                        ..RRB::new(pool)
+                        ..Rrb::new(pool)
                     };
                     tree.length = index;
                     swap(&mut tree.outer_b, &mut tree.inner_b);
@@ -1521,9 +1517,9 @@ impl<A: Clone> Vector<A> {
 
 // Implementation details
 
-impl<A: Clone> RRB<A> {
+impl<A: Clone> Rrb<A> {
     fn new(pool: &RRBPool<A>) -> Self {
-        RRB {
+        Rrb {
             length: 0,
             middle_level: 0,
             outer_f: PoolRef::default(&pool.value_pool),
@@ -2291,7 +2287,7 @@ mod test {
 
     #[test]
     fn large_vector_focus() {
-        let input = Vector::from_iter(0..100_000);
+        let input = (0..100_000).collect::<Vector<_>>();
         let vec = input.clone();
         let mut sum: i64 = 0;
         let mut focus = vec.focus();
@@ -2304,7 +2300,7 @@ mod test {
 
     #[test]
     fn large_vector_focus_mut() {
-        let input = Vector::from_iter(0..100_000);
+        let input = (0..100_000).collect::<Vector<_>>();
         let mut vec = input.clone();
         {
             let mut focus = vec.focus_mut();
@@ -2344,8 +2340,8 @@ mod test {
 
     #[test]
     fn issue_55_append() {
-        let mut vec1 = Vector::from_iter(0..92);
-        let vec2 = Vector::from_iter(0..165);
+        let mut vec1 = (0..92).collect::<Vector<_>>();
+        let vec2 = (0..165).collect::<Vector<_>>();
         vec1.append(vec2);
     }
 
@@ -2481,8 +2477,8 @@ mod test {
 
     #[test]
     fn issue_107_split_off_causes_overflow() {
-        let mut vec = Vector::from_iter(0..4289);
-        let mut control = Vec::from_iter(0..4289);
+        let mut vec = (0..4289).collect::<Vector<_>>();
+        let mut control = (0..4289).collect::<Vec<_>>();
         let chunk = 64;
 
         while vec.len() >= chunk {
@@ -2501,7 +2497,7 @@ mod test {
 
     #[test]
     fn issue_116() {
-        let vec = Vector::from_iter(0..300);
+        let vec = (0..300).collect::<Vector<_>>();
         let rev_vec: Vector<u32> = vec.clone().into_iter().rev().collect();
         assert_eq!(vec.len(), rev_vec.len());
     }
@@ -2529,14 +2525,14 @@ mod test {
             assert!(input.ptr_eq(&inp2));
             inp2.set(len - 1, 98);
             assert_ne!(inp2.get(len - 1), input.get(len - 1));
-            assert!(!input.ptr_eq(&inp2), len);
+            assert!(!input.ptr_eq(&inp2), "{}", len);
         }
     }
 
     proptest! {
         #[test]
         fn iter(ref vec in vec(i32::ANY, 0..1000)) {
-            let seq: Vector<i32> = Vector::from_iter(vec.iter().cloned());
+            let seq: Vector<i32> = vec.iter().cloned().collect::<Vector<_>>();
             for (index, item) in seq.iter().enumerate() {
                 assert_eq!(&vec[index], item);
             }
@@ -2551,8 +2547,8 @@ mod test {
                 vector.push_front(value);
                 assert_eq!(count + 1, vector.len());
             }
-            let input2 = Vec::from_iter(input.iter().rev().cloned());
-            assert_eq!(input2, Vec::from_iter(vector.iter().cloned()));
+            let input2 = input.iter().rev().cloned().collect::<Vec<_>>();
+            assert_eq!(input2, vector.iter().cloned().collect::<Vec<_>>());
         }
 
         #[test]
@@ -2563,12 +2559,12 @@ mod test {
                 vector.push_back(value);
                 assert_eq!(count + 1, vector.len());
             }
-            assert_eq!(input, &Vec::from_iter(vector.iter().cloned()));
+            assert_eq!(input, &vector.iter().cloned().collect::<Vec<_>>());
         }
 
         #[test]
         fn pop_back_mut(ref input in vec(i32::ANY, 0..1000)) {
-            let mut vector = Vector::from_iter(input.iter().cloned());
+            let mut vector = input.iter().cloned().collect::<Vector<_>>();
             assert_eq!(input.len(), vector.len());
             for (index, value) in input.iter().cloned().enumerate().rev() {
                 match vector.pop_back() {
@@ -2584,7 +2580,7 @@ mod test {
 
         #[test]
         fn pop_front_mut(ref input in vec(i32::ANY, 0..1000)) {
-            let mut vector = Vector::from_iter(input.iter().cloned());
+            let mut vector = input.iter().cloned().collect::<Vector<_>>();
             assert_eq!(input.len(), vector.len());
             for (index, value) in input.iter().cloned().rev().enumerate().rev() {
                 match vector.pop_front() {
@@ -2621,7 +2617,7 @@ mod test {
         #[test]
         fn split(ref vec in vec(i32::ANY, 1..2000), split_pos in usize::ANY) {
             let split_index = split_pos % (vec.len() + 1);
-            let mut left = Vector::from_iter(vec.iter().cloned());
+            let mut left = vec.iter().cloned().collect::<Vector<_>>();
             let right = left.split_off(split_index);
             assert_eq!(left.len(), split_index);
             assert_eq!(right.len(), vec.len() - split_index);
@@ -2635,8 +2631,8 @@ mod test {
 
         #[test]
         fn append(ref vec1 in vec(i32::ANY, 0..1000), ref vec2 in vec(i32::ANY, 0..1000)) {
-            let mut seq1 = Vector::from_iter(vec1.iter().cloned());
-            let seq2 = Vector::from_iter(vec2.iter().cloned());
+            let mut seq1 = vec1.iter().cloned().collect::<Vector<_>>();
+            let seq2 = vec2.iter().cloned().collect::<Vector<_>>();
             assert_eq!(seq1.len(), vec1.len());
             assert_eq!(seq2.len(), vec2.len());
             seq1.append(seq2);
