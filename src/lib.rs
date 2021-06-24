@@ -335,10 +335,15 @@
 //! [b-tree]: https://en.wikipedia.org/wiki/B-tree
 //! [cons-list]: https://en.wikipedia.org/wiki/Cons#Lists
 
+#![no_std]
 #![forbid(rust_2018_idioms)]
 #![deny(unsafe_code, nonstandard_style)]
 #![warn(unreachable_pub, missing_docs)]
 #![cfg_attr(has_specialisation, feature(specialization))]
+
+extern crate alloc;
+#[cfg(not(feature = "no_std"))]
+extern crate std;
 
 #[cfg(test)]
 #[macro_use]

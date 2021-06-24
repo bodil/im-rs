@@ -17,14 +17,18 @@
 //! [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 //! [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 
-use std::borrow::Borrow;
-use std::cmp::Ordering;
-use std::collections;
-use std::fmt::{Debug, Error, Formatter};
-use std::hash::{BuildHasher, Hash, Hasher};
-use std::iter::{FromIterator, Iterator, Sum};
-use std::mem;
-use std::ops::{Add, Index, IndexMut, RangeBounds};
+use core::borrow::Borrow;
+use core::cmp::Ordering;
+use alloc::collections;
+use core::fmt::{Debug, Error, Formatter};
+use core::hash::{BuildHasher, Hash, Hasher};
+use core::iter::{FromIterator, Iterator, Sum};
+use core::mem;
+use core::ops::{Add, Index, IndexMut, RangeBounds};
+use alloc::{vec::Vec, vec};
+use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::format;
 
 use crate::hashmap::HashMap;
 use crate::nodes::btree::{BTreeValue, Insert, Node, Remove};
@@ -251,7 +255,7 @@ impl<K, V> OrdMap<K, V> {
     ///
     /// Time: O(1)
     pub fn ptr_eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self, other) || PoolRef::ptr_eq(&self.root, &other.root)
+        core::ptr::eq(self, other) || PoolRef::ptr_eq(&self.root, &other.root)
     }
 
     /// Get the size of a map.

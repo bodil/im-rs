@@ -43,14 +43,18 @@
 //! [Vec]: https://doc.rust-lang.org/std/vec/struct.Vec.html
 //! [VecDeque]: https://doc.rust-lang.org/std/collections/struct.VecDeque.html
 
-use std::borrow::Borrow;
-use std::cmp::Ordering;
-use std::fmt::{Debug, Error, Formatter};
-use std::hash::{Hash, Hasher};
-use std::iter::Sum;
-use std::iter::{FromIterator, FusedIterator};
-use std::mem::{replace, swap};
-use std::ops::{Add, Index, IndexMut, RangeBounds};
+use core::borrow::Borrow;
+use core::cmp::Ordering;
+use core::fmt::{Debug, Error, Formatter};
+use core::hash::{Hash, Hasher};
+use core::iter::Sum;
+use core::iter::{FromIterator, FusedIterator};
+use core::mem::{replace, swap};
+use core::ops::{Add, Index, IndexMut, RangeBounds};
+use alloc::{vec::Vec, vec};
+use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::format;
 
 use sized_chunks::InlineArray;
 

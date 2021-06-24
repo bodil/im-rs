@@ -25,6 +25,7 @@ travis-ci = { repository = "bodil/im-rs" }
 [features]
 pool = ["refpool", "sized-chunks/refpool"]
 debug = []
+no_std = ["ahash", "hashbrown"]
 
 [build-dependencies]
 version_check = "0.9"
@@ -41,6 +42,8 @@ serde = { version = "1", optional = true }
 rayon = { version = "1", optional = true }
 refpool = { version = "0.4", optional = true }
 arbitrary = { version = "0.4", optional = true }
+ahash = { version = "0.7.4", optional = true }
+hashbrown = { version = "0.11.2", optional = true }
 
 [dev-dependencies]
 proptest = "0.10"

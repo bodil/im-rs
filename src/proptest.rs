@@ -5,9 +5,9 @@
 use crate::{HashMap, HashSet, OrdMap, OrdSet, Vector};
 use ::proptest::collection::vec;
 use ::proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
-use std::hash::Hash;
-use std::iter::FromIterator;
-use std::ops::Range;
+use core::hash::Hash;
+use core::iter::FromIterator;
+use core::ops::Range;
 
 /// A strategy for generating a [`Vector`][Vector] of a certain size.
 ///

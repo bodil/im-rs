@@ -2,12 +2,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::borrow::Borrow;
-use std::fmt;
-use std::hash::{BuildHasher, Hash, Hasher};
-use std::iter::FusedIterator;
-use std::slice::{Iter as SliceIter, IterMut as SliceIterMut};
-use std::{mem, ptr};
+use core::borrow::Borrow;
+use core::fmt;
+use core::hash::{BuildHasher, Hash, Hasher};
+use core::iter::FusedIterator;
+use core::slice::{Iter as SliceIter, IterMut as SliceIterMut};
+use core::{mem, ptr};
+use alloc::{vec::Vec, vec};
 
 use bitmaps::Bits;
 use sized_chunks::sparse_chunk::{Iter as ChunkIter, IterMut as ChunkIterMut, SparseChunk};

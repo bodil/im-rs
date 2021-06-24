@@ -4,10 +4,10 @@
 
 #![allow(dead_code)]
 
-use std::marker::PhantomData;
-use std::ops::Deref;
-use std::rc::Rc as RRc;
-use std::sync::Arc as RArc;
+use core::marker::PhantomData;
+use core::ops::Deref;
+use alloc::rc::Rc as RRc;
+use alloc::sync::Arc as RArc;
 
 use crate::nodes::chunk::Chunk;
 

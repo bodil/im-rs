@@ -8,6 +8,9 @@ use std::fmt;
 use std::hash::{BuildHasher, Hash};
 use std::marker::PhantomData;
 use std::ops::Deref;
+use alloc::{vec::Vec, vec};
+use alloc::borrow::ToOwned;
+use alloc::string::String;
 
 use crate::hashmap::HashMap;
 use crate::hashset::HashSet;
