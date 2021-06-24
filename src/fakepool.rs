@@ -4,10 +4,10 @@
 
 #![allow(dead_code)]
 
-use std::marker::PhantomData;
-use std::ops::Deref;
-use std::rc::Rc as RRc;
-use std::sync::Arc as RArc;
+use core::marker::PhantomData;
+use core::ops::Deref;
+use alloc::rc::Rc as RRc;
+use alloc::sync::Arc as RArc;
 
 use crate::nodes::chunk::Chunk;
 
@@ -112,12 +112,12 @@ where
 
 impl<A> Eq for Rc<A> where A: Eq {}
 
-impl<A> std::fmt::Debug for Rc<A>
+impl<A> core::fmt::Debug for Rc<A>
 where
-    A: std::fmt::Debug,
+    A: core::fmt::Debug,
 {
     #[inline(always)]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
         self.0.fmt(f)
     }
 }
@@ -197,12 +197,12 @@ where
 
 impl<A> Eq for Arc<A> where A: Eq {}
 
-impl<A> std::fmt::Debug for Arc<A>
+impl<A> core::fmt::Debug for Arc<A>
 where
-    A: std::fmt::Debug,
+    A: core::fmt::Debug,
 {
     #[inline(always)]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
         self.0.fmt(f)
     }
 }

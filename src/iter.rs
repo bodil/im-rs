@@ -33,7 +33,7 @@ where
     F: Fn(S) -> Option<(A, S)>,
 {
     let mut value = Some(value);
-    std::iter::from_fn(move || {
+    core::iter::from_fn(move || {
         f(value.take().unwrap()).map(|(next, state)| {
             value = Some(state);
             next

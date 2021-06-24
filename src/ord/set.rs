@@ -17,13 +17,19 @@
 //! [hashset::HashSet]: ../hashset/struct.HashSet.html
 //! [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 
-use std::borrow::Borrow;
-use std::cmp::Ordering;
+use core::borrow::Borrow;
+use core::cmp::Ordering;
+#[cfg(feature = "no_std")]
+use hashbrown as collections;
+#[cfg(not(feature = "no_std"))]
 use std::collections;
-use std::fmt::{Debug, Error, Formatter};
-use std::hash::{BuildHasher, Hash, Hasher};
-use std::iter::{FromIterator, IntoIterator, Sum};
-use std::ops::{Add, Deref, Mul, RangeBounds};
+use core::fmt::{Debug, Error, Formatter};
+use core::hash::{BuildHasher, Hash, Hasher};
+use core::iter::{FromIterator, IntoIterator, Sum};
+use core::ops::{Add, Deref, Mul, RangeBounds};
+use alloc::{vec::Vec, vec};
+use alloc::borrow::ToOwned;
+use alloc::string::String;
 
 use crate::hashset::HashSet;
 use crate::nodes::btree::{
@@ -274,7 +280,7 @@ impl<A> OrdSet<A> {
     ///
     /// Time: O(1)
     pub fn ptr_eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self, other) || PoolRef::ptr_eq(&self.root, &other.root)
+        core::ptr::eq(self, other) || PoolRef::ptr_eq(&self.root, &other.root)
     }
 
     /// Get a reference to the memory pool used by this set.
@@ -1139,14 +1145,14 @@ impl<'a, A: Eq + Hash + Ord + Clone> From<&'a collections::HashSet<A>> for OrdSe
     }
 }
 
-impl<A: Ord + Clone> From<collections::BTreeSet<A>> for OrdSet<A> {
-    fn from(btree_set: collections::BTreeSet<A>) -> Self {
+impl<A: Ord + Clone> From<alloc::collections::BTreeSet<A>> for OrdSet<A> {
+    fn from(btree_set: alloc::collections::BTreeSet<A>) -> Self {
         btree_set.into_iter().collect()
     }
 }
 
-impl<'a, A: Ord + Clone> From<&'a collections::BTreeSet<A>> for OrdSet<A> {
-    fn from(btree_set: &collections::BTreeSet<A>) -> Self {
+impl<'a, A: Ord + Clone> From<&'a alloc::collections::BTreeSet<A>> for OrdSet<A> {
+    fn from(btree_set: &alloc::collections::BTreeSet<A>) -> Self {
         btree_set.iter().cloned().collect()
     }
 }

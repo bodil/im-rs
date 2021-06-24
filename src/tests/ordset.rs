@@ -1,7 +1,7 @@
 #![allow(clippy::unit_arg)]
 
-use std::collections::BTreeSet;
-use std::fmt::{Debug, Error, Formatter, Write};
+use alloc::collections::BTreeSet;
+use core::fmt::{Debug, Error, Formatter, Write};
 
 use crate::OrdSet;
 

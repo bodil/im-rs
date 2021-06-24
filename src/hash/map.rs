@@ -21,15 +21,25 @@
 //! [std::hash::Hash]: https://doc.rust-lang.org/std/hash/trait.Hash.html
 //! [std::collections::hash_map::RandomState]: https://doc.rust-lang.org/std/collections/hash_map/struct.RandomState.html
 
-use std::borrow::Borrow;
-use std::cmp::Ordering;
+use core::borrow::Borrow;
+use core::cmp::Ordering;
+#[cfg(not(feature = "no_std"))]
 use std::collections;
+#[cfg(feature = "no_std")]
+use hashbrown as collections;
+#[cfg(feature = "no_std")]
+use ahash::RandomState;
+#[cfg(not(feature = "no_std"))]
 use std::collections::hash_map::RandomState;
-use std::fmt::{Debug, Error, Formatter};
-use std::hash::{BuildHasher, Hash, Hasher};
-use std::iter::{FromIterator, FusedIterator, Sum};
-use std::mem;
-use std::ops::{Add, Index, IndexMut};
+use core::fmt::{Debug, Error, Formatter};
+use core::hash::{BuildHasher, Hash, Hasher};
+use core::iter::{FromIterator, FusedIterator, Sum};
+use core::mem;
+use core::ops::{Add, Index, IndexMut};
+use alloc::{vec::Vec, vec};
+use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::format;
 
 use crate::nodes::hamt::{
     hash_key, Drain as NodeDrain, HashBits, HashValue, Iter as NodeIter, IterMut as NodeIterMut,
@@ -220,7 +230,7 @@ impl<K, V, S> HashMap<K, V, S> {
     ///
     /// Time: O(1)
     pub fn ptr_eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self, other) || PoolRef::ptr_eq(&self.root, &other.root)
+        core::ptr::eq(self, other) || PoolRef::ptr_eq(&self.root, &other.root)
     }
 
     /// Get a reference to the memory pool used by this map.
@@ -1779,7 +1789,8 @@ where
     S: BuildHasher,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        let mut keys = collections::BTreeSet::new();
+        #[cfg(not(feature = "no_std"))] let mut keys = collections::BTreeSet::new();
+        #[cfg(feature = "no_std")] let mut keys = collections::HashSet::new();
         keys.extend(self.keys());
         let mut d = f.debug_map();
         for key in keys {
@@ -2046,6 +2057,7 @@ where
     }
 }
 
+#[cfg(not(feature = "no_std"))]
 impl<K, V, S> From<collections::BTreeMap<K, V>> for HashMap<K, V, S>
 where
     K: Hash + Eq + Clone,
@@ -2057,6 +2069,7 @@ where
     }
 }
 
+#[cfg(not(feature = "no_std"))]
 impl<'a, K, V, S> From<&'a collections::BTreeMap<K, V>> for HashMap<K, V, S>
 where
     K: Hash + Eq + Clone,
@@ -2105,7 +2118,7 @@ mod test {
     use crate::test::LolHasher;
     use ::proptest::num::{i16, usize};
     use ::proptest::{collection, proptest};
-    use std::hash::BuildHasherDefault;
+    use core::hash::BuildHasherDefault;
 
     #[test]
     fn safe_mutation() {

@@ -2,10 +2,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::mem::{replace, swap};
-use std::ops::{Range, RangeBounds};
-use std::ptr::null;
-use std::sync::atomic::{AtomicPtr, Ordering};
+use core::mem::{replace, swap};
+use core::ops::{Range, RangeBounds};
+use core::ptr::null;
+use core::sync::atomic::{AtomicPtr, Ordering};
 
 use crate::nodes::chunk::Chunk;
 use crate::sync::Lock;

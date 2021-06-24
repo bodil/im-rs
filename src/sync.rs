@@ -6,7 +6,7 @@ pub(crate) use self::lock::Lock;
 
 #[cfg(threadsafe)]
 mod lock {
-    use std::sync::{Arc, Mutex, MutexGuard};
+    use alloc::sync::{Arc, Mutex, MutexGuard};
 
     /// Thread safe lock: just wraps a `Mutex`.
     pub(crate) struct Lock<A> {

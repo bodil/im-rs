@@ -2,10 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use std::borrow::Borrow;
-use std::cmp::Ordering;
-use std::mem;
-use std::ops::{Bound, RangeBounds};
+use core::borrow::Borrow;
+use core::cmp::Ordering;
+use core::mem;
+use core::ops::{Bound, RangeBounds};
+use alloc::{vec::Vec, vec};
 
 use sized_chunks::Chunk;
 use typenum::{Add1, Unsigned};
@@ -1303,7 +1304,7 @@ where
                 },
                 (Some(old), Some(new)) => match (old, new) {
                     (IterItem::Consider(old), IterItem::Consider(new)) => {
-                        if !std::ptr::eq(old, new) {
+                        if !core::ptr::eq(old, new) {
                             match old.keys[0].cmp_values(&new.keys[0]) {
                                 Ordering::Less => {
                                     Self::push(&mut self.old_stack, &old);

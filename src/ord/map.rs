@@ -17,14 +17,21 @@
 //! [hashmap::HashMap]: ../hashmap/struct.HashMap.html
 //! [std::cmp::Ord]: https://doc.rust-lang.org/std/cmp/trait.Ord.html
 
-use std::borrow::Borrow;
-use std::cmp::Ordering;
+use core::borrow::Borrow;
+use core::cmp::Ordering;
+#[cfg(feature = "no_std")]
+use hashbrown as collections;
+#[cfg(not(feature = "no_std"))]
 use std::collections;
-use std::fmt::{Debug, Error, Formatter};
-use std::hash::{BuildHasher, Hash, Hasher};
-use std::iter::{FromIterator, Iterator, Sum};
-use std::mem;
-use std::ops::{Add, Index, IndexMut, RangeBounds};
+use core::fmt::{Debug, Error, Formatter};
+use core::hash::{BuildHasher, Hash, Hasher};
+use core::iter::{FromIterator, Iterator, Sum};
+use core::mem;
+use core::ops::{Add, Index, IndexMut, RangeBounds};
+use alloc::{vec::Vec, vec};
+use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::format;
 
 use crate::hashmap::HashMap;
 use crate::nodes::btree::{BTreeValue, Insert, Node, Remove};
@@ -251,7 +258,7 @@ impl<K, V> OrdMap<K, V> {
     ///
     /// Time: O(1)
     pub fn ptr_eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self, other) || PoolRef::ptr_eq(&self.root, &other.root)
+        core::ptr::eq(self, other) || PoolRef::ptr_eq(&self.root, &other.root)
     }
 
     /// Get the size of a map.
@@ -2117,17 +2124,17 @@ where
     }
 }
 
-impl<K: Ord, V, RK, RV> From<collections::BTreeMap<RK, RV>> for OrdMap<K, V>
+impl<K: Ord, V, RK, RV> From<alloc::collections::BTreeMap<RK, RV>> for OrdMap<K, V>
 where
     K: Ord + Clone + From<RK>,
     V: Clone + From<RV>,
 {
-    fn from(m: collections::BTreeMap<RK, RV>) -> OrdMap<K, V> {
+    fn from(m: alloc::collections::BTreeMap<RK, RV>) -> OrdMap<K, V> {
         m.into_iter().collect()
     }
 }
 
-impl<'a, K: Ord, V, RK, RV, OK, OV> From<&'a collections::BTreeMap<RK, RV>> for OrdMap<K, V>
+impl<'a, K: Ord, V, RK, RV, OK, OV> From<&'a alloc::collections::BTreeMap<RK, RV>> for OrdMap<K, V>
 where
     K: Ord + Clone + From<OK>,
     V: Clone + From<OV>,
@@ -2136,7 +2143,7 @@ where
     RK: Ord + ToOwned<Owned = OK>,
     RV: ToOwned<Owned = OV>,
 {
-    fn from(m: &'a collections::BTreeMap<RK, RV>) -> OrdMap<K, V> {
+    fn from(m: &'a alloc::collections::BTreeMap<RK, RV>) -> OrdMap<K, V> {
         m.iter()
             .map(|(k, v)| (k.to_owned(), v.to_owned()))
             .collect()
@@ -2443,7 +2450,7 @@ mod test {
             ref ops in collection::vec((bool::ANY, usize::ANY, usize::ANY), 1..1000)
         ) {
             let mut map = input.clone();
-            let mut tree: collections::BTreeMap<usize, usize> = input.iter().map(|(k, v)| (*k, *v)).collect();
+            let mut tree: alloc::collections::BTreeMap<usize, usize> = input.iter().map(|(k, v)| (*k, *v)).collect();
             for (ins, key, val) in ops {
                 if *ins {
                     tree.insert(*key, *val);

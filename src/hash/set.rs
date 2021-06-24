@@ -21,15 +21,24 @@
 //! [std::hash::Hash]: https://doc.rust-lang.org/std/hash/trait.Hash.html
 //! [std::collections::hash_map::RandomState]: https://doc.rust-lang.org/std/collections/hash_map/struct.RandomState.html
 
-use std::borrow::Borrow;
-use std::cmp::Ordering;
+use core::borrow::Borrow;
+use core::cmp::Ordering;
+#[cfg(feature = "no_std")]
+use ahash::RandomState;
+#[cfg(not(feature = "no_std"))]
 use std::collections::hash_map::RandomState;
+#[cfg(feature = "no_std")]
+use hashbrown as collections;
+#[cfg(not(feature = "no_std"))]
 use std::collections::{self, BTreeSet};
-use std::fmt::{Debug, Error, Formatter};
-use std::hash::{BuildHasher, Hash, Hasher};
-use std::iter::FusedIterator;
-use std::iter::{FromIterator, IntoIterator, Sum};
-use std::ops::{Add, Deref, Mul};
+use core::fmt::{Debug, Error, Formatter};
+use core::hash::{BuildHasher, Hash, Hasher};
+use core::iter::FusedIterator;
+use core::iter::{FromIterator, IntoIterator, Sum};
+use core::ops::{Add, Deref, Mul};
+use alloc::{vec::Vec, vec};
+use alloc::borrow::ToOwned;
+use alloc::string::String;
 
 use crate::nodes::hamt::{hash_key, Drain as NodeDrain, HashValue, Iter as NodeIter, Node};
 use crate::ordset::OrdSet;
@@ -217,7 +226,7 @@ impl<A, S> HashSet<A, S> {
     ///
     /// Time: O(1)
     pub fn ptr_eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self, other) || PoolRef::ptr_eq(&self.root, &other.root)
+        core::ptr::eq(self, other) || PoolRef::ptr_eq(&self.root, &other.root)
     }
 
     /// Get a reference to the memory pool used by this set.
@@ -1015,6 +1024,7 @@ where
     }
 }
 
+#[cfg(not(feature = "no_std"))]
 impl<'a, A, S> From<&'a BTreeSet<A>> for HashSet<A, S>
 where
     A: Hash + Eq + Clone,
@@ -1058,12 +1068,14 @@ pub mod proptest {
 
 #[cfg(test)]
 mod test {
+    extern crate std;
+    use std::println;
     use super::proptest::*;
     use super::*;
     use crate::test::LolHasher;
     use ::proptest::num::i16;
     use ::proptest::proptest;
-    use std::hash::BuildHasherDefault;
+    use core::hash::BuildHasherDefault;
 
     #[test]
     fn insert_failing() {
