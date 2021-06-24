@@ -365,7 +365,7 @@ impl<A: Clone> Vector<A> {
             (left.is_empty() && right.is_empty()) || PoolRef::ptr_eq(left, right)
         }
 
-        if std::ptr::eq(self, other) {
+        if core::ptr::eq(self, other) {
             return true;
         }
 
@@ -1186,7 +1186,7 @@ impl<A: Clone> Vector<A> {
                         middle_level: tree.middle_level,
                         outer_f: PoolRef::new(&pool.value_pool, of2),
                         inner_f: replace_pool_def(&pool.value_pool, &mut tree.inner_f),
-                        middle: std::mem::take(&mut tree.middle),
+                        middle: core::mem::take(&mut tree.middle),
                         inner_b: replace_pool_def(&pool.value_pool, &mut tree.inner_b),
                         outer_b: replace_pool_def(&pool.value_pool, &mut tree.outer_b),
                     };
@@ -1207,7 +1207,7 @@ impl<A: Clone> Vector<A> {
                         middle_level: tree.middle_level,
                         outer_f: PoolRef::new(&pool.value_pool, if2),
                         inner_f: PoolRef::<Chunk<A>>::default(&pool.value_pool),
-                        middle: std::mem::take(&mut tree.middle),
+                        middle: core::mem::take(&mut tree.middle),
                         inner_b: replace_pool_def(&pool.value_pool, &mut tree.inner_b),
                         outer_b: replace_pool_def(&pool.value_pool, &mut tree.outer_b),
                     };
@@ -1741,7 +1741,7 @@ impl<A: Clone + Eq> PartialEq for Vector<A> {
             (left.is_empty() && right.is_empty()) || PoolRef::ptr_eq(left, right)
         }
 
-        if std::ptr::eq(self, other) {
+        if core::ptr::eq(self, other) {
             return true;
         }
 
@@ -2512,13 +2512,13 @@ mod test {
 
     #[test]
     fn issue_131() {
-        let smol = std::iter::repeat(42).take(64).collect::<Vector<_>>();
+        let smol = core::iter::repeat(42).take(64).collect::<Vector<_>>();
         let mut smol2 = smol.clone();
         assert!(smol.ptr_eq(&smol2));
         smol2.set(63, 420);
         assert!(!smol.ptr_eq(&smol2));
 
-        let huge = std::iter::repeat(42).take(65).collect::<Vector<_>>();
+        let huge = core::iter::repeat(42).take(65).collect::<Vector<_>>();
         let mut huge2 = huge.clone();
         assert!(huge.ptr_eq(&huge2));
         huge2.set(63, 420);
@@ -2528,7 +2528,7 @@ mod test {
     #[test]
     fn ptr_eq() {
         for len in 32..256 {
-            let input = std::iter::repeat(42).take(len).collect::<Vector<_>>();
+            let input = core::iter::repeat(42).take(len).collect::<Vector<_>>();
             let mut inp2 = input.clone();
             assert!(input.ptr_eq(&inp2));
             inp2.set(len - 1, 98);

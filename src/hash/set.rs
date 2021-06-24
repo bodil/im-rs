@@ -27,6 +27,8 @@ use core::cmp::Ordering;
 use ahash::RandomState;
 #[cfg(not(feature = "no_std"))]
 use std::collections::hash_map::RandomState;
+#[cfg(feature = "no_std")]
+use hashbrown as collections;
 #[cfg(not(feature = "no_std"))]
 use std::collections::{self, BTreeSet};
 use core::fmt::{Debug, Error, Formatter};
@@ -1066,12 +1068,14 @@ pub mod proptest {
 
 #[cfg(test)]
 mod test {
+    extern crate std;
+    use std::println;
     use super::proptest::*;
     use super::*;
     use crate::test::LolHasher;
     use ::proptest::num::i16;
     use ::proptest::proptest;
-    use std::hash::BuildHasherDefault;
+    use core::hash::BuildHasherDefault;
 
     #[test]
     fn insert_failing() {
@@ -1103,7 +1107,6 @@ mod test {
 
     #[test]
     fn issue_60_drain_iterator_memory_corruption() {
-        use ::std::println;
         use crate::test::MetroHashBuilder;
         for i in 0..1000 {
             let mut lhs = vec![0, 1, 2];

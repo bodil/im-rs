@@ -19,7 +19,10 @@
 
 use core::borrow::Borrow;
 use core::cmp::Ordering;
-use alloc::collections;
+#[cfg(feature = "no_std")]
+use hashbrown as collections;
+#[cfg(not(feature = "no_std"))]
+use std::collections;
 use core::fmt::{Debug, Error, Formatter};
 use core::hash::{BuildHasher, Hash, Hasher};
 use core::iter::{FromIterator, Iterator, Sum};
@@ -2121,17 +2124,17 @@ where
     }
 }
 
-impl<K: Ord, V, RK, RV> From<collections::BTreeMap<RK, RV>> for OrdMap<K, V>
+impl<K: Ord, V, RK, RV> From<alloc::collections::BTreeMap<RK, RV>> for OrdMap<K, V>
 where
     K: Ord + Clone + From<RK>,
     V: Clone + From<RV>,
 {
-    fn from(m: collections::BTreeMap<RK, RV>) -> OrdMap<K, V> {
+    fn from(m: alloc::collections::BTreeMap<RK, RV>) -> OrdMap<K, V> {
         m.into_iter().collect()
     }
 }
 
-impl<'a, K: Ord, V, RK, RV, OK, OV> From<&'a collections::BTreeMap<RK, RV>> for OrdMap<K, V>
+impl<'a, K: Ord, V, RK, RV, OK, OV> From<&'a alloc::collections::BTreeMap<RK, RV>> for OrdMap<K, V>
 where
     K: Ord + Clone + From<OK>,
     V: Clone + From<OV>,
@@ -2140,7 +2143,7 @@ where
     RK: Ord + ToOwned<Owned = OK>,
     RV: ToOwned<Owned = OV>,
 {
-    fn from(m: &'a collections::BTreeMap<RK, RV>) -> OrdMap<K, V> {
+    fn from(m: &'a alloc::collections::BTreeMap<RK, RV>) -> OrdMap<K, V> {
         m.iter()
             .map(|(k, v)| (k.to_owned(), v.to_owned()))
             .collect()
@@ -2447,7 +2450,7 @@ mod test {
             ref ops in collection::vec((bool::ANY, usize::ANY, usize::ANY), 1..1000)
         ) {
             let mut map = input.clone();
-            let mut tree: collections::BTreeMap<usize, usize> = input.iter().map(|(k, v)| (*k, *v)).collect();
+            let mut tree: alloc::collections::BTreeMap<usize, usize> = input.iter().map(|(k, v)| (*k, *v)).collect();
             for (ins, key, val) in ops {
                 if *ins {
                     tree.insert(*key, *val);

@@ -1,24 +1,42 @@
 #![allow(clippy::unit_arg)]
 
+#[cfg(feature = "no_std")]
+use hashbrown::HashSet as NatSet;
+#[cfg(not(feature = "no_std"))]
 use std::collections::HashSet as NatSet;
-use std::fmt::{Debug, Error, Formatter, Write};
-use std::hash::Hash;
+use core::fmt::{Debug, Error, Formatter, Write};
+use core::hash::Hash;
+use alloc::vec::Vec;
+use alloc::string::String;
 
 use crate::HashSet;
 
 use proptest::proptest;
+#[cfg(not(feature = "no_std"))]
 use proptest_derive::Arbitrary;
 
+#[cfg(not(feature = "no_std"))]
 #[derive(Arbitrary, Debug)]
 enum Action<A> {
     Insert(A),
     Remove(A),
 }
+#[cfg(feature = "no_std")]
+#[derive(Debug)]
+enum Action<A> {
+    Insert(A),
+    Remove(A),
+}
 
+#[cfg(not(feature = "no_std"))]
 #[derive(Arbitrary)]
 struct Actions<A>(Vec<Action<A>>)
 where
     A: Hash + Eq + Clone;
+#[cfg(feature = "no_std")]
+struct Actions<A>(Vec<Action<A>>)
+    where
+        A: Hash + Eq + Clone;
 
 impl<A> Debug for Actions<A>
 where

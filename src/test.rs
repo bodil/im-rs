@@ -3,8 +3,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use metrohash::MetroHash64;
-use std::hash::{BuildHasher, Hasher};
-use std::marker::PhantomData;
+use core::hash::{BuildHasher, Hasher};
+use core::marker::PhantomData;
 use typenum::{Unsigned, U64};
 
 pub(crate) fn is_sorted<A, I>(l: I) -> bool

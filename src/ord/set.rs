@@ -19,7 +19,10 @@
 
 use core::borrow::Borrow;
 use core::cmp::Ordering;
-use alloc::collections;
+#[cfg(feature = "no_std")]
+use hashbrown as collections;
+#[cfg(not(feature = "no_std"))]
+use std::collections;
 use core::fmt::{Debug, Error, Formatter};
 use core::hash::{BuildHasher, Hash, Hasher};
 use core::iter::{FromIterator, IntoIterator, Sum};
@@ -1142,14 +1145,14 @@ impl<'a, A: Eq + Hash + Ord + Clone> From<&'a collections::HashSet<A>> for OrdSe
     }
 }
 
-impl<A: Ord + Clone> From<collections::BTreeSet<A>> for OrdSet<A> {
-    fn from(btree_set: collections::BTreeSet<A>) -> Self {
+impl<A: Ord + Clone> From<alloc::collections::BTreeSet<A>> for OrdSet<A> {
+    fn from(btree_set: alloc::collections::BTreeSet<A>) -> Self {
         btree_set.into_iter().collect()
     }
 }
 
-impl<'a, A: Ord + Clone> From<&'a collections::BTreeSet<A>> for OrdSet<A> {
-    fn from(btree_set: &collections::BTreeSet<A>) -> Self {
+impl<'a, A: Ord + Clone> From<&'a alloc::collections::BTreeSet<A>> for OrdSet<A> {
+    fn from(btree_set: &alloc::collections::BTreeSet<A>) -> Self {
         btree_set.iter().cloned().collect()
     }
 }
