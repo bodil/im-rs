@@ -3,7 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use crate::vector::FocusMut;
-use rand_core::{RngCore, SeedableRng};
+use rand_xoshiro::rand_core::{RngCore, SeedableRng};
 use std::cmp::Ordering;
 use std::mem;
 
