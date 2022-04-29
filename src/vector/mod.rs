@@ -2525,7 +2525,7 @@ mod test {
             assert!(input.ptr_eq(&inp2));
             inp2.set(len - 1, 98);
             assert_ne!(inp2.get(len - 1), input.get(len - 1));
-            assert!(!input.ptr_eq(&inp2), "{}", len);
+            assert!(!input.ptr_eq(&inp2));
         }
     }
 

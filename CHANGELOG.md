@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+#189 #197
+
+#163 #150 #154 #191 #186 #179 #173 #194 #158 
+
 ### Added
 
 -   `HashSet` now implements `From<Vector<A>>` and `From<&Vector<A>> where A: Clone`.

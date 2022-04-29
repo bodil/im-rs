@@ -4,19 +4,19 @@ use std::hash::{BuildHasher, Hash};
 use std::iter::FromIterator;
 
 impl<A: Arbitrary + Sync + Clone> Arbitrary for Vector<A> {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+    fn arbitrary(g: &mut Gen) -> Self {
         Vector::from_iter(Vec::<A>::arbitrary(g))
     }
 }
 
 impl<K: Ord + Clone + Arbitrary + Sync, V: Clone + Arbitrary + Sync> Arbitrary for OrdMap<K, V> {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+    fn arbitrary(g: &mut Gen) -> Self {
         OrdMap::from_iter(Vec::<(K, V)>::arbitrary(g))
     }
 }
 
 impl<A: Ord + Clone + Arbitrary + Sync> Arbitrary for OrdSet<A> {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+    fn arbitrary(g: &mut Gen) -> Self {
         OrdSet::from_iter(Vec::<A>::arbitrary(g))
     }
 }
@@ -26,7 +26,7 @@ where
     A: Hash + Eq + Arbitrary + Sync,
     S: BuildHasher + Default + Send + Sync + 'static,
 {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+    fn arbitrary(g: &mut Gen) -> Self {
         HashSet::from_iter(Vec::<A>::arbitrary(g))
     }
 }
@@ -37,7 +37,7 @@ where
     V: Arbitrary + Sync,
     S: BuildHasher + Default + Send + Sync + 'static,
 {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+    fn arbitrary(g: &mut Gen) -> Self {
         HashMap::from(Vec::<(K, V)>::arbitrary(g))
     }
 }
