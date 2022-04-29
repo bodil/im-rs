@@ -6,7 +6,7 @@ use std::hash::{BuildHasher, Hash};
 
 use ::arbitrary::{size_hint, Arbitrary, Result, Unstructured};
 
-use crate::{HashMap, HashSet, OrdMap, OrdSet, Vector};
+use crate::{hashmap::HashMap, hashset::HashSet, OrdMap, OrdSet, Vector};
 
 impl<'a, A: Arbitrary<'a> + Clone> Arbitrary<'a> for Vector<A> {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
