@@ -389,7 +389,7 @@ where
         if !contains(&self.target_range, &phys_index) {
             self.set_focus(phys_index);
         }
-        let mut slice: &[A] = self.get_focus();
+        let mut slice: &[A] = self.get_focus().as_slice();
         let mut left = 0;
         let mut right = 0;
         if self.target_range.start < self.view.start {
@@ -528,10 +528,7 @@ where
     /// Returns `None` if the index is out of bounds, or the replaced value
     /// otherwise.
     pub fn set(&mut self, index: usize, value: A) -> Option<A> {
-        match self.get_mut(index) {
-            Some(ref mut pos) => Some(replace(pos, value)),
-            None => None,
-        }
+        self.get_mut(index).map(|pos| replace(pos, value))
     }
 
     /// Swap the values at two given indices.
@@ -748,12 +745,12 @@ where
     }
 }
 
-impl<'a, A> Into<Focus<'a, A>> for FocusMut<'a, A>
+impl<'a, A> From<FocusMut<'a, A>> for Focus<'a, A>
 where
     A: Clone + 'a,
 {
-    fn into(self) -> Focus<'a, A> {
-        self.unmut()
+    fn from(f: FocusMut<'a, A>) -> Self {
+        f.unmut()
     }
 }
 
