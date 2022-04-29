@@ -1,6 +1,6 @@
 [package]
 name = "im-rc"
-version = "15.0.0"
+version = "15.1.0"
 edition = "2018"
 rust-version = "1.46.0"
 authors = ["Bodil Stokke <bodil@bodil.org>"]

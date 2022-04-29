@@ -1,6 +1,6 @@
 [package]
 name = "im"
-version = "15.0.0"
+version = "15.1.0"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 edition = "2018"
 rust-version = "1.46.0"
