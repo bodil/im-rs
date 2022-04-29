@@ -1457,6 +1457,43 @@ impl<A: Clone> Vector<A> {
         }
     }
 
+    /// Insert an element into a sorted vector using a comparator function.
+    ///
+    /// Insert an element into a vector in sorted order using the given
+    /// comparator function, assuming the vector is already in sorted order.
+    ///
+    /// Time: O(log n)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[macro_use] extern crate im;
+    /// # use im::vector::Vector;
+    /// use std::cmp::Ordering;
+    ///
+    /// fn reverse_cmp(x: &u8, y: &u8) -> Ordering {
+    ///     match x.cmp(&y) {
+    ///         Ordering::Equal => Ordering::Equal,
+    ///         Ordering::Greater => Ordering::Less,
+    ///         Ordering::Less => Ordering::Greater,
+    ///     }
+    /// }
+    ///
+    /// let mut vec: Vector<u8> = vector![9, 8, 7, 3, 2, 1];
+    /// vec.insert_ord_by(5, reverse_cmp);
+    /// assert_eq!(vector![9, 8, 7, 5, 3, 2, 1], vec);
+    /// ```
+    pub fn insert_ord_by<F>(&mut self, item: A, mut f: F)
+    where
+        A: Ord,
+        F: FnMut(&A, &A) -> Ordering,
+    {
+        match self.binary_search_by(|scan_item| f(scan_item, &item)) {
+            Ok(index) => self.insert(index, item),
+            Err(index) => self.insert(index, item),
+        }
+    }
+
     /// Sort a vector.
     ///
     /// Time: O(n log n)
