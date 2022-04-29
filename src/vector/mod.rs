@@ -1986,8 +1986,21 @@ impl<'a, A: Clone> Iterator for Iter<'a, A> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.back_index - self.front_index;
-        (remaining, Some(remaining))
+        let len = self.len();
+        (len, Some(len))
+    }
+
+    fn count(self) -> usize {
+        self.len()
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        if n >= self.len() {
+            None
+        } else {
+            self.front_index += n;
+            self.next()
+        }
     }
 }
 
@@ -2004,9 +2017,22 @@ impl<'a, A: Clone> DoubleEndedIterator for Iter<'a, A> {
         let focus: &'a mut Focus<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
         focus.get(self.back_index)
     }
+
+    fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
+        if n >= self.len() {
+            None
+        } else {
+            self.back_index -= n;
+            self.next_back()
+        }
+    }
 }
 
-impl<'a, A: Clone> ExactSizeIterator for Iter<'a, A> {}
+impl<'a, A: Clone> ExactSizeIterator for Iter<'a, A> {
+    fn len(&self) -> usize {
+        self.back_index - self.front_index
+    }
+}
 
 impl<'a, A: Clone> FusedIterator for Iter<'a, A> {}
 
@@ -2065,8 +2091,21 @@ where
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.back_index - self.front_index;
-        (remaining, Some(remaining))
+        let len = self.len();
+        (len, Some(len))
+    }
+
+    fn count(self) -> usize {
+        self.len()
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        if n >= self.len() {
+            None
+        } else {
+            self.front_index += n;
+            self.next()
+        }
     }
 }
 
@@ -2086,9 +2125,22 @@ where
         let focus: &'a mut FocusMut<'a, A> = unsafe { &mut *(&mut self.focus as *mut _) };
         focus.get_mut(self.back_index)
     }
+
+    fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
+        if n >= self.len() {
+            None
+        } else {
+            self.back_index -= n;
+            self.next_back()
+        }
+    }
 }
 
-impl<'a, A: Clone> ExactSizeIterator for IterMut<'a, A> {}
+impl<'a, A: Clone> ExactSizeIterator for IterMut<'a, A> {
+    fn len(&self) -> usize {
+        self.back_index - self.front_index
+    }
+}
 
 impl<'a, A: Clone> FusedIterator for IterMut<'a, A> {}
 
@@ -2169,6 +2221,24 @@ impl<'a, A: Clone> Iterator for Chunks<'a, A> {
         self.front_index = range.end;
         Some(value)
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.len();
+        (len, Some(len))
+    }
+
+    fn count(self) -> usize {
+        self.len()
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        if n >= self.len() {
+            None
+        } else {
+            self.front_index += n;
+            self.next()
+        }
+    }
 }
 
 impl<'a, A: Clone> DoubleEndedIterator for Chunks<'a, A> {
@@ -2185,6 +2255,21 @@ impl<'a, A: Clone> DoubleEndedIterator for Chunks<'a, A> {
         let (range, value) = focus.chunk_at(self.back_index);
         self.back_index = range.start;
         Some(value)
+    }
+
+    fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
+        if n >= self.len() {
+            None
+        } else {
+            self.back_index -= n;
+            self.next_back()
+        }
+    }
+}
+
+impl<'a, A: Clone> ExactSizeIterator for Chunks<'a, A> {
+    fn len(&self) -> usize {
+        self.back_index - self.front_index
     }
 }
 
@@ -2228,6 +2313,24 @@ impl<'a, A: Clone> Iterator for ChunksMut<'a, A> {
         self.front_index = range.end;
         Some(value)
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.len();
+        (len, Some(len))
+    }
+
+    fn count(self) -> usize {
+        self.len()
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        if n >= self.len() {
+            None
+        } else {
+            self.front_index += n;
+            self.next()
+        }
+    }    
 }
 
 impl<'a, A: Clone> DoubleEndedIterator for ChunksMut<'a, A> {
@@ -2244,6 +2347,21 @@ impl<'a, A: Clone> DoubleEndedIterator for ChunksMut<'a, A> {
         let (range, value) = focus.chunk_at(self.back_index);
         self.back_index = range.start;
         Some(value)
+    }
+
+    fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
+        if n >= self.len() {
+            None
+        } else {
+            self.back_index -= n;
+            self.next_back()
+        }
+    }
+}
+
+impl<'a, A: Clone> ExactSizeIterator for ChunksMut<'a, A> {
+    fn len(&self) -> usize {
+        self.back_index - self.front_index
     }
 }
 
@@ -2537,6 +2655,31 @@ mod test {
                 assert_eq!(&vec[index], item);
             }
             assert_eq!(vec.len(), seq.len());
+            assert_eq!(vec.iter().count(), seq.iter().count());
+        }
+
+        #[test]
+        #[allow(clippy::iter_nth)]
+        fn iter_nth(ref vec in vec(i32::ANY, 0..1000)) {
+            let seq: Vector<i32> = Vector::from_iter(vec.iter().cloned());
+            assert_eq!(vec.iter().nth(0), seq.iter().nth(0));
+            assert_eq!(vec.iter().nth(1), seq.iter().nth(1));
+            let last_index = seq.len().checked_sub(1).unwrap_or(0);
+            assert_eq!(vec.iter().nth(last_index), seq.iter().nth(last_index));
+            let last_index_plus_one = seq.len();
+            assert_eq!(vec.iter().nth(last_index_plus_one), seq.iter().nth(last_index_plus_one));
+        }
+
+        #[test]
+        #[allow(clippy::iter_nth)]
+        fn iter_nth_back(ref vec in vec(i32::ANY, 0..1000)) {
+            let seq: Vector<i32> = Vector::from_iter(vec.iter().cloned());
+            assert_eq!(vec.iter().nth_back(0), seq.iter().nth_back(0));
+            assert_eq!(vec.iter().nth_back(1), seq.iter().nth_back(1));
+            let last_index = seq.len().checked_sub(1).unwrap_or(0);
+            assert_eq!(vec.iter().nth_back(last_index), seq.iter().nth_back(last_index));
+            let last_index_plus_one = seq.len();
+            assert_eq!(vec.iter().nth_back(last_index_plus_one), seq.iter().nth_back(last_index_plus_one));
         }
 
         #[test]
