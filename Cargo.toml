@@ -3,6 +3,7 @@ name = "im"
 version = "15.0.0"
 authors = ["Bodil Stokke <bodil@bodil.org>"]
 edition = "2018"
+rust-version = "1.46.0"
 license = "MPL-2.0+"
 description = "Immutable collection datatypes"
 repository = "https://github.com/bodil/im-rs"
