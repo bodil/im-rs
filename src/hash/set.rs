@@ -1070,6 +1070,8 @@ mod test {
     use ::proptest::proptest;
     use std::hash::BuildHasherDefault;
 
+    assert_covariant!(HashSet<T> in T);
+
     #[test]
     fn insert_failing() {
         let mut set: HashSet<i16, BuildHasherDefault<LolHasher>> = Default::default();

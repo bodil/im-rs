@@ -2125,6 +2125,9 @@ mod test {
     use ::proptest::{collection, proptest};
     use std::hash::BuildHasherDefault;
 
+    assert_covariant!(HashMap<T, i32> in T);
+    assert_covariant!(HashMap<i32, T> in T);
+
     #[test]
     fn safe_mutation() {
         let v1: HashMap<usize, usize> = (0..131_072).map(|i| (i, i)).collect::<HashMap<_, _>>();

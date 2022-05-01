@@ -9,17 +9,14 @@ use std::iter::FusedIterator;
 use std::slice::{Iter as SliceIter, IterMut as SliceIterMut};
 use std::{mem, ptr};
 
-use bitmaps::Bits;
+use bitmaps::{Bits, BitsImpl};
 use sized_chunks::sparse_chunk::{Iter as ChunkIter, IterMut as ChunkIterMut, SparseChunk};
-use typenum::{Pow, Unsigned, U2};
 
-use crate::config::HashLevelSize;
 use crate::util::{clone_ref, Pool, PoolClone, PoolDefault, PoolRef, Ref};
 
-pub(crate) type HashWidth = <U2 as Pow<HashLevelSize>>::Output;
-pub(crate) type HashBits = <HashWidth as Bits>::Store; // a uint of HASH_SIZE bits
-pub(crate) const HASH_SHIFT: usize = HashLevelSize::USIZE;
-pub(crate) const HASH_WIDTH: usize = HashWidth::USIZE;
+pub(crate) use crate::config::HASH_LEVEL_SIZE as HASH_SHIFT;
+pub(crate) const HASH_WIDTH: usize = 2_usize.pow(HASH_SHIFT as u32);
+pub(crate) type HashBits = <BitsImpl<HASH_WIDTH> as Bits>::Store; // a uint of HASH_WIDTH bits
 pub(crate) const HASH_MASK: HashBits = (HASH_WIDTH - 1) as HashBits;
 
 pub(crate) fn hash_key<K: Hash + ?Sized, S: BuildHasher>(bh: &S, key: &K) -> HashBits {
@@ -42,7 +39,7 @@ pub trait HashValue {
 
 #[derive(Clone)]
 pub(crate) struct Node<A> {
-    data: SparseChunk<Entry<A>, HashWidth>,
+    data: SparseChunk<Entry<A>, HASH_WIDTH>,
 }
 
 #[allow(unsafe_code)]
@@ -52,7 +49,7 @@ impl<A> PoolDefault for Node<A> {
         SparseChunk::default_uninit(
             target
                 .as_mut_ptr()
-                .cast::<mem::MaybeUninit<SparseChunk<Entry<A>, HashWidth>>>()
+                .cast::<mem::MaybeUninit<SparseChunk<Entry<A>, HASH_WIDTH>>>()
                 .as_mut()
                 .unwrap(),
         )
@@ -69,7 +66,7 @@ where
         self.data.clone_uninit(
             target
                 .as_mut_ptr()
-                .cast::<mem::MaybeUninit<SparseChunk<Entry<A>, HashWidth>>>()
+                .cast::<mem::MaybeUninit<SparseChunk<Entry<A>, HASH_WIDTH>>>()
                 .as_mut()
                 .unwrap(),
         )
@@ -471,8 +468,8 @@ impl<A: HashValue> CollisionNode<A> {
 
 pub(crate) struct Iter<'a, A> {
     count: usize,
-    stack: Vec<ChunkIter<'a, Entry<A>, HashWidth>>,
-    current: ChunkIter<'a, Entry<A>, HashWidth>,
+    stack: Vec<ChunkIter<'a, Entry<A>, HASH_WIDTH>>,
+    current: ChunkIter<'a, Entry<A>, HASH_WIDTH>,
     collision: Option<(HashBits, SliceIter<'a, A>)>,
 }
 
@@ -551,8 +548,8 @@ impl<'a, A> FusedIterator for Iter<'a, A> where A: 'a {}
 pub(crate) struct IterMut<'a, A> {
     count: usize,
     pool: Pool<Node<A>>,
-    stack: Vec<ChunkIterMut<'a, Entry<A>, HashWidth>>,
-    current: ChunkIterMut<'a, Entry<A>, HashWidth>,
+    stack: Vec<ChunkIterMut<'a, Entry<A>, HASH_WIDTH>>,
+    current: ChunkIterMut<'a, Entry<A>, HASH_WIDTH>,
     collision: Option<(HashBits, SliceIterMut<'a, A>)>,
 }
 

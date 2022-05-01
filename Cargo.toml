@@ -35,8 +35,8 @@ debug = []
 
 [dependencies]
 typenum = "1.12"
-bitmaps = "2"
-sized-chunks = "0.6.4"
+bitmaps = "3"
+sized-chunks = "0.7"
 rand_core = "0.6"
 rand_xoshiro = "0.6"
 quickcheck = { version = "1", optional = true }
