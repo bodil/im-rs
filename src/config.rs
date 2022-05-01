@@ -2,17 +2,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use typenum::*;
-
 /// The branching factor of RRB-trees
-pub(crate) type VectorChunkSize = U64;
+pub(crate) const VECTOR_CHUNK_SIZE: usize = 64;
 
 /// The branching factor of B-trees
-pub(crate) type OrdChunkSize = U64; // Must be an even number!
+pub(crate) const ORD_CHUNK_SIZE: usize = 64; // Must be an even number!
 
 /// The level size of HAMTs, in bits
 /// Branching factor is 2 ^ HashLevelSize.
-pub(crate) type HashLevelSize = U5;
+pub(crate) const HASH_LEVEL_SIZE: usize = 5;
 
 /// The size of per-instance memory pools if the `pool` feature is enabled.
 /// This is set to 0, meaning you have to opt in to using a pool by constructing

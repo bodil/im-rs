@@ -1185,6 +1185,8 @@ mod test {
     use crate::proptest::*;
     use ::proptest::proptest;
 
+    assert_covariant!(OrdSet<T> in T);
+
     #[test]
     fn match_strings_with_string_slices() {
         let mut set: OrdSet<String> = From::from(&ordset!["foo", "bar"]);

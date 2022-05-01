@@ -2270,6 +2270,8 @@ mod test {
     use ::proptest::num::{i32, usize};
     use ::proptest::proptest;
 
+    assert_covariant!(Vector<T> in T);
+
     #[test]
     fn macro_allows_trailing_comma() {
         let vec1 = vector![1, 2, 3];

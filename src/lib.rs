@@ -344,13 +344,13 @@
 #[macro_use]
 extern crate pretty_assertions;
 
+#[macro_use]
+mod util;
+
 mod config;
 mod nodes;
 mod sort;
 mod sync;
-
-#[macro_use]
-mod util;
 
 #[macro_use]
 mod ord;

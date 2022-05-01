@@ -4,8 +4,6 @@
 
 use metrohash::MetroHash64;
 use std::hash::{BuildHasher, Hasher};
-use std::marker::PhantomData;
-use typenum::{Unsigned, U64};
 
 pub(crate) fn is_sorted<A, I>(l: I) -> bool
 where
@@ -22,13 +20,12 @@ where
     }
 }
 
-pub(crate) struct LolHasher<N: Unsigned = U64> {
+pub(crate) struct LolHasher<const N: usize = 64> {
     state: u64,
     shift: usize,
-    size: PhantomData<N>,
 }
 
-impl<N: Unsigned> LolHasher<N> {
+impl<const N: usize> LolHasher<N> {
     fn feed_me(&mut self, byte: u8) {
         self.state ^= u64::from(byte) << self.shift;
         self.shift += 8;
@@ -38,7 +35,7 @@ impl<N: Unsigned> LolHasher<N> {
     }
 }
 
-impl<N: Unsigned> Hasher for LolHasher<N> {
+impl<const N: usize> Hasher for LolHasher<N> {
     fn write(&mut self, bytes: &[u8]) {
         for byte in bytes {
             self.feed_me(*byte)
@@ -46,21 +43,17 @@ impl<N: Unsigned> Hasher for LolHasher<N> {
     }
 
     fn finish(&self) -> u64 {
-        if N::USIZE == 64 {
+        if N == 64 {
             self.state
         } else {
-            self.state & ((1 << N::USIZE) - 1)
+            self.state & ((1 << N) - 1)
         }
     }
 }
 
-impl<N: Unsigned> Default for LolHasher<N> {
+impl<const N: usize> Default for LolHasher<N> {
     fn default() -> Self {
-        LolHasher {
-            state: 0,
-            shift: 0,
-            size: PhantomData,
-        }
+        LolHasher { state: 0, shift: 0 }
     }
 }
 

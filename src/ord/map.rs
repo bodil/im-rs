@@ -2190,6 +2190,9 @@ mod test {
     use ::proptest::num::{i16, usize};
     use ::proptest::{bool, collection, proptest};
 
+    assert_covariant!(OrdMap<T, i32> in T);
+    assert_covariant!(OrdMap<i32, T> in T);
+
     #[test]
     fn iterates_in_order() {
         let map = ordmap! {
