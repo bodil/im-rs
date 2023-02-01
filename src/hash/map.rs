@@ -337,6 +337,19 @@ impl<K, V, S> HashMap<K, V, S> {
         }
     }
 
+    /// Get a mutable iterator over a hash map's values.
+    ///
+    /// Please note that the order is consistent between maps using
+    /// the same hasher, but no other ordering guarantee is offered.
+    /// Items will not come out in insertion order or sort order.
+    /// They will, however, come out in the same order every time for
+    /// the same map.
+    #[inline]
+    #[must_use]
+    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut V> {
+        self.iter_mut().map(|(_, v)| v)
+    }
+
     /// Discard all elements from the map.
     ///
     /// This leaves you with an empty map, and all elements that
