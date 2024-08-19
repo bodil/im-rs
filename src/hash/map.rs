@@ -1245,10 +1245,10 @@ where
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::ordmap::OrdMap;
-    /// let map1 = ordmap!{1 => 1, 3 => 4};
-    /// let map2 = ordmap!{2 => 2, 3 => 5};
-    /// let expected = ordmap!{1 => 1};
+    /// # use im::hashmap::HashMap;
+    /// let map1 = hashmap!{1 => 1, 3 => 4};
+    /// let map2 = hashmap!{2 => 2, 3 => 5};
+    /// let expected = hashmap!{1 => 1};
     /// assert_eq!(expected, map1.relative_complement(map2));
     /// ```
     #[inline]

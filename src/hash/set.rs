@@ -593,10 +593,10 @@ where
     ///
     /// ```
     /// # #[macro_use] extern crate im;
-    /// # use im::ordset::OrdSet;
-    /// let set1 = ordset!{1, 2};
-    /// let set2 = ordset!{2, 3};
-    /// let expected = ordset!{1};
+    /// # use im::hashset::HashSet;
+    /// let set1 = hashset!{1, 2};
+    /// let set2 = hashset!{2, 3};
+    /// let expected = hashset!{1};
     /// assert_eq!(expected, set1.relative_complement(set2));
     /// ```
     #[must_use]
