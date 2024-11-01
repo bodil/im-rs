@@ -1239,5 +1239,19 @@ mod test {
             let result: Vec<i32> = set.range(..).rev().cloned().collect();
             assert_eq!(expected, result);
         }
+
+        #[test]
+        fn get_next_and_prev(count in 0..1000) {
+            let values = (0..count).map(|i| (i + 1) * 2).collect::<Vec<_>>();
+
+            let set = values.iter().cloned().collect::<OrdSet<i32>>();
+            for value in &values {
+                let next = *value + 1;
+                assert_eq!(set.get_prev(&next), Some(value));
+
+                let prev = *value - 1;
+                assert_eq!(set.get_next(&prev), Some(value));
+            }
+        }
     }
 }

@@ -2645,5 +2645,19 @@ mod test {
             }).collect();
             assert_eq!(expected, diff);
         }
+
+        #[test]
+        fn get_next_and_prev(count in 0..1000) {
+            let values = (0..count).map(|i| ((i + 1) * 2, ())).collect::<Vec<_>>();
+
+            let set = values.iter().cloned().collect::<OrdMap<i32, ()>>();
+            for value in &values {
+                let next = value.0 + 1;
+                assert_eq!(set.get_prev(&next), Some((&value.0, &value.1)));
+
+                let prev = value.0 - 1;
+                assert_eq!(set.get_next(&prev), Some((&value.0, &value.1)));
+            }
+        }
     }
 }

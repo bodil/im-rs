@@ -248,7 +248,11 @@ impl<A: BTreeValue> Node<A> {
             Err(index) => match self.children[index] {
                 None if index == 0 => None,
                 None => self.keys.get(index - 1).map(|_| &self.keys[index - 1]),
-                Some(ref node) => node.lookup_prev(key),
+                Some(ref node) => match node.lookup_prev(key) {
+                    None if index == 0 => None,
+                    None => self.keys.get(index - 1).map(|_| &self.keys[index - 1]),
+                    Some(key) => Some(key),
+                },
             },
         }
     }
@@ -265,7 +269,10 @@ impl<A: BTreeValue> Node<A> {
             Ok(index) => Some(&self.keys[index]),
             Err(index) => match self.children[index] {
                 None => self.keys.get(index).map(|_| &self.keys[index]),
-                Some(ref node) => node.lookup_next(key),
+                Some(ref node) => match node.lookup_next(key) {
+                    None => self.keys.get(index).map(|_| &self.keys[index]),
+                    Some(key) => Some(key),
+                },
             },
         }
     }
